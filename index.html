@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>비지네스 시뮬레이터 V3.0 (Master Edition)</title>
+    <!-- 파비콘 404 콘솔 경고 방지 -->
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="css/style.css">
+    
+    <style>
+        #salesWidget { transition: transform 0.3s ease-in-out; transform: translateX(0); }
+        #salesWidget.closed { transform: translateX(-100%); }
+        
+        #salesToggleBtn {
+            position: absolute; right: -24px; top: 50%; margin-top: -30px;
+            width: 24px; height: 60px; background: #1f2937;
+            border: 1px solid #374151; border-left: none; border-radius: 0 8px 8px 0;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; box-shadow: 4px 0 6px rgba(0,0,0,0.3); z-index: 1000;
+        }
+        #salesToggleBtn svg { transition: transform 0.3s ease; }
+        #salesWidget.closed #salesToggleBtn svg { transform: rotate(180deg); }
+
+        /* 줌 컨트롤러 위치 고정 */
+        .zoom-controls {
+            position: absolute !important;
+            top: 70px !important;
+            bottom: auto !important;
+            right: 20px !important;
+            height: auto !important;
+            z-index: 1000 !important;
+        }
+
+        /* 하단 고정 슬라이드 패널 (세로 스크롤바 보장) */
+        #perfWidget {
+            position: fixed !important;
+            bottom: 0 !important;
+            top: auto !important;
+            left: 330px !important;
+            right: 0 !important;
+            width: auto !important;
+            margin: 0 !important;
+            height: 350px;
+            min-height: 48px !important;
+            max-height: calc(100vh - 70px) !important;
+            z-index: 920 !important;
+            background: #1f2937 !important;
+            border-top: 1px solid #374151 !important;
+            border-left: 1px solid #374151 !important;
+            border-radius: 10px 0 0 0 !important;
+            box-shadow: 0 -5px 25px rgba(0,0,0,0.5) !important;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #perfWidget.closed {
+            height: 48px !important;
+        }
+        #perfWidget.closed #perf-resizer {
+            display: none !important;
+        }
+
+        /* 수당 시뮬레이터 내부 세로/가로 스크롤바 보장 */
+        #perfWidget .widget-body {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            height: calc(100% - 48px) !important;
+            padding: 0 10px 10px 10px;
+            background: #1f2937;
+            overflow-x: auto !important;
+            overflow-y: auto !important;
+        }
+
+        #perfWidget .widget-body::-webkit-scrollbar {
+            width: 8px !important;
+            height: 8px !important;
+        }
+        #perfWidget .widget-body::-webkit-scrollbar-track {
+            background: #111827 !important;
+        }
+        #perfWidget .widget-body::-webkit-scrollbar-thumb {
+            background: #4b5563 !important;
+            border-radius: 4px !important;
+        }
+        #perfWidget .widget-body::-webkit-scrollbar-thumb:hover {
+            background: #60a5fa !important;
+        }
+
+        .sales-row { display: flex; gap: 4px; margin-bottom: 6px; align-items: center; }
+        .sales-row select, .sales-row input { box-sizing: border-box; background: transparent; border: 1px solid #4b5563; color: #fff; border-radius: 4px; font-family: inherit; }
+        .sales-row select:focus, .sales-row input:focus { outline: none; border-color: #60a5fa; }
+        .sales-row .s-type { width: 46px; padding: 4px 0; text-align: center; font-size: 11px; }
+        .sales-row .s-date { flex: 1; min-width: 82px; padding: 4px 2px; text-align: center; font-size: 12px; letter-spacing: -0.5px; }
+        .sales-row .s-cv, .sales-row .s-pv { width: 60px; padding: 4px 2px; text-align: right; font-size: 12px; }
+        .sales-row .btn-del-row { width: 18px; padding: 0; display: flex; justify-content: center; align-items: center; color: #ef4444; background: transparent; border: none; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .sales-row .btn-del-row:hover { color: #dc2626; transform: scale(1.2); }
+
+        #taskbar {
+            position: absolute; bottom: 0; left: 340px; display: flex; gap: 8px; z-index: 10000; padding: 0 10px;
+        }
+        .taskbar-item {
+            background: #1f2937; color: #9ca3af; padding: 8px 16px; border: 1px solid #4b5563; 
+            border-bottom: none; border-radius: 8px 8px 0 0; font-size: 12px; cursor: pointer; 
+            display: flex; align-items: center; gap: 8px; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); transition: background 0.2s;
+        }
+        .taskbar-item:hover { background: #374151; color: #fff; }
+
+        .period-table input, .period-table select {
+            background: #1f2937; border: 1px solid #4b5563; color: #fff; border-radius: 4px; padding: 2px 4px; font-size: 11px;
+        }
+        .period-table td { padding: 4px; border-bottom: 1px solid #374151; }
+
+        .icon-btn-mac {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2);
+            transition: transform 0.15s ease, filter 0.15s ease;
+        }
+        .icon-btn-mac:hover {
+            transform: scale(1.15);
+            filter: brightness(1.1);
+        }
+        .icon-btn-mac.close { background: #ef4444; color: #450a0a; }
+        .icon-btn-mac.minimize { background: #f59e0b; color: #451a03; }
+        .icon-btn-mac svg { display: block; pointer-events: none; }
+
+        #filterWidget .table-scroll-container::-webkit-scrollbar { width: 8px; }
+        #filterWidget .table-scroll-container::-webkit-scrollbar-track { background: #111827; border-radius: 4px; }
+        #filterWidget .table-scroll-container::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        #filterWidget .table-scroll-container::-webkit-scrollbar-thumb:hover { background: #60a5fa; }
+
+        .node-card {
+            position: relative !important;
+            overflow: visible !important;
+            cursor: pointer;
+        }
+        .node-card .btn-add-parent {
+            position: absolute;
+            top: -16px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 28px;
+            height: 14px;
+            background: #3b82f6;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: #fff;
+            font-weight: bold;
+            z-index: 101;
+            transition: all 0.2s ease;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.5);
+        }
+        .node-card .btn-add-parent:hover {
+            background: #1d4ed8;
+            top: -18px;
+            height: 16px;
+        }
+
+        .node-card .corner-btn {
+            position: absolute;
+            bottom: 0;
+            width: 0;
+            height: 0;
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.2s ease;
+        }
+        .node-card .corner-btn.corner-left {
+            left: 0;
+            border-bottom: 18px solid #6b7280;
+            border-right: 18px solid transparent;
+        }
+        .node-card .corner-btn.corner-left:hover {
+            border-bottom-color: #3b82f6;
+            transform: scale(1.2);
+        }
+        .node-card .corner-btn.corner-right {
+            right: 0;
+            border-bottom: 18px solid #6b7280;
+            border-left: 18px solid transparent;
+        }
+        .node-card .corner-btn.corner-right:hover {
+            border-bottom-color: #ef4444;
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body style="margin: 0; overflow: hidden; background: #111827;">
+    
+    <!-- 1. 상단 헤더 -->
+    <div class="top-header-bar" style="position: absolute; top: 0; left: 0; right: 0; height: 60px; box-sizing: border-box; z-index: 9999; box-shadow: 0 2px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: #1f2937; border-bottom: 1px solid #374151;">
+        <div class="header-left">
+            <div class="main-logo-title" style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-weight: bold; font-size: 16px; color: #fff;">비지네스 시뮬레이터 V3.0</span>
+                
+                <span id="header-line-count" style="font-size:12px; color:#fff; background:#111827; padding:4px 10px; border-radius:12px; border:1px solid #374151; white-space:nowrap;"></span>
+
+                <label class="theme-switch" title="가상 시뮬레이션 모드 전환" style="margin: 0;">
+                    <input type="checkbox" id="sim-mode-toggle" onchange="window.toggleSimMode()">
+                    <span class="slider"></span>
+                </label>
+                <span class="sim-banner" style="font-size: 12px; color: #10b981;">🔮 AI 시뮬레이션 모드 작동 중 (가상 데이터)</span>
+                
+                <div id="sim-controls" style="display:none; gap:6px; margin-left:12px;">
+                    <button class="btn-sm btn-cancel" onclick="initVirtualTree()">초기화</button>
+                    <button class="btn-sm btn-save" onclick="saveVirtualTree()">저장</button>
+                    <button class="btn-sm btn-success" onclick="document.getElementById('sim-file-input').click()">불러오기</button>
+                    <input type="file" id="sim-file-input" style="display:none" accept=".json" onchange="loadVirtualTree(event)">
+                </div>
+            </div>
+        </div>
+        
+        <div class="header-right" style="display: flex; align-items: center; gap: 10px;">
+            <div class="search-box" style="margin: 0;">
+                <input type="text" id="searchInput" placeholder="전체 계보도 회원 검색..." onkeydown="if(event.key==='Enter') window.searchMember()">
+                <button onclick="window.searchMember()" title="검색">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </button>
+            </div>
+
+            <div style="position: relative;">
+                <button class="btn-icon-header" onclick="window.toggleSettingsMenu(event)" title="계보도 표시 설정">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+                
+                <div class="settings-menu" id="settingsMenu" onclick="event.stopPropagation()" style="display:none; position: absolute; right: 0; top: 40px; z-index: 10000; background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 14px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); width: 420px; color: #fff;">
+                    <div class="settings-grid" style="display: flex; gap: 16px; justify-content: space-between;">
+                        <div class="settings-col" style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
+                            <div class="settings-title" style="font-weight: bold; color: #60a5fa; margin-bottom: 4px; border-bottom: 1px solid #374151; padding-bottom: 4px;">기본 표시</div>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-id" checked onchange="window.updateSetting('id')"> 회원ID</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-name" checked onchange="window.updateSetting('name')"> 회원이름</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-rank" checked onchange="window.updateSetting('rank')"> 직급</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-type" checked onchange="window.updateSetting('type')"> 회원구분</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-code" checked onchange="window.updateSetting('code')"> 회원코드</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-joinDate" checked onchange="window.updateSetting('joinDate')"> 가입일</label>
+                        </div>
+                        <div class="settings-col" style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
+                            <div class="settings-title" style="font-weight: bold; color: #60a5fa; margin-bottom: 4px; border-bottom: 1px solid #374151; padding-bottom: 4px;">상세 표시</div>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-recName" checked onchange="window.updateSetting('recName')"> 추천인명</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-recId" checked onchange="window.updateSetting('recId')"> 추천인ID</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-firstSales" onchange="window.updateSetting('firstSales')"> 최초매출일</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-lastSales" onchange="window.updateSetting('lastSales')"> 최종매출일</label>
+                        </div>
+                        <div class="settings-col" style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
+                            <div class="settings-title" style="font-weight: bold; color: #60a5fa; margin-bottom: 4px; border-bottom: 1px solid #374151; padding-bottom: 4px;">위젯 설정</div>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-sales-widget" checked onchange="window.toggleWidgetGlobal('chk-sales-widget', 'salesWidget')"> 매출/구독 패널</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-perf-widget" checked onchange="window.toggleWidgetGlobal('chk-perf-widget', 'perfWidget')"> 실적/수당 시뮬레이션</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-ai-widget" onchange="window.toggleWidgetGlobal('chk-ai-widget', 'aiWidget')"> 비지네스 내비게이터</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-filter-widget" onchange="window.toggleWidgetGlobal('chk-filter-widget', 'filterWidget')"> 매출 기간 검색</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn-icon-header" id="toggleTreeBtn" onclick="window.toggleTreeMode()" title="추천계보도로 전환 (현재: 후원계보도)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="3" width="6" height="6" rx="1" ry="1"></rect><path d="M12 9v3"></path><path d="M3 15h18"></path><path d="M5 15v3"></path>
+                    <rect x="2" y="18" width="6" height="6" rx="1" ry="1"></rect><path d="M12 15v3"></path><rect x="9" y="18" width="6" height="6" rx="1" ry="1"></rect>
+                    <path d="M19 15v3"></path><rect x="16" y="18" width="6" height="6" rx="1" ry="1"></rect>
+                </svg>
+            </button>
+
+            <button class="btn-icon-header" onclick="window.fetchTreeData(true)" title="계보도 강제 새로고침">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. 매출 및 구독 내역 위젯 (사이드바) -->
+    <div class="widget" id="salesWidget" style="position: absolute; top: 60px; left: 0; bottom: 0; width: 330px; margin: 0; border-radius: 0; border-left: none; border-bottom: none; border-top: none; z-index: 950; display: flex; flex-direction: column; background: #1f2937;">
+        <div class="sales-panel-toggle" onclick="window.toggleSalesSidebar()" id="salesToggleBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </div>
+        
+        <div class="widget-header" id="salesWidgetHeader" style="align-items: flex-start; cursor: default; padding: 12px 12px;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 14px; font-weight: bold; padding-top: 2px;">매출 및 구독 내역</span>
+                <span id="sales-target-name" style="color:#60a5fa; font-size: 11px;">선택 안됨</span>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="icon-btn-sm success" onclick="window.saveSalesData()" title="입력된 매출 DB 동기화">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                </button>
+            </div>
+        </div>
+        
+        <div class="widget-body" style="flex: 1; display: flex; flex-direction: column; padding-bottom: 10px;">
+            <div style="margin-bottom: 12px; position: relative; padding: 0 8px;">
+                <div class="search-box" style="margin: 0; width: 100%; box-sizing: border-box; border-color: #4b5563; display: flex; align-items: center; overflow: hidden;">
+                    <input type="text" id="salesSearchInput" placeholder="패널 회원명 / ID 검색..." onkeydown="if(event.key==='Enter') window.searchPanelMember(event, this)" style="flex: 1; min-width: 0;">
+                    <button onclick="window.clickSearchPanel()" title="검색" style="padding-right: 12px; cursor: pointer;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="sales-labels" style="display: flex; gap: 4px; padding: 0 8px 6px 8px; font-size: 11px; color: #9ca3af; align-items: center; text-align: center;">
+                <span style="width: 46px;">구분</span>
+                <span class="date-sort" onclick="window.toggleSalesSort()" style="flex: 1; cursor: pointer;">날짜 <span id="sales-sort-icon">↑</span></span>
+                <span style="width: 60px;">CV</span>
+                <span style="width: 60px;">PV</span>
+                <span style="width: 18px;"></span>
+            </div>
+            
+            <div id="sales-rows-container" style="flex: 1; overflow-y: auto; padding: 0 8px;"></div>
+            
+            <div class="sales-note" style="padding: 10px 8px 0;">
+                ※ 입력 시 <b>MMDD</b> (4자리)만 입력해도 자동 변환됩니다.
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 하단 슬라이드 패널 수당 시뮬레이터 (#perfWidget) -->
+    <div class="widget" id="perfWidget">
+        <div id="perf-resizer" style="position:absolute; top:0; left:0; right:0; height:8px; cursor:ns-resize; background:transparent; z-index:1000;" 
+             onmousedown="event.stopPropagation();" onpointerdown="event.stopPropagation();">
+            <div style="width:40px; height:4px; background:#4b5563; border-radius:2px; margin:2px auto;"></div>
+        </div>
+        
+        <div class="widget-header" style="cursor: pointer; padding: 14px 16px 10px 16px; display: flex; justify-content: space-between; align-items: center;" 
+             onmousedown="event.stopPropagation();" onpointerdown="event.stopPropagation();" onclick="window.togglePerfSidebar(event)">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-weight:bold; font-size:13.5px; color:#fff;">📊 실적 집계 및 수당 시뮬레이터 <span id="perf-target-name" style="color:#60a5fa; font-size:12px; font-weight:normal; margin-left:4px;">(선택 안됨)</span></span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <label style="font-size: 11px; color: #d1d5db; display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="event.stopPropagation()">
+                    <input type="checkbox" id="chk-rollup" style="cursor: pointer;" checked> 압축롤업 적용
+                </label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="perf-slide-btn" style="background:transparent; border:none; color:#9ca3af; cursor:pointer; font-size:12px; font-weight:bold; display:flex; align-items:center; gap:2px; padding:2px 6px; border-radius:4px; pointer-events:none;" title="슬라이드 접기/펼치기">
+                        <span id="perf-toggle-icon" style="display:inline-block; transition:transform 0.35s;">▼</span> <span id="perf-toggle-text">접기</span>
+                    </button>
+                    <button class="icon-btn-mac close" onclick="event.stopPropagation(); window.closeWidgetGlobal(event, 'perfWidget', 'chk-perf-widget')" title="닫기" style="margin-left:4px;">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="widget-body">
+            <table class="period-table" style="width:100%; border-collapse:collapse; text-align:right; font-size:11.5px; white-space:nowrap; margin-bottom: 20px;">
+                <thead style="position:sticky; top:0; background:#111827; color:#9ca3af; border-bottom:1px solid #4b5563; z-index:10;">
+                    <tr>
+                        <th rowspan="2" style="padding:8px 8px; text-align:center; font-weight:bold; color:#fff; border-right:1px solid #374151; min-width:65px;">기(주차) ↓</th>
+                        <th colspan="3" style="padding:6px; text-align:center; color:#fff; font-weight:bold; border-right:1px solid #374151;">A라인 CV</th>
+                        <th colspan="2" style="padding:6px; text-align:center; color:#fff; font-weight:bold; border-right:1px solid #374151;">A라인 PV</th>
+                        <th colspan="3" style="padding:6px; text-align:center; color:#fff; font-weight:bold; border-right:1px solid #374151;">B라인 CV</th>
+                        <th colspan="2" style="padding:6px; text-align:center; color:#fff; font-weight:bold; border-right:1px solid #374151;">B라인 PV</th>
+                        <th rowspan="2" style="padding:8px 6px; text-align:center; border-right:1px solid #374151; color:#fff; font-weight:bold;">추천수당</th>
+                        <th rowspan="2" style="padding:8px 6px; text-align:center; border-right:1px solid #374151; color:#fff; font-weight:bold;">지원수당</th>
+                        <th rowspan="2" style="padding:8px 6px; text-align:center; border-right:1px solid #374151; color:#fff; font-weight:bold;">추천매칭</th>
+                        <th rowspan="2" style="padding:8px 6px; text-align:center; border-right:1px solid #374151; color:#fff; font-weight:bold;">품위유지</th>
+                        <th rowspan="2" style="padding:8px 6px; text-align:center; border-right:1px solid #374151; color:#fff; font-weight:bold;">차량유지비</th>
+                        <th rowspan="2" style="padding:8px 6px; text-align:center; border-right:1px solid #374151; color:#fff; font-weight:bold;">FastPower</th>
+                        <th rowspan="2" style="padding:8px 8px; text-align:center; color:#fff; font-weight:bold;">합계</th>
+                    </tr>
+                    <tr style="background:#1f2937; border-top:1px solid #374151; color:#d1d5db;">
+                        <th style="padding:4px 6px; text-align:center; color:#fff; font-weight:bold;">신규</th>
+                        <th style="padding:4px 6px; text-align:center; color:#fff; font-weight:bold;">누적</th>
+                        <th style="padding:4px 6px; text-align:center; border-right:1px solid #374151; color:#ef4444; font-weight:bold;">공제CV</th>
+                        <th style="padding:4px 6px; text-align:center; color:#fff; font-weight:bold;">신규</th>
+                        <th style="padding:4px 6px; text-align:center; border-right:1px solid #374151; color:#fff; font-weight:bold;">누적</th>
+                        <th style="padding:4px 6px; text-align:center; color:#fff; font-weight:bold;">신규</th>
+                        <th style="padding:4px 6px; text-align:center; color:#fff; font-weight:bold;">누적</th>
+                        <th style="padding:4px 6px; text-align:center; border-right:1px solid #374151; color:#ef4444; font-weight:bold;">공제CV</th>
+                        <th style="padding:4px 6px; text-align:center; color:#fff; font-weight:bold;">신규</th>
+                        <th style="padding:4px 6px; text-align:center; border-right:1px solid #374151; color:#fff; font-weight:bold;">누적</th>
+                    </tr>
+                </thead>
+                <tbody id="perf-table-tbody">
+                    <!-- JS로 기수별 실적 및 수당 행 동적 생성 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 🌟 8. 보너스 산출 상세 검증 신규 모달 (#bonusDetailModal) - 계보도 좌측상단 초기 위치 -->
+    <div class="widget" id="bonusDetailModal" style="display:none; position: absolute; top: 80px; left: 340px; width: 620px; height: 480px; z-index: 99999; margin: 0; background: #1f2937; border: 1px solid #374151; border-radius: 10px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); flex-direction: column; overflow: hidden; resize: vertical;">
+        <div class="widget-header" style="cursor: move; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; background: #111827; border-bottom: 1px solid #374151;" title="클릭 후 드래그하여 이동">
+            <span style="font-weight:bold; font-size:13.5px; color:#fff;">🔍 보너스 산출 상세 검증</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <button class="icon-btn-mac close" onclick="window.closeBonusDetailModal()" title="닫기">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+        </div>
+        
+        <div class="widget-body" style="padding: 14px; color: #d1d5db; font-size: 11.5px; display: flex; flex-direction: column; height: calc(100% - 45px); box-sizing: border-box; overflow: hidden; background: #1f2937;">
+            <div id="b-detail-summary" style="background: #111827; padding: 10px 12px; border-radius: 6px; border: 1px solid #374151; margin-bottom: 8px;">
+                <!-- JS 동적 입력 -->
+            </div>
+            
+            <div id="b-detail-logic" style="background: #1e293b; color: #93c5fd; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 11px; line-height: 1.4; border-left: 3px solid #3b82f6;">
+                <!-- JS 동적 입력 -->
+            </div>
+
+            <div class="table-scroll-container" style="flex: 1 1 auto; height: 100%; min-height: 150px; overflow-y: auto !important; border: 1px solid #374151; border-radius: 6px; background: #111827;">
+                <table class="period-table" style="width:100%; border-collapse:collapse; text-align:center; font-size:11px; white-space:nowrap;">
+                    <thead id="b-detail-thead" style="position:sticky; top:0; background:#1f2937; border-bottom:1px solid #4b5563; color:#9ca3af; z-index:10;">
+                        <!-- JS 동적 생성 -->
+                    </thead>
+                    <tbody id="b-detail-tbody">
+                        <!-- JS 동적 생성 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 계보도 캔버스 전용 워크스페이스 -->
+    <div id="main-workspace" style="position: absolute; top: 60px; left: 0; right: 0; bottom: 0; overflow: hidden; z-index: 1;">
+        <div id="canvas-container" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden;">
+            <div id="tree-wrapper" class="tree" style="position: absolute; transform-origin: 0 0;"><div id="tree-root"></div></div>
+        </div>
+    </div>
+
+    <!-- 계보도 줌 컨트롤러 아이콘 바 -->
+    <div class="zoom-controls" style="position: absolute; top: 70px; right: 20px; z-index: 1000;">
+        <button class="btn-icon" onclick="window.changeZoom(-0.05)" title="축소"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+        <button class="btn-icon" onclick="window.resetZoomAndPan()" title="중앙 정렬"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2"></circle></svg></button>
+        <button class="btn-icon" onclick="window.toggleFullScreen()" title="전체화면 전환">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <polyline points="9 21 3 21 3 15"></polyline>
+                <line x1="21" y1="3" x2="14" y2="10"></line>
+                <line x1="3" y1="21" x2="10" y2="14"></line>
+            </svg>
+        </button>
+        <button class="btn-icon" onclick="window.changeZoom(0.05)" title="확대"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+    </div>
+
+    <div id="taskbar"></div>
+
+    <script src="css/js/state.js"></script>
+    <script src="css/js/api.js"></script>
+    <script src="css/js/ui.js"></script>
+    <script src="css/js/main.js"></script>
+
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            const filterWidget = document.getElementById('filterWidget');
+            if (filterWidget) {
+                const savedHeight = localStorage.getItem('bs_filter_widget_height');
+                if (savedHeight) filterWidget.style.height = savedHeight;
+            }
+
+            // 하단 패널 높이 조절 핸들러 (마우스 드래그)
+            let isResizingPerf = false;
+            const perfResizer = document.getElementById('perf-resizer');
+            if (perfResizer) {
+                perfResizer.addEventListener('pointerdown', (e) => {
+                    const panel = document.getElementById('perfWidget');
+                    if (panel && panel.classList.contains('closed')) return;
+                    isResizingPerf = true;
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+                window.addEventListener('pointermove', (e) => {
+                    if (!isResizingPerf) return;
+                    const panel = document.getElementById('perfWidget');
+                    if (!panel || panel.classList.contains('closed')) return;
+                    
+                    const newHeight = window.innerHeight - e.clientY;
+                    if (newHeight >= 150 && newHeight <= window.innerHeight - 70) {
+                        panel.style.height = newHeight + 'px';
+                    }
+                });
+                window.addEventListener('pointerup', () => {
+                    isResizingPerf = false;
+                });
+            }
+
+            // 초기 로딩 시 미선택 상태 보장
+            setTimeout(() => {
+                if (typeof window.fetchTreeData === 'function') {
+                    window.fetchTreeData(true);
+                } else if (typeof window.renderTree === 'function') {
+                    window.renderTree(true);
+                }
+                if (typeof window.calculateLocalPerformance === 'function') {
+                    window.calculateLocalPerformance(null);
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>
