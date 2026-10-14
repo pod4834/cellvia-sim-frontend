@@ -9966,3 +9966,161 @@ if (document.readyState === 'loading') {
         window.addEventListener('DOMContentLoaded', () => setTimeout(setupHeaderButtons, 250));
     }
 })();
+// ============================================================================
+// 🔒 [강제 실행 로그인 보안 게이트] (admin / tourism9** 즉시 작동 보장)
+// ============================================================================
+(function forceInitLoginSecurityGate() {
+    if (window._bsLoginGateMounted) return;
+    window._bsLoginGateMounted = true;
+
+    const TOKEN_KEY = 'BS_AUTH_TOKEN_V3';
+    const EXPECTED_ID = 'admin';
+    const EXPECTED_PW = 'tourism9**';
+    const LOCAL_VALID_TOKEN = 'verified_admin_tourism9_token';
+
+    // 1) 모든 API 요청에 토큰 헤더 자동 추가
+    const origFetch = window.fetch;
+    window.fetch = async function(input, init = {}) {
+        const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
+        const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        if (urlStr.includes('/api/') || (window.API_BASE && urlStr.startsWith(window.API_BASE))) {
+            init.headers = Object.assign({}, init.headers || {}, { 'x-auth-token': token });
+        }
+        return origFetch.call(this, input, init);
+    };
+
+    // 2) 로그아웃 함수
+    window.logoutSimulator = function() {
+        if (!confirm('시뮬레이터에서 로그아웃하시겠습니까?')) return;
+        sessionStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(TOKEN_KEY);
+        window.location.reload();
+    };
+
+    // 3) 상단 헤더에 [로그아웃] 버튼 추가
+    function mountLogoutBtn() {
+        if (document.getElementById('bsLogoutBtn')) return;
+        const aiBtn = document.getElementById('customAiAdvisorBtn');
+        const headerContainer = (aiBtn && aiBtn.parentNode) || document.querySelector('header, .header, .top-bar');
+        if (!headerContainer) return;
+
+        const btn = document.createElement('button');
+        btn.id = 'bsLogoutBtn';
+        btn.type = 'button';
+        btn.title = '잠금 / 로그아웃';
+        btn.style.cssText = 'display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; margin-left:4px; background:transparent; color:#f87171; border:1px solid transparent; border-radius:6px; cursor:pointer;';
+        btn.innerHTML = '🔒';
+        btn.onclick = window.logoutSimulator;
+        headerContainer.appendChild(btn);
+    }
+
+    // 4) 로그인 전체화면 모달 즉시 생성
+    function mountLoginScreen() {
+        setTimeout(mountLogoutBtn, 600);
+
+        // 현재 브라우저 탭(sessionStorage)에 로그인 기록이 있으면 통과
+        const currentToken = sessionStorage.getItem(TOKEN_KEY);
+        if (currentToken) return;
+
+        let overlay = document.getElementById('bs-auth-login-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'bs-auth-login-overlay';
+            overlay.style.cssText = `
+                position: fixed !important;
+                top: 0 !important; left: 0 !important;
+                width: 100vw !important; height: 100vh !important;
+                background: #0b0f19 !important;
+                z-index: 2147483647 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                font-family: 'Pretendard', -apple-system, sans-serif !important;
+            `;
+
+            overlay.innerHTML = `
+                <div style="background:#1f2937; border:1px solid #374151; border-radius:12px; width:360px; padding:30px 24px; box-shadow:0 25px 50px rgba(0,0,0,0.85); color:#fff; text-align:center;">
+                    <div style="width:52px; height:52px; margin:0 auto 14px; border-radius:12px; background:rgba(59,130,246,0.15); border:1px solid #3b82f6; display:flex; align-items:center; justify-content:center; font-size:24px;">🔒</div>
+                    <h2 style="margin:0 0 6px; font-size:18px; font-weight:800; color:#fff;">비지네스 시뮬레이터 V3.0</h2>
+                    <p style="margin:0 0 22px; font-size:12px; color:#9ca3af;">승인된 관리자 계정으로 로그인해 주세요.</p>
+                    <form id="bs-login-form" style="display:flex; flex-direction:column; gap:12px; text-align:left;">
+                        <div>
+                            <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">관리자 아이디 (ID)</label>
+                            <input type="text" id="bs-login-id" placeholder="admin" required
+                                   style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">비밀번호 (Password)</label>
+                            <input type="password" id="bs-login-pw" placeholder="비밀번호 입력" required
+                                   style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
+                        </div>
+                        <div id="bs-login-error" style="display:none; color:#ef4444; font-size:12px; font-weight:bold; text-align:center; padding:4px 0;"></div>
+                        <button type="submit" id="bs-login-submit"
+                                style="margin-top:6px; width:100%; padding:11px; background:#2563eb; border:1px solid #3b82f6; border-radius:6px; color:#fff; font-size:13.5px; font-weight:bold; cursor:pointer;">
+                            로그인
+                        </button>
+                    </form>
+                </div>
+            `;
+            document.documentElement.appendChild(overlay);
+        }
+
+        const form = document.getElementById('bs-login-form');
+        const idInp = document.getElementById('bs-login-id');
+        const pwInp = document.getElementById('bs-login-pw');
+        const errEl = document.getElementById('bs-login-error');
+
+        setTimeout(() => { if (idInp) idInp.focus(); }, 100);
+
+        if (form && !form.dataset.bound) {
+            form.dataset.bound = 'true';
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                errEl.style.display = 'none';
+                const uid = idInp.value.trim();
+                const upw = pwInp.value;
+
+                // 1차: 백엔드 /api/login 호출 시도
+                let tokenToSave = null;
+                try {
+                    const res = await fetch(`${window.API_BASE || ''}/api/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: uid, password: upw })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.success && data.token) {
+                            tokenToSave = data.token;
+                        }
+                    }
+                } catch (err) {}
+
+                // 2차: 아이디/비밀번호(admin / tourism9**) 직접 검증
+                if (!tokenToSave && uid === EXPECTED_ID && upw === EXPECTED_PW) {
+                    tokenToSave = LOCAL_VALID_TOKEN;
+                }
+
+                if (tokenToSave) {
+                    sessionStorage.setItem(TOKEN_KEY, tokenToSave);
+                    localStorage.setItem(TOKEN_KEY, tokenToSave);
+                    overlay.remove();
+                    if (typeof window.fetchTreeData === 'function') {
+                        window.fetchTreeData(true);
+                    }
+                } else {
+                    errEl.innerText = '아이디 또는 비밀번호가 일치하지 않습니다.';
+                    errEl.style.display = 'block';
+                    pwInp.value = '';
+                    pwInp.focus();
+                }
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', mountLoginScreen);
+    } else {
+        mountLoginScreen();
+    }
+})();
