@@ -76,3 +76,56 @@ window.parseDateToYMD = function(d) {
     if (val.length === 8) return `${val.substring(0,4)}-${val.substring(4,6)}-${val.substring(6,8)}`;
     return str;
 };
+// ============================================================================
+// 🔒 [보안 로그인 & API 접근 차단 미들웨어]
+// ============================================================================
+const crypto = require('crypto');
+
+// 관리자 아이디 및 비밀번호 설정 (tourism9** 적용)
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASS || 'tourism9**';
+const AUTH_SECRET = process.env.AUTH_SECRET || 'cellvia_sim_secret_key_v3';
+
+function generateAuthToken(username) {
+    return crypto.createHmac('sha256', AUTH_SECRET).update(String(username)).digest('hex');
+}
+
+// 1) 로그인 검증 API
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body || {};
+    if (username === ADMIN_USER && password === ADMIN_PASS) {
+        return res.json({
+            success: true,
+            token: generateAuthToken(username),
+            username
+        });
+    }
+    return res.status(401).json({
+        success: false,
+        message: '아이디 또는 비밀번호가 일치하지 않습니다.'
+    });
+});
+
+// 2) 토큰 유효성 확인 API
+app.get('/api/auth-check', (req, res) => {
+    const token = req.headers['x-auth-token'];
+    const validToken = generateAuthToken(ADMIN_USER);
+    if (token && token === validToken) {
+        return res.json({ ok: true });
+    }
+    return res.status(401).json({ ok: false });
+});
+
+// 3) 모든 /api/* 요청에 대해 로그인 토큰 강제 검증 (로그인 안 된 외부 호출 100% 차단)
+app.use('/api', (req, res, next) => {
+    if (req.path === '/login' || req.path === '/auth-check') return next();
+    const token = req.headers['x-auth-token'];
+    const validToken = generateAuthToken(ADMIN_USER);
+    if (token && token === validToken) {
+        return next();
+    }
+    return res.status(401).json({
+        success: false,
+        error: '로그인이 필요한 서비스입니다. (Unauthorized)'
+    });
+});
