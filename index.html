@@ -8,31 +8,49 @@
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="css/style.css">
     
+    <!-- =================================================================== -->
+    <!-- [HTML-1] 시스템 전용 커스텀 스타일 정의 (사이드바, 위젯, 스크롤바, 카드 가독성) -->
+    <!-- =================================================================== -->
     <style>
-        #salesWidget { transition: transform 0.3s ease-in-out; transform: translateX(0); }
-        #salesWidget.closed { transform: translateX(-100%); }
-        
-        #salesToggleBtn {
-            position: absolute; right: -24px; top: 50%; margin-top: -30px;
-            width: 24px; height: 60px; background: #1f2937;
-            border: 1px solid #374151; border-left: none; border-radius: 0 8px 8px 0;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; box-shadow: 4px 0 6px rgba(0,0,0,0.3); z-index: 1000;
+        /* [1-1] 좌측 매출/구독 사이드바 애니메이션, 높이 고정 및 표시설정 숨김 연동 */
+        #salesWidget { 
+            position: absolute !important;
+            top: 60px !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            width: 330px !important;
+            height: calc(100vh - 60px) !important;
+            max-height: none !important;
+            min-height: calc(100vh - 60px) !important;
+            transition: transform 0.3s ease-in-out !important; 
+            transform: translateX(0) !important; 
         }
-        #salesToggleBtn svg { transition: transform 0.3s ease; }
-        #salesWidget.closed #salesToggleBtn svg { transform: rotate(180deg); }
+        #salesWidget.closed { 
+            transform: translateX(-100%) !important; 
+        }
+        /* 표시설정에서 체크 해제 시 완전히 숨김 */
+        #salesWidget[data-settings-hidden="true"] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+        #salesWidget .widget-body {
+            display: flex !important;
+            height: calc(100% - 60px) !important;
+        }
 
-        /* 줌 컨트롤러 위치 고정 */
+        /* [1-2] 줌 컨트롤러 위치 고정 (플로팅 창보다 아래에 위치하도록 z-index 800 설정) */
         .zoom-controls {
             position: absolute !important;
             top: 70px !important;
             bottom: auto !important;
             right: 20px !important;
             height: auto !important;
-            z-index: 1000 !important;
+            z-index: 800 !important;
         }
 
-        /* 하단 고정 슬라이드 패널 (세로 스크롤바 보장) */
+        /* [1-3] 하단 고정 슬라이드 패널 (실적 집계 및 수당 시뮬레이터) */
         #perfWidget {
             position: fixed !important;
             bottom: 0 !important;
@@ -44,7 +62,7 @@
             height: 350px;
             min-height: 48px !important;
             max-height: calc(100vh - 70px) !important;
-            z-index: 920 !important;
+            z-index: 920;
             background: #1f2937 !important;
             border-top: 1px solid #374151 !important;
             border-left: 1px solid #374151 !important;
@@ -55,14 +73,10 @@
             overflow: hidden;
             transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        #perfWidget.closed {
-            height: 48px !important;
-        }
-        #perfWidget.closed #perf-resizer {
-            display: none !important;
-        }
+        #perfWidget.closed { height: 48px !important; }
+        #perfWidget.closed #perf-resizer { display: none !important; }
 
-        /* 수당 시뮬레이터 내부 세로/가로 스크롤바 보장 */
+        /* [1-4] 수당 시뮬레이터 내부 세로/가로 스크롤바 보장 */
         #perfWidget .widget-body {
             flex: 1 1 auto !important;
             min-height: 0 !important;
@@ -72,22 +86,12 @@
             overflow-x: auto !important;
             overflow-y: auto !important;
         }
+        #perfWidget .widget-body::-webkit-scrollbar { width: 8px !important; height: 8px !important; }
+        #perfWidget .widget-body::-webkit-scrollbar-track { background: #111827 !important; }
+        #perfWidget .widget-body::-webkit-scrollbar-thumb { background: #4b5563 !important; border-radius: 4px !important; }
+        #perfWidget .widget-body::-webkit-scrollbar-thumb:hover { background: #60a5fa !important; }
 
-        #perfWidget .widget-body::-webkit-scrollbar {
-            width: 8px !important;
-            height: 8px !important;
-        }
-        #perfWidget .widget-body::-webkit-scrollbar-track {
-            background: #111827 !important;
-        }
-        #perfWidget .widget-body::-webkit-scrollbar-thumb {
-            background: #4b5563 !important;
-            border-radius: 4px !important;
-        }
-        #perfWidget .widget-body::-webkit-scrollbar-thumb:hover {
-            background: #60a5fa !important;
-        }
-
+        /* [1-5] 좌측 패널 내 매출 입력 행(Row) 디자인 */
         .sales-row { display: flex; gap: 4px; margin-bottom: 6px; align-items: center; }
         .sales-row select, .sales-row input { box-sizing: border-box; background: transparent; border: 1px solid #4b5563; color: #fff; border-radius: 4px; font-family: inherit; }
         .sales-row select:focus, .sales-row input:focus { outline: none; border-color: #60a5fa; }
@@ -97,9 +101,8 @@
         .sales-row .btn-del-row { width: 18px; padding: 0; display: flex; justify-content: center; align-items: center; color: #ef4444; background: transparent; border: none; font-size: 16px; font-weight: bold; cursor: pointer; }
         .sales-row .btn-del-row:hover { color: #dc2626; transform: scale(1.2); }
 
-        #taskbar {
-            position: absolute; bottom: 0; left: 340px; display: flex; gap: 8px; z-index: 10000; padding: 0 10px;
-        }
+        /* [1-6] 하단 작업표시줄(Taskbar) 및 테이블 공통 스타일 */
+        #taskbar { position: absolute; bottom: 0; left: 340px; display: flex; gap: 8px; z-index: 10000; padding: 0 10px; }
         .taskbar-item {
             background: #1f2937; color: #9ca3af; padding: 8px 16px; border: 1px solid #4b5563; 
             border-bottom: none; border-radius: 8px 8px 0 0; font-size: 12px; cursor: pointer; 
@@ -112,100 +115,126 @@
         }
         .period-table td { padding: 4px; border-bottom: 1px solid #374151; }
 
+        /* [1-7] 맥북(macOS) 스타일 원형 닫기/최소화 버튼 */
         .icon-btn-mac {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            border: none;
-            cursor: pointer;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            padding: 0 !important;
-            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2);
+            width: 14px; height: 14px; border-radius: 50%; border: none; cursor: pointer;
+            display: inline-flex !important; align-items: center !important; justify-content: center !important;
+            padding: 0 !important; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2);
             transition: transform 0.15s ease, filter 0.15s ease;
         }
-        .icon-btn-mac:hover {
-            transform: scale(1.15);
-            filter: brightness(1.1);
-        }
+        .icon-btn-mac:hover { transform: scale(1.15); filter: brightness(1.1); }
         .icon-btn-mac.close { background: #ef4444; color: #450a0a; }
         .icon-btn-mac.minimize { background: #f59e0b; color: #451a03; }
         .icon-btn-mac svg { display: block; pointer-events: none; }
 
+        /* [1-8] 매출 기간 검색 위젯 스크롤바 */
         #filterWidget .table-scroll-container::-webkit-scrollbar { width: 8px; }
         #filterWidget .table-scroll-container::-webkit-scrollbar-track { background: #111827; border-radius: 4px; }
         #filterWidget .table-scroll-container::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
         #filterWidget .table-scroll-container::-webkit-scrollbar-thumb:hover { background: #60a5fa; }
 
+        /* [1-9] 계보도 노드 카드 및 타이틀 이하 폰트 크기 확대 / 굵기(가독성) 대폭 강화 */
         .node-card {
             position: relative !important;
             overflow: visible !important;
             cursor: pointer;
+            -webkit-font-smoothing: antialiased;
         }
         .node-card .btn-add-parent {
-            position: absolute;
-            top: -16px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 28px;
-            height: 14px;
-            background: #3b82f6;
-            border-radius: 4px 4px 0 0;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 9px;
-            color: #fff;
-            font-weight: bold;
-            z-index: 101;
-            transition: all 0.2s ease;
-            box-shadow: 0 -2px 5px rgba(0,0,0,0.5);
+            position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+            width: 28px; height: 14px; background: #3b82f6; border-radius: 4px 4px 0 0;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 9px; color: #fff; font-weight: bold; z-index: 101;
+            transition: all 0.2s ease; box-shadow: 0 -2px 5px rgba(0,0,0,0.5);
         }
-        .node-card .btn-add-parent:hover {
-            background: #1d4ed8;
-            top: -18px;
-            height: 16px;
+        .node-card .btn-add-parent:hover { background: #1d4ed8; top: -18px; height: 16px; }
+
+        .node-card .corner-btn { position: absolute; bottom: 0; width: 0; height: 0; cursor: pointer; z-index: 100; transition: all 0.2s ease; }
+        .node-card .corner-btn.corner-left { left: 0; border-bottom: 18px solid #6b7280; border-right: 18px solid transparent; }
+        .node-card .corner-btn.corner-left:hover { border-bottom-color: #3b82f6; transform: scale(1.2); }
+        .node-card .corner-btn.corner-right { right: 0; border-bottom: 18px solid #6b7280; border-left: 18px solid transparent; }
+        .node-card .corner-btn.corner-right:hover { border-bottom-color: #ef4444; transform: scale(1.2); }
+
+        /* 🌟 카드 타이틀(회원코드) 이하 본문 요소들의 폰트 크기 확대 및 굵기(font-weight) 강화 */
+        /* 1) 클래스 기반 요소 가독성 향상 */
+        .node-card .node-id, .node-card .member-id, .node-card .card-id {
+            font-size: 13px !important;
+            font-weight: 700 !important;
+            color: #93c5fd !important;
+            letter-spacing: -0.2px !important;
+            line-height: 1.35 !important;
+        }
+        .node-card .node-name, .node-card .member-name, .node-card .card-name {
+            font-size: 16px !important;
+            font-weight: 800 !important;
+            color: #ffffff !important;
+            margin: 2px 0 !important;
+            line-height: 1.35 !important;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6) !important;
+        }
+        .node-card .node-rank, .node-card .member-rank, .node-card .card-rank {
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.2px !important;
+            line-height: 1.3 !important;
+        }
+        .node-card .node-type, .node-card .member-type, .node-card .card-type,
+        .node-card .node-info, .node-card .node-sub {
+            font-size: 11.5px !important;
+            font-weight: 700 !important;
+            color: #e5e7eb !important;
+            line-height: 1.3 !important;
+        }
+        .node-card .node-date, .node-card .member-date, .node-card .card-date {
+            font-size: 11.5px !important;
+            font-weight: 600 !important;
+            color: #d1d5db !important;
+            line-height: 1.3 !important;
+        }
+        .node-card .node-rec, .node-card .node-footer, .node-card .card-rec, .node-card .rec-info {
+            font-size: 11.5px !important;
+            font-weight: 700 !important;
+            color: #e5e7eb !important;
+            line-height: 1.35 !important;
+        }
+        .node-card .node-rec span, .node-card .node-footer span,
+        .node-card .node-rec div, .node-card .node-footer div {
+            font-size: 11px !important;
+            font-weight: 600 !important;
+            color: #d1d5db !important;
         }
 
-        .node-card .corner-btn {
-            position: absolute;
-            bottom: 0;
-            width: 0;
-            height: 0;
-            cursor: pointer;
-            z-index: 100;
-            transition: all 0.2s ease;
+        /* 2) 인라인 스타일(div/span)로 렌더링되는 카드 구조에서도 타이틀(첫 줄) 이하 전체 크기/굵기 강제 상향 */
+        .node-card > div:not(.btn-add-parent):not(.corner-btn):not(:first-of-type),
+        .node-card .node-body > div,
+        .node-card .card-body > div {
+            font-weight: 700 !important;
         }
-        .node-card .corner-btn.corner-left {
-            left: 0;
-            border-bottom: 18px solid #6b7280;
-            border-right: 18px solid transparent;
+
+        /* [1-10] 선택된 활성 위젯(매출 기간 검색 / 하단 슬라이드 창) 최상단 레이어 보장 */
+        #filterWidget.is-front-widget,
+        #perfWidget.is-front-widget {
+            z-index: 2147483600 !important;
         }
-        .node-card .corner-btn.corner-left:hover {
-            border-bottom-color: #3b82f6;
-            transform: scale(1.2);
+        #filterWidget.is-back-widget,
+        #perfWidget.is-back-widget {
+            z-index: 900 !important;
         }
-        .node-card .corner-btn.corner-right {
-            right: 0;
-            border-bottom: 18px solid #6b7280;
-            border-left: 18px solid transparent;
-        }
-        .node-card .corner-btn.corner-right:hover {
-            border-bottom-color: #ef4444;
-            transform: scale(1.2);
+        #bonusDetailModal, #addPartnerModal, #memberEditModal {
+            z-index: 2147483645 !important;
         }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden; background: #111827;">
     
-    <!-- 1. 상단 헤더 -->
+    <!-- =================================================================== -->
+    <!-- [HTML-2] 상단 헤더 바 (로고, 시뮬레이션 스위치, 기간검색, 회원검색, 설정) -->
+    <!-- =================================================================== -->
     <div class="top-header-bar" style="position: absolute; top: 0; left: 0; right: 0; height: 60px; box-sizing: border-box; z-index: 9999; box-shadow: 0 2px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: #1f2937; border-bottom: 1px solid #374151;">
+        <!-- [2-1] 헤더 좌측: 타이틀 및 가상 시뮬레이션 제어 -->
         <div class="header-left">
             <div class="main-logo-title" style="display: flex; align-items: center; gap: 12px;">
                 <span style="font-weight: bold; font-size: 16px; color: #fff;">비지네스 시뮬레이터 V3.0</span>
-                
                 <span id="header-line-count" style="font-size:12px; color:#fff; background:#111827; padding:4px 10px; border-radius:12px; border:1px solid #374151; white-space:nowrap;"></span>
 
                 <label class="theme-switch" title="가상 시뮬레이션 모드 전환" style="margin: 0;">
@@ -223,7 +252,32 @@
             </div>
         </div>
         
+        <!-- [2-2] 헤더 우측: 통합 기간검색, 회원검색, 표시설정 드롭다운, 모드전환 -->
         <div class="header-right" style="display: flex; align-items: center; gap: 10px;">
+            
+            <!-- [2-2-1] 헤더 통합 기간검색 컴포넌트 -->
+            <div id="header-period-filter" style="display: flex; align-items: center; gap: 6px; background: #111827; padding: 4px 10px; border-radius: 6px; border: 1px solid #374151; font-size: 12px; color: #d1d5db;">
+                <select id="header-period-select" onchange="window.handleHeaderPeriodPresetChange(this.value)" style="background: #1f2937; border: 1px solid #4b5563; color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 12px; cursor: pointer; outline: none;">
+                    <option value="term">이번기수</option>
+                    <option value="month">이번달</option>
+                    <option value="year">올해</option>
+                </select>
+
+                <div style="display: flex; gap: 2px;">
+                    <button onclick="window.navigateHeaderPeriod(-1)" title="이전 기간" style="background: #374151; color: #fff; border: 1px solid #4b5563; padding: 3px 7px; border-radius: 4px 0 0 4px; font-size: 11px; cursor: pointer;">◀ 이전</button>
+                    <button onclick="window.navigateHeaderPeriod(1)" title="다음 기간" style="background: #374151; color: #fff; border: 1px solid #4b5563; padding: 3px 7px; border-radius: 0 4px 4px 0; font-size: 11px; cursor: pointer; border-left: none;">다음 ▶</button>
+                </div>
+
+                <div style="width: 1px; height: 16px; background: #374151; margin: 0 2px;"></div>
+
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <input type="text" id="header-start-date" value="2026-10-01" placeholder="MMDD" style="width: 85px; text-align: center; background: #1f2937; border: 1px solid #4b5563; color: #60a5fa; padding: 3px 4px; border-radius: 4px; font-size: 12px; font-weight: bold;" onblur="window.handleHeaderDateInputBlur(this, 'start')" onkeydown="if(event.key==='Enter') this.blur();">
+                    <span style="color: #9ca3af;">~</span>
+                    <input type="text" id="header-end-date" value="2026-10-15" placeholder="MMDD" style="width: 85px; text-align: center; background: #1f2937; border: 1px solid #4b5563; color: #60a5fa; padding: 3px 4px; border-radius: 4px; font-size: 12px; font-weight: bold;" onblur="window.handleHeaderDateInputBlur(this, 'end')" onkeydown="if(event.key==='Enter') this.blur();">
+                </div>
+            </div>
+
+            <!-- [2-2-2] 전체 계보도 회원 검색창 -->
             <div class="search-box" style="margin: 0;">
                 <input type="text" id="searchInput" placeholder="전체 계보도 회원 검색..." onkeydown="if(event.key==='Enter') window.searchMember()">
                 <button onclick="window.searchMember()" title="검색">
@@ -231,6 +285,7 @@
                 </button>
             </div>
 
+            <!-- [2-2-3] 계보도 및 위젯 표시 설정 톱니바퀴 메뉴 -->
             <div style="position: relative;">
                 <button class="btn-icon-header" onclick="window.toggleSettingsMenu(event)" title="계보도 표시 설정">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -243,11 +298,11 @@
                     <div class="settings-grid" style="display: flex; gap: 16px; justify-content: space-between;">
                         <div class="settings-col" style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
                             <div class="settings-title" style="font-weight: bold; color: #60a5fa; margin-bottom: 4px; border-bottom: 1px solid #374151; padding-bottom: 4px;">기본 표시</div>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-code" checked onchange="window.updateSetting('code')"> 회원코드</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-id" checked onchange="window.updateSetting('id')"> 회원ID</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-name" checked onchange="window.updateSetting('name')"> 회원이름</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-rank" checked onchange="window.updateSetting('rank')"> 직급</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-type" checked onchange="window.updateSetting('type')"> 회원구분</label>
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-code" checked onchange="window.updateSetting('code')"> 회원코드</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-joinDate" checked onchange="window.updateSetting('joinDate')"> 가입일</label>
                         </div>
                         <div class="settings-col" style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
@@ -259,15 +314,16 @@
                         </div>
                         <div class="settings-col" style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
                             <div class="settings-title" style="font-weight: bold; color: #60a5fa; margin-bottom: 4px; border-bottom: 1px solid #374151; padding-bottom: 4px;">위젯 설정</div>
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-sales-widget" checked onchange="window.toggleWidgetGlobal('chk-sales-widget', 'salesWidget')"> 매출/구독 패널</label>
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-perf-widget" checked onchange="window.toggleWidgetGlobal('chk-perf-widget', 'perfWidget')"> 실적/수당 시뮬레이션</label>
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-ai-widget" onchange="window.toggleWidgetGlobal('chk-ai-widget', 'aiWidget')"> 비지네스 내비게이터</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-sales-widget" checked onchange="window.toggleWidgetGlobal('chk-sales-widget', 'salesWidget')"> 매출/구독</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-perf-widget" checked onchange="window.toggleWidgetGlobal('chk-perf-widget', 'perfWidget')"> 실적/수당</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-ai-widget" onchange="window.toggleWidgetGlobal('chk-ai-widget', 'aiWidget')"> 내비게이터</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #d1d5db;"><input type="checkbox" id="chk-filter-widget" onchange="window.toggleWidgetGlobal('chk-filter-widget', 'filterWidget')"> 매출 기간 검색</label>
                         </div>
                     </div>
                 </div>
             </div>
             
+            <!-- [2-2-4] 후원/추천 계보도 전환 및 새로고침 버튼 -->
             <button class="btn-icon-header" id="toggleTreeBtn" onclick="window.toggleTreeMode()" title="추천계보도로 전환 (현재: 후원계보도)">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="9" y="3" width="6" height="6" rx="1" ry="1"></rect><path d="M12 9v3"></path><path d="M3 15h18"></path><path d="M5 15v3"></path>
@@ -284,7 +340,9 @@
         </div>
     </div>
 
-    <!-- 2. 매출 및 구독 내역 위젯 (사이드바) -->
+    <!-- =================================================================== -->
+    <!-- [HTML-3] 좌측 매출 및 구독 내역 사이드바 위젯 (#salesWidget) -->
+    <!-- =================================================================== -->
     <div class="widget" id="salesWidget" style="position: absolute; top: 60px; left: 0; bottom: 0; width: 330px; margin: 0; border-radius: 0; border-left: none; border-bottom: none; border-top: none; z-index: 950; display: flex; flex-direction: column; background: #1f2937;">
         <div class="sales-panel-toggle" onclick="window.toggleSalesSidebar()" id="salesToggleBtn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
@@ -292,7 +350,7 @@
         
         <div class="widget-header" id="salesWidgetHeader" style="align-items: flex-start; cursor: default; padding: 12px 12px;">
             <div style="display: flex; flex-direction: column; gap: 4px;">
-                <span style="font-size: 14px; font-weight: bold; padding-top: 2px;">매출 및 구독 내역</span>
+                <span style="font-size: 14px; font-weight: bold; padding-top: 2px;">매출/구독 내역</span>
                 <span id="sales-target-name" style="color:#60a5fa; font-size: 11px;">선택 안됨</span>
             </div>
             
@@ -329,7 +387,9 @@
         </div>
     </div>
 
-    <!-- 3. 하단 슬라이드 패널 수당 시뮬레이터 (#perfWidget) -->
+    <!-- =================================================================== -->
+    <!-- [HTML-4] 하단 슬라이드 패널: 실적 집계 및 수당 시뮬레이터 (#perfWidget) -->
+    <!-- =================================================================== -->
     <div class="widget" id="perfWidget">
         <div id="perf-resizer" style="position:absolute; top:0; left:0; right:0; height:8px; cursor:ns-resize; background:transparent; z-index:1000;" 
              onmousedown="event.stopPropagation();" onpointerdown="event.stopPropagation();">
@@ -339,7 +399,7 @@
         <div class="widget-header" style="cursor: pointer; padding: 14px 16px 10px 16px; display: flex; justify-content: space-between; align-items: center;" 
              onmousedown="event.stopPropagation();" onpointerdown="event.stopPropagation();" onclick="window.togglePerfSidebar(event)">
             <div style="display:flex; align-items:center; gap:10px;">
-                <span style="font-weight:bold; font-size:13.5px; color:#fff;">📊 실적 집계 및 수당 시뮬레이터 <span id="perf-target-name" style="color:#60a5fa; font-size:12px; font-weight:normal; margin-left:4px;">(선택 안됨)</span></span>
+                <span style="font-weight:bold; font-size:13.5px; color:#fff;">📊 실적 집계 <span id="perf-target-name" style="color:#60a5fa; font-size:12px; font-weight:normal; margin-left:4px;">(선택 안됨)</span></span>
             </div>
             <div style="display: flex; align-items: center; gap: 14px;">
                 <label style="font-size: 11px; color: #d1d5db; display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="event.stopPropagation()">
@@ -393,7 +453,9 @@
         </div>
     </div>
 
-    <!-- 🌟 8. 보너스 산출 상세 검증 신규 모달 (#bonusDetailModal) - 계보도 좌측상단 초기 위치 -->
+    <!-- =================================================================== -->
+    <!-- [HTML-5] 보너스 산출 상세 검증 팝업 모달 (#bonusDetailModal) -->
+    <!-- =================================================================== -->
     <div class="widget" id="bonusDetailModal" style="display:none; position: absolute; top: 80px; left: 340px; width: 620px; height: 480px; z-index: 99999; margin: 0; background: #1f2937; border: 1px solid #374151; border-radius: 10px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); flex-direction: column; overflow: hidden; resize: vertical;">
         <div class="widget-header" style="cursor: move; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; background: #111827; border-bottom: 1px solid #374151;" title="클릭 후 드래그하여 이동">
             <span style="font-weight:bold; font-size:13.5px; color:#fff;">🔍 보너스 산출 상세 검증</span>
@@ -405,44 +467,33 @@
         </div>
         
         <div class="widget-body" style="padding: 14px; color: #d1d5db; font-size: 11.5px; display: flex; flex-direction: column; height: calc(100% - 45px); box-sizing: border-box; overflow: hidden; background: #1f2937;">
-            <div id="b-detail-summary" style="background: #111827; padding: 10px 12px; border-radius: 6px; border: 1px solid #374151; margin-bottom: 8px;">
-                <!-- JS 동적 입력 -->
-            </div>
-            
-            <div id="b-detail-logic" style="background: #1e293b; color: #93c5fd; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 11px; line-height: 1.4; border-left: 3px solid #3b82f6;">
-                <!-- JS 동적 입력 -->
-            </div>
-
+            <div id="b-detail-summary" style="background: #111827; padding: 10px 12px; border-radius: 6px; border: 1px solid #374151; margin-bottom: 8px;"></div>
+            <div id="b-detail-logic" style="background: #1e293b; color: #93c5fd; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 11px; line-height: 1.4; border-left: 3px solid #3b82f6;"></div>
             <div class="table-scroll-container" style="flex: 1 1 auto; height: 100%; min-height: 150px; overflow-y: auto !important; border: 1px solid #374151; border-radius: 6px; background: #111827;">
                 <table class="period-table" style="width:100%; border-collapse:collapse; text-align:center; font-size:11px; white-space:nowrap;">
-                    <thead id="b-detail-thead" style="position:sticky; top:0; background:#1f2937; border-bottom:1px solid #4b5563; color:#9ca3af; z-index:10;">
-                        <!-- JS 동적 생성 -->
-                    </thead>
-                    <tbody id="b-detail-tbody">
-                        <!-- JS 동적 생성 -->
-                    </tbody>
+                    <thead id="b-detail-thead" style="position:sticky; top:0; background:#1f2937; border-bottom:1px solid #4b5563; color:#9ca3af; z-index:10;"></thead>
+                    <tbody id="b-detail-tbody"></tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <!-- 계보도 캔버스 전용 워크스페이스 -->
+    <!-- =================================================================== -->
+    <!-- [HTML-6] 계보도 캔버스 전용 워크스페이스 및 줌 컨트롤러 -->
+    <!-- =================================================================== -->
     <div id="main-workspace" style="position: absolute; top: 60px; left: 0; right: 0; bottom: 0; overflow: hidden; z-index: 1;">
         <div id="canvas-container" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden;">
             <div id="tree-wrapper" class="tree" style="position: absolute; transform-origin: 0 0;"><div id="tree-root"></div></div>
         </div>
     </div>
 
-    <!-- 계보도 줌 컨트롤러 아이콘 바 -->
-    <div class="zoom-controls" style="position: absolute; top: 70px; right: 20px; z-index: 1000;">
+    <div class="zoom-controls" style="position: absolute; top: 70px; right: 20px; z-index: 800;">
         <button class="btn-icon" onclick="window.changeZoom(-0.05)" title="축소"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
         <button class="btn-icon" onclick="window.resetZoomAndPan()" title="중앙 정렬"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2"></circle></svg></button>
         <button class="btn-icon" onclick="window.toggleFullScreen()" title="전체화면 전환">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="15 3 21 3 21 9"></polyline>
-                <polyline points="9 21 3 21 3 15"></polyline>
-                <line x1="21" y1="3" x2="14" y2="10"></line>
-                <line x1="3" y1="21" x2="10" y2="14"></line>
+                <polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline>
+                <line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line>
             </svg>
         </button>
         <button class="btn-icon" onclick="window.changeZoom(0.05)" title="확대"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
@@ -450,26 +501,226 @@
 
     <div id="taskbar"></div>
 
+    <!-- =================================================================== -->
+    <!-- [HTML-7] 외부 스크립트 로드 및 내장 통합 기간검색/초기 구동 스크립트 -->
+    <!-- =================================================================== -->
     <script src="css/js/state.js"></script>
     <script src="css/js/api.js"></script>
     <script src="css/js/ui.js"></script>
     <script src="css/js/main.js"></script>
 
     <script>
-        window.addEventListener('DOMContentLoaded', () => {
-            const filterWidget = document.getElementById('filterWidget');
-            if (filterWidget) {
-                const savedHeight = localStorage.getItem('bs_filter_widget_height');
-                if (savedHeight) filterWidget.style.height = savedHeight;
+        // ====================================================================
+        // [14] 헤더 통합 기간검색 전역 제어 로직 (에러 원천 차단 내장형)
+        // ====================================================================
+
+        // [14-1] 현재 날짜(2026-10-13) 기준 초기 년/월/기수 즉시 계산
+        (function initDefaultPeriodVars() {
+            const now = new Date();
+            window.currentPeriodYear = now.getFullYear();
+            window.currentPeriodMonth = now.getMonth() + 1;
+            window.currentPeriodTerm = now.getDate() <= 15 ? 1 : 2;
+
+            const mStr = String(window.currentPeriodMonth).padStart(2, '0');
+            if (window.currentPeriodTerm === 1) {
+                window.globalStartDate = `${window.currentPeriodYear}-${mStr}-01`;
+                window.globalEndDate = `${window.currentPeriodYear}-${mStr}-15`;
+            } else {
+                const lastDay = new Date(window.currentPeriodYear, window.currentPeriodMonth, 0).getDate();
+                window.globalStartDate = `${window.currentPeriodYear}-${mStr}-16`;
+                window.globalEndDate = `${window.currentPeriodYear}-${mStr}-${lastDay}`;
+            }
+        })();
+
+        // [14-2] MMDD(4자리) 및 YYYYMMDD(8자리) 입력값 YYYY-MM-DD 자동 포맷 변환
+        window.parseToFullDateStr = function(inputVal) {
+            if (!inputVal) return '';
+            let clean = String(inputVal).replace(/[^0-9]/g, '');
+            
+            if (clean.length === 4) {
+                let mm = clean.substring(0, 2);
+                let dd = clean.substring(2, 4);
+                return `${window.currentPeriodYear}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+            }
+            if (clean.length === 8) {
+                return `${clean.substring(0, 4)}-${clean.substring(4, 6)}-${clean.substring(6, 8)}`;
+            }
+            if (/^\d{4}-\d{2}-\d{2}$/.test(inputVal.trim())) {
+                return inputVal.trim();
+            }
+            return '';
+        };
+
+        // [14-3] 헤더 날짜 입력창 포커스 아웃(Blur) 및 엔터 처리
+        window.handleHeaderDateInputBlur = function(inputEl, type) {
+            let fullDate = window.parseToFullDateStr(inputEl.value);
+            if (fullDate) {
+                inputEl.value = fullDate;
+                if (type === 'start') window.globalStartDate = fullDate;
+                if (type === 'end') window.globalEndDate = fullDate;
+                window.applyGlobalPeriodFilter();
+            } else {
+                inputEl.value = (type === 'start') ? window.globalStartDate : window.globalEndDate;
+            }
+        };
+
+        // [14-4] 드롭다운 프리셋 변경 처리 (이번기수 / 이번달 / 올해)
+        window.handleHeaderPeriodPresetChange = function(preset) {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const day = now.getDate();
+
+            const selectEl = document.getElementById('header-period-select');
+            if (selectEl && selectEl.value !== preset) {
+                selectEl.value = preset;
             }
 
-            // 하단 패널 높이 조절 핸들러 (마우스 드래그)
+            if (preset === 'term') {
+                const term = day <= 15 ? 1 : 2;
+                window.setPeriodByTerm(year, month, term);
+            } else if (preset === 'month') {
+                window.setPeriodByMonth(year, month);
+            } else if (preset === 'year') {
+                window.setPeriodByYear(year);
+            }
+        };
+
+        // [14-5] 기수 / 월 / 년 단위 시작일·종료일 계산 함수
+        window.setPeriodByTerm = function(year, month, term) {
+            window.currentPeriodYear = year;
+            window.currentPeriodMonth = month;
+            window.currentPeriodTerm = term;
+
+            let mStr = String(month).padStart(2, '0');
+            let startD = '', endD = '';
+
+            if (term === 1) {
+                startD = `${year}-${mStr}-01`;
+                endD = `${year}-${mStr}-15`;
+            } else {
+                let lastDay = new Date(year, month, 0).getDate();
+                startD = `${year}-${mStr}-16`;
+                endD = `${year}-${mStr}-${lastDay}`;
+            }
+
+            window.updateHeaderDateDisplay(startD, endD);
+        };
+
+        window.setPeriodByMonth = function(year, month) {
+            window.currentPeriodYear = year;
+            window.currentPeriodMonth = month;
+            let mStr = String(month).padStart(2, '0');
+            let lastDay = new Date(year, month, 0).getDate();
+
+            let startD = `${year}-${mStr}-01`;
+            let endD = `${year}-${mStr}-${lastDay}`;
+
+            window.updateHeaderDateDisplay(startD, endD);
+        };
+
+        window.setPeriodByYear = function(year) {
+            window.currentPeriodYear = year;
+            let startD = `${year}-01-01`;
+            let endD = `${year}-12-31`;
+
+            window.updateHeaderDateDisplay(startD, endD);
+        };
+
+        // [14-6] 헤더 날짜 입력칸 UI 텍스트 갱신 및 전역 필터 호출
+        window.updateHeaderDateDisplay = function(startD, endD) {
+            const startEl = document.getElementById('header-start-date');
+            const endEl = document.getElementById('header-end-date');
+            if (startEl) startEl.value = startD;
+            if (endEl) endEl.value = endD;
+
+            window.globalStartDate = startD;
+            window.globalEndDate = endD;
+
+            window.applyGlobalPeriodFilter();
+        };
+
+        // [14-7] ◀ 이전 / 다음 ▶ 버튼 클릭 시 선택된 단위로 기간 이동
+        window.navigateHeaderPeriod = function(direction) {
+            const selectEl = document.getElementById('header-period-select');
+            const preset = selectEl ? selectEl.value : 'term';
+
+            if (preset === 'term') {
+                window.currentPeriodTerm += direction;
+                if (window.currentPeriodTerm > 2) {
+                    window.currentPeriodTerm = 1;
+                    window.currentPeriodMonth++;
+                    if (window.currentPeriodMonth > 12) {
+                        window.currentPeriodMonth = 1;
+                        window.currentPeriodYear++;
+                    }
+                } else if (window.currentPeriodTerm < 1) {
+                    window.currentPeriodTerm = 2;
+                    window.currentPeriodMonth--;
+                    if (window.currentPeriodMonth < 1) {
+                        window.currentPeriodMonth = 12;
+                        window.currentPeriodYear--;
+                    }
+                }
+                window.setPeriodByTerm(window.currentPeriodYear, window.currentPeriodMonth, window.currentPeriodTerm);
+
+            } else if (preset === 'month') {
+                window.currentPeriodMonth += direction;
+                if (window.currentPeriodMonth > 12) {
+                    window.currentPeriodMonth = 1;
+                    window.currentPeriodYear++;
+                } else if (window.currentPeriodMonth < 1) {
+                    window.currentPeriodMonth = 12;
+                    window.currentPeriodYear--;
+                }
+                window.setPeriodByMonth(window.currentPeriodYear, window.currentPeriodMonth);
+
+            } else if (preset === 'year') {
+                window.currentPeriodYear += direction;
+                window.setPeriodByYear(window.currentPeriodYear);
+            }
+        };
+
+        // [14-8] 전역 기간 변경 시 계보도, 수당 시뮬레이터, 좌측 패널, 매출 기간 검색 위젯 일괄 동기화
+        window.applyGlobalPeriodFilter = function() {
+            if (typeof window.renderTree === 'function') {
+                window.renderTree();
+            }
+            if (typeof window.calculateLocalPerformance === 'function') {
+                window.calculateLocalPerformance(window.currentSelectedId || null);
+            }
+            if (window.currentSelectedId && typeof window.loadMemberSales === 'function') {
+                window.loadMemberSales(window.currentSelectedId);
+            }
+            // 매출 기간 검색 창이 생성되어 있으면 헤더 기간 기준으로 즉시 데이터 갱신
+            if (typeof window.searchPeriodSales === 'function' && document.getElementById('filterWidget')) {
+                window.searchPeriodSales();
+            }
+        };
+
+        // [7] DOMContentLoaded 초기화 이벤트
+        window.addEventListener('DOMContentLoaded', () => {
+            // [7-1] 초기 날짜(2026-10-01 ~ 2026-10-15) 즉시 입력칸에 반영
+            const startEl = document.getElementById('header-start-date');
+            const endEl = document.getElementById('header-end-date');
+            if (startEl) startEl.value = window.globalStartDate;
+            if (endEl) endEl.value = window.globalEndDate;
+
+            // [7-2] 필터 위젯 저장된 높이 복원
+            const filterWidget = document.getElementById('filterWidget');
+            if (filterWidget) {
+                const savedHeight = localStorage.getItem('bs_filter_widget_height') || localStorage.getItem('filterWidgetSavedHeight');
+                if (savedHeight) filterWidget.style.height = String(savedHeight).endsWith('px') ? savedHeight : `${savedHeight}px`;
+            }
+
+            // [7-3] 하단 수당 패널 높이 마우스 드래그 조절 핸들러
             let isResizingPerf = false;
             const perfResizer = document.getElementById('perf-resizer');
             if (perfResizer) {
                 perfResizer.addEventListener('pointerdown', (e) => {
                     const panel = document.getElementById('perfWidget');
                     if (panel && panel.classList.contains('closed')) return;
+                    if (typeof window.bringWidgetToFront === 'function') window.bringWidgetToFront(panel);
                     isResizingPerf = true;
                     e.preventDefault();
                     e.stopPropagation();
@@ -489,7 +740,7 @@
                 });
             }
 
-            // 초기 로딩 시 미선택 상태 보장
+            // [7-4] 초기 로딩 시 계보도 및 수당 데이터 호출
             setTimeout(() => {
                 if (typeof window.fetchTreeData === 'function') {
                     window.fetchTreeData(true);

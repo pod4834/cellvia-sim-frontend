@@ -17,7 +17,7 @@ window.simMembers = [];
 window.simSales = [];
 
 window.salesSortOrder = 'asc'; 
-window.useCompression = true; 
+window.useCompression = true; // 2차 압축롤업 (3만원 미만 패스) 토글
 window.dynamicCodes = {}; 
 window.rankRules = [];
 window.treeDisplaySettings = { 
@@ -26,7 +26,8 @@ window.treeDisplaySettings = {
     firstSales: false, lastSales: false 
 };
 
-window.isRecommendTreeMode = false;
+// 🌟 [수정] main.js와 완벽한 호환을 위해 계보도 모드 변수명 통합
+window.treeMode = 'sponsor'; // 기본값: 후원계보도 ('sponsor' 또는 'recommender')
 
 window.currentWidgetZ = 100;
 window.minimizedWidgets = new Set();

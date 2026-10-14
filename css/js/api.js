@@ -31,15 +31,22 @@ window.loadTargetData = async function(id) {
 };
 
 window.fetchTreeData = async function(recenter = false) {
+    // 🌟 [수정] main.js의 fetchTreeData와 충돌하지 않도록, 이 파일의 fetchTreeData는 main.js에 위임하거나 에러를 명확히 throw 하도록 변경
+    if (typeof window.fetchTreeData_MAIN === 'function') {
+        return window.fetchTreeData_MAIN(recenter); // main.js의 최신 에러 표출 로직 사용
+    }
+
     try {
         if (typeof window.fetchSalesHistory === 'function') {
             try { await window.fetchSalesHistory(); } catch(e) {}
         }
 
         const res = await fetch(`${window.API_BASE}/api/tree`);
-        if (res.ok) {
-            const data = await res.json();
-            window.treeData = data.tree || data;
+        if (!res.ok) throw new Error(`서버 응답 상태 코드: ${res.status}`);
+        
+        const data = await res.json();
+        if (data && data.tree) {
+            window.treeData = data.tree;
             window.flatMembersData = data.flatMembers || {};
             
             try {
@@ -59,11 +66,20 @@ window.fetchTreeData = async function(recenter = false) {
             if (typeof window.renderTree === 'function') {
                 window.renderTree(recenter);
             }
+        } else {
+            throw new Error("서버에서 계보도 데이터를 받지 못했습니다.");
         }
     } catch (e) {
-        console.error("계보도 트리 데이터 수신 실패:", e);
+        console.error("🔥 계보도 트리 데이터 수신 실패:", e);
+        // 에러를 무시하지 않고 밖으로 던져서 UI에 빨간 경고창이 뜨도록 유도
+        throw e; 
     }
 };
+
+// 🌟 위에서 덮어쓰기 전, main.js에서 선언한 fetchTreeData를 안전하게 보존
+if (window.fetchTreeData.toString().includes("서버 통신 에러 발생")) {
+    window.fetchTreeData_MAIN = window.fetchTreeData;
+}
 
 window.saveNewMember = async function(memberObj) {
     if (!memberObj) return;
