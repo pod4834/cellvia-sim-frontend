@@ -1,7 +1,27 @@
 // frontend/css/js/api.js
-// 백엔드 API 비동기 통신 모듈 (안전한 예외 처리 및 프론트엔드 실시간 계산 연동)
+// 백엔드 API 비동기 통신 모듈 (로컬 개발 & 클라우드 웹 배포 자동 감지 지원)
 
-window.API_BASE = window.API_BASE || 'http://127.0.0.1:3001';
+(function initApiBaseConfig() {
+    const host = window.location.hostname;
+    const isLocal = (
+        host === '127.0.0.1' ||
+        host === 'localhost' ||
+        host === '' ||
+        window.location.protocol === 'file:'
+    );
+
+    // 💡 프론트엔드와 백엔드를 별도 도메인으로 분리 배포할 경우에만 아래 문자열에 백엔드 주소를 입력하세요.
+    // (예: 'https://cellvia-sim-backend.onrender.com')
+    // 지금처럼 server.js가 프론트엔드까지 통합 서빙할 때는 비워두시면 현재 도메인(window.location.origin)을 자동 사용합니다.
+    const SEPARATE_PROD_BACKEND_URL = '';
+
+    const resolvedBase = isLocal
+        ? 'http://127.0.0.1:3001'
+        : (SEPARATE_PROD_BACKEND_URL || window.location.origin);
+
+    window.API_BASE = (window.API_BASE || resolvedBase).replace(/\/+$/, '');
+    window.API_BASE_URL = window.API_BASE; // main.js 등 타 스크립트 호환용 별칭
+})();
 
 window.loadTargetData = async function(id) {
     if (!id) return;
@@ -10,7 +30,7 @@ window.loadTargetData = async function(id) {
     let targetId = cleanId ? cleanId : id;
 
     try {
-        let salesRes = await fetch(`${window.API_BASE}/api/sales/${targetId}`);
+        let salesRes = await fetch(`${window.API_BASE}/api/sales/${encodeURIComponent(targetId)}`);
         if (salesRes.ok) {
             const salesData = await salesRes.json();
             window.currentSalesData = Array.isArray(salesData) ? salesData : (salesData.data || []);
@@ -30,15 +50,20 @@ window.loadTargetData = async function(id) {
     }
 };
 
+// 🌟 덮어쓰기 전에 main.js에서 먼저 선언된 fetchTreeData가 있다면 안전하게 보존
+if (typeof window.fetchTreeData === 'function' && window.fetchTreeData.toString().includes("서버 통신 에러 발생")) {
+    window.fetchTreeData_MAIN = window.fetchTreeData;
+}
+
 window.fetchTreeData = async function(recenter = false) {
-    // 🌟 [수정] main.js의 fetchTreeData와 충돌하지 않도록, 이 파일의 fetchTreeData는 main.js에 위임하거나 에러를 명확히 throw 하도록 변경
-    if (typeof window.fetchTreeData_MAIN === 'function') {
-        return window.fetchTreeData_MAIN(recenter); // main.js의 최신 에러 표출 로직 사용
+    // main.js의 전용 fetchTreeData_MAIN이 있으면 위임
+    if (typeof window.fetchTreeData_MAIN === 'function' && window.fetchTreeData_MAIN !== window.fetchTreeData) {
+        return window.fetchTreeData_MAIN(recenter);
     }
 
     try {
         if (typeof window.fetchSalesHistory === 'function') {
-            try { await window.fetchSalesHistory(); } catch(e) {}
+            try { await window.fetchSalesHistory(); } catch (e) {}
         }
 
         const res = await fetch(`${window.API_BASE}/api/tree`);
@@ -48,6 +73,10 @@ window.fetchTreeData = async function(recenter = false) {
         if (data && data.tree) {
             window.treeData = data.tree;
             window.flatMembersData = data.flatMembers || {};
+
+            // 서버에서 함께 전달된 보상플랜 정책(compRules) 전역 동기화
+            if (data.compRules) window.compRules = data.compRules;
+            if (data.policiesByRankName) window.policiesByRankName = data.policiesByRankName;
             
             try {
                 let localMembers = JSON.parse(localStorage.getItem('bs_new_members') || '[]');
@@ -61,7 +90,7 @@ window.fetchTreeData = async function(recenter = false) {
                         }
                     }
                 });
-            } catch(e) {}
+            } catch (e) {}
             
             if (typeof window.renderTree === 'function') {
                 window.renderTree(recenter);
@@ -71,15 +100,9 @@ window.fetchTreeData = async function(recenter = false) {
         }
     } catch (e) {
         console.error("🔥 계보도 트리 데이터 수신 실패:", e);
-        // 에러를 무시하지 않고 밖으로 던져서 UI에 빨간 경고창이 뜨도록 유도
-        throw e; 
+        throw e;
     }
 };
-
-// 🌟 위에서 덮어쓰기 전, main.js에서 선언한 fetchTreeData를 안전하게 보존
-if (window.fetchTreeData.toString().includes("서버 통신 에러 발생")) {
-    window.fetchTreeData_MAIN = window.fetchTreeData;
-}
 
 window.saveNewMember = async function(memberObj) {
     if (!memberObj) return;
@@ -90,7 +113,7 @@ window.saveNewMember = async function(memberObj) {
             localMembers.push(memberObj);
             localStorage.setItem('bs_new_members', JSON.stringify(localMembers));
         }
-    } catch(e) {}
+    } catch (e) {}
 
     try {
         let res = await fetch(`${window.API_BASE}/api/members`, {
@@ -119,7 +142,7 @@ window.fetchSalesHistory = async function(startDate = '', endDate = '') {
     try {
         let url = `${window.API_BASE}/api/sales/history`;
         if (startDate || endDate) {
-            url += `?start=${startDate}&end=${endDate}`;
+            url += `?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`;
         }
         const res = await fetch(url);
         if (res.ok) {
@@ -131,7 +154,7 @@ window.fetchSalesHistory = async function(startDate = '', endDate = '') {
     }
 };
 
-// 🌟 [핵심 수정] 매출 행 저장 시 서버에서 수신한 DB PK ID(_dbId)를 객체에 즉시 할당 (중복 INSERT 차단)
+// 🌟 매출 행 저장 시 서버에서 수신한 DB PK ID(_dbId)를 객체에 즉시 할당 (중복 INSERT 차단)
 window.saveSalesHistoryRow = async function(rowObj) {
     if (!rowObj || rowObj._isSaving) return null;
     try {

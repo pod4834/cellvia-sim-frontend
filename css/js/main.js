@@ -1,6 +1,14 @@
 // frontend/css/js/main.js
 // cellvia_db.integrated_sales_history DB 연동 및 계보도/매출 시뮬레이션 메인 엔진
-
+// 🌟 [로컬 개발 & 클라우드 웹 배포 자동 감지 안전망]
+(function ensureMainJsApiBase() {
+    const host = window.location.hostname;
+    const isLocal = (host === '127.0.0.1' || host === 'localhost' || host === '' || window.location.protocol === 'file:');
+    window.IS_LOCAL_DEV = isLocal;
+    const resolvedBase = isLocal ? 'http://127.0.0.1:3001' : window.location.origin;
+    window.API_BASE = (window.API_BASE || resolvedBase).replace(/\/+$/, '');
+    window.API_BASE_URL = window.API_BASE;
+})();
 // ============================================================================
 // [1] 전역 변수 및 설정 초기화
 // ============================================================================
@@ -9533,20 +9541,26 @@ if (document.readyState === 'loading') {
     };
 })();
 // ============================================================================
-// 🚀 [헤더 우측 버튼 통합 패치] AI 어드바이저 아이콘(1개) + GitHub 원클릭 업로드 아이콘(1개)
+// 🚀 [헤더 우측 버튼 통합 패치 - 배포 겸용 완성본]
+// - AI 어드바이저 아이콘 (로컬 + 웹 모두 표시, left/right 이진트리 파트너 완벽 수집)
+// - GitHub 원클릭 업로드 아이콘 (로컬 개발 시에만 표시, 외부 웹 공개 시 자동 숨김 보호)
 // ============================================================================
 (function initHeaderAIAndGitHubButtons() {
 
-    // 중복 실행 완전 방지 플래그
     if (window._headerCustomBtnsInitialized) return;
     window._headerCustomBtnsInitialized = true;
 
+    const isLocalEnv = (
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '' ||
+        window.location.protocol === 'file:'
+    );
+
     function setupHeaderButtons() {
-        // 이미 AI 버튼이 생성되어 있다면 중복 변환 절대 금지!
         let aiBtn = document.getElementById('customAiAdvisorBtn');
 
         if (!aiBtn) {
-            // 1. 오직 '새로고침' 버튼만 정확히 타겟팅 (옆의 계보도/설정 아이콘 건드리지 않음)
             const allBtns = Array.from(document.querySelectorAll('header button, .header button, .top-bar button, button, a'));
             let refreshBtn = null;
 
@@ -9583,7 +9597,6 @@ if (document.readyState === 'loading') {
 
             if (!refreshBtn) return;
 
-            // AI 어드바이저 버튼 생성 (딱 1개만 생성)
             aiBtn = document.createElement('button');
             aiBtn.id = 'customAiAdvisorBtn';
             aiBtn.type = 'button';
@@ -9629,12 +9642,12 @@ if (document.readyState === 'loading') {
             }
         }
 
-        // 2. AI 버튼 바로 우측에 [☁️↑ GitHub 원클릭 업로드] 버튼 추가 (딱 1개만 생성)
-        if (aiBtn && aiBtn.parentNode && !document.getElementById('oneClickGithubBtn')) {
+        // 2. [☁️↑ GitHub 원클릭 업로드] 버튼은 로컬 개발 환경(isLocalEnv)에서만 표시 (웹 공개 시 일반 사용자에게 노출 차단)
+        if (isLocalEnv && aiBtn && aiBtn.parentNode && !document.getElementById('oneClickGithubBtn')) {
             const ghBtn = document.createElement('button');
             ghBtn.id = 'oneClickGithubBtn';
             ghBtn.type = 'button';
-            ghBtn.setAttribute('title', 'GitHub 원클릭 업로드 (백엔드 + 프론트엔드 동시 저장)');
+            ghBtn.setAttribute('title', 'GitHub 원클릭 업로드 (백엔드 + 프론트엔드 동시 저장 - 로컬 전용)');
             ghBtn.style.cssText = `
                 display: inline-flex;
                 align-items: center;
@@ -9680,7 +9693,7 @@ if (document.readyState === 'loading') {
                 ghBtn.innerHTML = `<span style="font-size:10px; color:#ffffff; font-weight:bold;">UP</span>`;
 
                 try {
-                    const baseUrl = (window.API_BASE_URL || 'http://localhost:3001').replace(/\/api\/?$/, '');
+                    const baseUrl = (window.API_BASE || window.API_BASE_URL || 'http://127.0.0.1:3001').replace(/\/api\/?$/, '');
                     const response = await fetch(`${baseUrl}/api/git-push`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -9692,7 +9705,7 @@ if (document.readyState === 'loading') {
                     }
                     alert(`✅ [GitHub 통합 업로드 완료]\n\n${result.message}`);
                 } catch (err) {
-                    alert(`❌ [GitHub 업로드 오류]\n${err.message}\n\n* 백엔드(server.js)에 /api/git-push 코드가 추가되었는지, 서버가 실행 중인지 확인해 주세요.`);
+                    alert(`❌ [GitHub 업로드 오류]\n${err.message}\n\n* 백엔드(server.js)가 실행 중인지 확인해 주세요.`);
                 } finally {
                     ghBtn.disabled = false;
                     ghBtn.innerHTML = ghIconSvg;
@@ -9703,7 +9716,7 @@ if (document.readyState === 'loading') {
         }
     }
 
-    // 3. 계보도 데이터 수집 헬퍼
+    // 3. 계보도 데이터 수집 헬퍼 (node.left / node.right 이진 트리 및 node.children 완벽 호환)
     window.collectNetworkContextForAI = function(rootMemberId) {
         const targetId = rootMemberId || window.currentSelectedId || 'VK-1199464';
         const rootNode = typeof window.findMemberNode === 'function' ? window.findMemberNode(targetId) : null;
@@ -9718,12 +9731,15 @@ if (document.readyState === 'loading') {
         const visited = new Set();
 
         function traverse(node, depth, parentInfo, lineDirection) {
-            if (!node || depth > 3) return;
-            const nid = node.id || node.member_id || '';
+            if (!node || depth > 4) return;
+            const obj = (typeof node === 'object') ? node : (typeof window.findMemberNode === 'function' ? window.findMemberNode(node) : null);
+            if (!obj) return;
+
+            const nid = obj.id || obj.member_id || '';
             if (!nid || visited.has(nid)) return;
             visited.add(nid);
 
-            const currRank = String(node.rank || node.rank_name || 'MANIA').toUpperCase();
+            const currRank = String(obj.rank || obj.rank_name || 'MANIA').toUpperCase();
             const badge = typeof window.evaluateMemberCardBadgeStatus === 'function'
                 ? window.evaluateMemberCardBadgeStatus(nid)
                 : {};
@@ -9734,7 +9750,7 @@ if (document.readyState === 'loading') {
 
             summaryList.push({
                 '회원번호': nid,
-                '성명': node.name || '-',
+                '성명': obj.name || '-',
                 '단계_Depth': depth,
                 '상위스폰서': parentInfo || '최상위(기준)',
                 '소속라인': lineDirection || '기준본인',
@@ -9749,11 +9765,20 @@ if (document.readyState === 'loading') {
                 '품위유지부족CV': Math.max(0, reqMaintCV - (badge.maintCurrVal || 0))
             });
 
-            if (Array.isArray(node.children)) {
-                node.children.forEach((child, idx) => {
+            // 1) node.left / node.right 이진 트리 탐색
+            if (obj.left) {
+                traverse(obj.left, depth + 1, `${obj.name}(${nid})`, depth === 0 ? '좌측(A라인)' : lineDirection);
+            }
+            if (obj.right) {
+                traverse(obj.right, depth + 1, `${obj.name}(${nid})`, depth === 0 ? '우측(B라인)' : lineDirection);
+            }
+
+            // 2) node.children 배열이 있는 경우도 함께 탐색
+            if (Array.isArray(obj.children)) {
+                obj.children.forEach((child, idx) => {
                     const pos = String(child.position || (idx === 0 ? '좌(A라인)' : '우(B라인)')).toUpperCase();
                     const dirLabel = (pos.includes('A') || pos.includes('LEFT') || pos.includes('좌')) ? '좌측(A라인)' : '우측(B라인)';
-                    traverse(child, depth + 1, `${node.name}(${nid})`, dirLabel);
+                    traverse(child, depth + 1, `${obj.name}(${nid})`, depth === 0 ? dirLabel : lineDirection);
                 });
             }
         }
