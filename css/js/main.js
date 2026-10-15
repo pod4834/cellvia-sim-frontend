@@ -9967,7 +9967,7 @@ if (document.readyState === 'loading') {
     }
 })();
 // ============================================================================
-// 🔒 [강제 실행 로그인 보안 게이트] (admin / tourism9** 즉시 작동 보장)
+// 🔒 [강제 실행 로그인 보안 게이트] (admin / 즉시 작동 보장)
 // ============================================================================
 (function forceInitLoginSecurityGate() {
     if (window._bsLoginGateMounted) return;
@@ -10125,3 +10125,946 @@ if (document.readyState === 'loading') {
     }
 })();
 // Force Git Sync: 10/15/2026 08:57:22
+// ============================================================================
+// 📱 [모바일 & 태블릿 반응형 UI/UX 및 심플 헤더 & 햄버거 메뉴 패치 V11]
+// 1. 태블릿 세로(768x1024) 및 아이폰 가로(641px~1250px): 햄버거 대신 1단 우측에 아이콘 전체 표시 + 2단 우측에 검색창 표시!
+// 2. 시작일 ~ 종료일 간격 벌어짐 원천 차단 (언제나 촘촘하게 밀착 정렬)
+// 3. 순수 스마트폰 세로 화면(640px 이하)에서만 햄버거 메뉴(☰) 작동 (내부 화이트 볼드 적용)
+// 4. 우측 줌 컨트롤 바(.zoom-controls)를 헤더 하단에서 14px 여유 있게 띄움
+// ============================================================================
+(function initResponsiveMobileTabletSupportV11() {
+    if (window._bsResponsivePatchMountedV11) return;
+    window._bsResponsivePatchMountedV11 = true;
+
+    // ------------------------------------------------------------------------
+    // [1] Viewport 메타 태그 보장 및 화면 크기 판별 (스마트폰 세로 기준: 640px 이하)
+    // ------------------------------------------------------------------------
+    function ensureViewportMeta() {
+        let meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) {
+            meta = document.createElement('meta');
+            meta.name = 'viewport';
+            document.head.appendChild(meta);
+        }
+        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+    }
+
+    window.isTabletOrMobileViewport = function() {
+        return window.innerWidth <= 1024 || window.innerHeight <= 500;
+    };
+    // 🌟 순수 스마트폰 세로 화면만 640px 이하로 판별 (768px 태블릿 세로 화면은 아이콘 모드로 동작!)
+    window.isMobileViewport = function() {
+        return window.innerWidth <= 640;
+    };
+    // 태블릿 세로(768px), 태블릿 가로(1024px), 아이폰 가로(852px) 등 중형 화면 판별
+    window.isLandscapePhoneOrCompactTablet = function() {
+        return window.innerWidth > 640 && (window.innerWidth <= 1250 || window.innerHeight <= 500);
+    };
+
+    // ------------------------------------------------------------------------
+    // [1-1] 상단 헤더 하단 끝선(bottom) 측정 -> 좌측 패널 밀착 & 우측 줌 컨트롤 바 14px 여백 부여
+    // ------------------------------------------------------------------------
+    window.syncSalesPanelBelowHeader = function() {
+        const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
+        const salesW = document.getElementById('salesWidget') || (typeof window.getSmartLeftPanel === 'function' ? window.getSmartLeftPanel() : null);
+        const zoomCtrl = document.querySelector('.zoom-controls');
+
+        let headerBottom = 60;
+        if (headerEl) {
+            const rect = headerEl.getBoundingClientRect();
+            if (rect.height > 0) {
+                headerBottom = Math.round(rect.bottom);
+            }
+        }
+
+        document.documentElement.style.setProperty('--bs-header-bottom', `${headerBottom}px`);
+
+        // 1) 좌측 슬라이드 패널은 헤더 바로 아래에 밀착
+        if (salesW) {
+            salesW.style.setProperty('top', `${headerBottom}px`, 'important');
+            salesW.style.setProperty('height', `calc(100dvh - ${headerBottom}px)`, 'important');
+        }
+
+        // 2) 우측 줌/정렬/전체화면 컨트롤 바(.zoom-controls)는 헤더 하단에서 14px 띄워서 배치
+        if (zoomCtrl) {
+            if (window.isMobileViewport()) {
+                zoomCtrl.style.setProperty('top', 'auto', 'important');
+                zoomCtrl.style.setProperty('bottom', '56px', 'important');
+                zoomCtrl.style.setProperty('right', '8px', 'important');
+            } else {
+                const parentEl = zoomCtrl.offsetParent || document.body;
+                const isInsideCanvas = (parentEl.id === 'canvas-container' || parentEl.classList.contains('canvas-container') || parentEl.tagName === 'MAIN');
+                const targetTop = isInsideCanvas ? 14 : (headerBottom + 14);
+
+                zoomCtrl.style.setProperty('bottom', 'auto', 'important');
+                zoomCtrl.style.setProperty('top', `${targetTop}px`, 'important');
+                zoomCtrl.style.setProperty('right', '14px', 'important');
+            }
+        }
+    };
+
+    // ------------------------------------------------------------------------
+    // [2] 인원수 배지 포맷: "박성혜 A:41 / B:34 (Total 75)"
+    // ------------------------------------------------------------------------
+    window.updateHeaderLineCount = function(selectedId) {
+        const badgeEl = document.getElementById('header-line-count');
+        if (!badgeEl) return;
+
+        const targetId = selectedId || window.currentSelectedId;
+        let baseNode = targetId && typeof window.findMemberNode === 'function' ? window.findMemberNode(targetId) : (typeof window.getAbsoluteTopRoot === 'function' ? window.getAbsoluteTopRoot() : null);
+        if (!baseNode && typeof window.getAbsoluteTopRoot === 'function') baseNode = window.getAbsoluteTopRoot();
+
+        if (!baseNode) {
+            badgeEl.innerHTML = `<span style="color:#9ca3af;">데이터 없음</span>`;
+            return;
+        }
+
+        const baseName = baseNode.name || baseNode.id;
+
+        if (window.treeMode === 'recommender') {
+            const uniqueMembers = typeof window.getUniqueMembers === 'function' ? window.getUniqueMembers() : [];
+            let directRecCount = 0;
+            let totalRecSubCount = 0;
+            const visited = new Set();
+
+            function countRecSubtree(currNode, depth) {
+                if (!currNode || !currNode.id) return;
+                let norm = String(currNode.id).trim().toLowerCase().replace(/^vk-?/, '');
+                if (visited.has(norm)) return;
+                visited.add(norm);
+
+                if (depth > 0) totalRecSubCount++;
+                if (depth === 1) directRecCount++;
+
+                uniqueMembers.filter(m => m && !window.isSameMemberId(m.id, currNode.id) && window.isSameMemberId(m.recId || m.rec_id || m.recommenderId, currNode.id))
+                    .forEach(child => countRecSubtree(child, depth + 1));
+            }
+
+            countRecSubtree(baseNode, 0);
+            badgeEl.innerHTML = `
+                <b style="color:#fff;">${baseName}</b>
+                <span style="color:#10b981; font-weight:bold; margin-left:4px;">직추천:${directRecCount}</span>
+                <span style="color:#9ca3af; font-size:11px; margin-left:2px;">(Total ${totalRecSubCount})</span>
+            `;
+            return;
+        }
+
+        const visitedA = new Set();
+        const visitedB = new Set();
+
+        function countBranchNodes(node, visitedSet) {
+            if (!node || !node.id) return 0;
+            let norm = String(node.id).trim().toLowerCase().replace(/^vk-?/, '');
+            if (visitedSet.has(norm)) return 0;
+            visitedSet.add(norm);
+
+            let count = 1;
+            let leftChild = node.left ? (typeof node.left === 'object' ? node.left : window.findMemberNode(node.left)) : null;
+            let rightChild = node.right ? (typeof node.right === 'object' ? node.right : window.findMemberNode(node.right)) : null;
+
+            if (leftChild) count += countBranchNodes(leftChild, visitedSet);
+            if (rightChild) count += countBranchNodes(rightChild, visitedSet);
+            return count;
+        }
+
+        let leftRoot = baseNode.left ? (typeof baseNode.left === 'object' ? baseNode.left : window.findMemberNode(baseNode.left)) : null;
+        let rightRoot = baseNode.right ? (typeof baseNode.right === 'object' ? baseNode.right : window.findMemberNode(baseNode.right)) : null;
+
+        const aCount = leftRoot ? countBranchNodes(leftRoot, visitedA) : 0;
+        const bCount = rightRoot ? countBranchNodes(rightRoot, visitedB) : 0;
+        const totalSub = aCount + bCount;
+
+        badgeEl.innerHTML = `
+            <b style="color:#fff;">${baseName}</b>
+            <span style="color:#60a5fa; font-weight:bold; margin-left:5px;">A:${aCount.toLocaleString()}</span>
+            <span style="color:#6b7280; margin:0 3px;">/</span>
+            <span style="color:#f59e0b; font-weight:bold;">B:${bCount.toLocaleString()}</span>
+            <span style="color:#9ca3af; font-size:11px; margin-left:3px;">(Total ${totalSub.toLocaleString()})</span>
+        `;
+    };
+
+    // ------------------------------------------------------------------------
+    // [3] < 이전 / 다음 > 버튼 텍스트 제거 후 아이콘(◀ / ▶) 전용 변환
+    // ------------------------------------------------------------------------
+    function simplifyPrevNextButtons(rootDoc = document) {
+        if (!rootDoc) return;
+        const buttons = rootDoc.querySelectorAll('button, .nav-btn, [onclick*="Period"], [onclick*="period"]');
+        buttons.forEach(btn => {
+            const txt = (btn.innerText || '').trim();
+            if (txt.includes('이전') && (txt.includes('◀') || txt.includes('<') || txt === '이전')) {
+                btn.innerHTML = '◀';
+                btn.title = '이전 기수';
+                btn.classList.add('bs-period-nav-btn');
+            } else if (txt.includes('다음') && (txt.includes('▶') || txt.includes('>') || txt === '다음')) {
+                btn.innerHTML = '▶';
+                btn.title = '다음 기수';
+                btn.classList.add('bs-period-nav-btn');
+            }
+        });
+    }
+
+    const origOpenSalesPopup = window.openSalesSearchPopupWindow;
+    if (typeof origOpenSalesPopup === 'function' && !origOpenSalesPopup._iconPatchedV11) {
+        const wrappedOpenSales = function() {
+            const pop = origOpenSalesPopup.apply(this, arguments);
+            if (pop && pop.document) {
+                setTimeout(() => simplifyPrevNextButtons(pop.document), 50);
+            }
+            return pop;
+        };
+        wrappedOpenSales._iconPatchedV11 = true;
+        window.openSalesSearchPopupWindow = wrappedOpenSales;
+    }
+
+    // ------------------------------------------------------------------------
+    // [4] 🌟 태블릿 세로(768px) & 아이폰 가로(852px): 1단 우측 아이콘 + 2단 날짜바(밀착) & 검색창 표시!
+    // ------------------------------------------------------------------------
+    function syncHeaderButtonsAndLayoutByViewport() {
+        const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
+        if (!headerEl) return;
+
+        const isMobPortrait = window.isMobileViewport(); // 640px 이하 (스마트폰 세로)
+        const isLandscapeCompact = window.isLandscapePhoneOrCompactTablet(); // 641px~1250px (태블릿 세로 768px, 아이폰 가로 852px 등)
+
+        // 1) 스마트폰 세로용 햄버거 버튼 생성
+        let hamBtn = document.getElementById('bs-mobile-hamburger-btn');
+        if (!hamBtn) {
+            hamBtn = document.createElement('button');
+            hamBtn.id = 'bs-mobile-hamburger-btn';
+            hamBtn.type = 'button';
+            hamBtn.title = '메뉴 열기';
+            hamBtn.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            `;
+            hamBtn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.toggleMobileHamburgerDrawer();
+            };
+        }
+        if (hamBtn.parentElement !== headerEl) {
+            headerEl.appendChild(hamBtn);
+        }
+
+        // 2) 우측 액션 아이콘 전용 홀더(#bs-top-row-icons-holder)를 headerEl 직계 자식으로 유지
+        let topIconsHolder = document.getElementById('bs-top-row-icons-holder');
+        if (!topIconsHolder) {
+            topIconsHolder = document.createElement('div');
+            topIconsHolder.id = 'bs-top-row-icons-holder';
+            headerEl.appendChild(topIconsHolder);
+        } else if (topIconsHolder.parentElement !== headerEl) {
+            headerEl.appendChild(topIconsHolder);
+        }
+
+        // 3) 톱니바퀴(⚙️), 계보전환(🌳), AI(✨), GitHub(☁️), 로그아웃(🔒)을 홀더에 수집
+        const gearBtn = headerEl.querySelector('[onclick*="toggleSettingsMenu"]');
+        let gearItem = gearBtn;
+        if (gearBtn && gearBtn.parentElement && gearBtn.parentElement !== headerEl && gearBtn.parentElement !== topIconsHolder) {
+            const p = gearBtn.parentElement;
+            if (!p.querySelector('#searchInput') && !p.querySelector('input[type="date"]') && !p.querySelector('#header-line-count')) {
+                gearItem = p;
+            }
+        }
+
+        const treeBtn = document.getElementById('toggleTreeBtn') || headerEl.querySelector('[onclick*="toggleTreeMode"]');
+        const aiBtn = document.getElementById('customAiAdvisorBtn');
+        const ghBtn = document.getElementById('oneClickGithubBtn');
+        const logoutBtn = document.getElementById('bsLogoutBtn');
+
+        const orderedItems = [gearItem, treeBtn, aiBtn, ghBtn, logoutBtn].filter(Boolean);
+        orderedItems.forEach(item => {
+            if (item.parentElement !== topIconsHolder) {
+                topIconsHolder.appendChild(item);
+            }
+            item.style.margin = '0';
+        });
+
+        // 4) 화면 모드별 표시 및 위치 제어
+        const searchInp = document.getElementById('searchInput');
+        const searchBox = (searchInp && searchInp.parentElement !== headerEl && !searchInp.parentElement.querySelector('input[type="date"]'))
+            ? searchInp.parentElement
+            : searchInp;
+
+        if (isMobPortrait) {
+            // [스마트폰 세로 화면 (640px 이하)]: 아이콘 홀더와 검색창을 숨기고, 우측 상단 햄버거 버튼(☰)만 표시
+            topIconsHolder.style.setProperty('display', 'none', 'important');
+            if (searchInp) searchInp.style.setProperty('display', 'none', 'important');
+            if (searchBox) searchBox.style.setProperty('display', 'none', 'important');
+            hamBtn.style.setProperty('display', 'inline-flex', 'important');
+        } else if (isLandscapeCompact) {
+            // 🌟 [태블릿 세로(768px) & 아이폰 가로(852px)]: 햄버거 숨기고 1단 우측 끝에 아이콘 전체 표시 + 2단 우측에 검색창 표시!
+            hamBtn.style.setProperty('display', 'none', 'important');
+            topIconsHolder.style.cssText = `
+                position: absolute !important;
+                top: 6px !important;
+                right: 10px !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 4px !important;
+                z-index: 120 !important;
+            `;
+            orderedItems.forEach(el => {
+                el.style.setProperty('display', 'inline-flex', 'important');
+            });
+            if (searchInp) searchInp.style.setProperty('display', 'inline-block', 'important');
+            if (searchBox && searchBox !== searchInp) {
+                searchBox.style.setProperty('display', 'flex', 'important');
+                searchBox.style.setProperty('margin-left', 'auto', 'important');
+            }
+        } else {
+            // [일반 데스크톱 모니터 (1251px 이상)]: 기본 플렉스 우측 정렬 유지
+            hamBtn.style.setProperty('display', 'none', 'important');
+            topIconsHolder.style.cssText = `
+                position: static !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 4px !important;
+                margin-left: 6px !important;
+            `;
+            orderedItems.forEach(el => {
+                el.style.setProperty('display', 'inline-flex', 'important');
+            });
+            if (searchInp) searchInp.style.setProperty('display', 'inline-block', 'important');
+            if (searchBox && searchBox !== searchInp) {
+                searchBox.style.setProperty('display', 'flex', 'important');
+                searchBox.style.removeProperty('margin-left');
+            }
+        }
+
+        // 5) 🌟 2단 날짜 입력창 폭 및 내부 간격 정리 (시작일 ~ 종료일 사이가 절대 벌어지지 않도록 밀착 고정!)
+        const dateInputs = headerEl.querySelectorAll('input[type="date"], #header-start-date, #header-end-date');
+        dateInputs.forEach(dInp => {
+            dInp.classList.add('bs-header-date-input');
+            dInp.style.setProperty('display', 'inline-block', 'important');
+            if (isMobPortrait) {
+                dInp.style.setProperty('width', '84px', 'important');
+                dInp.style.setProperty('min-width', '0px', 'important');
+                dInp.style.setProperty('max-width', '88px', 'important');
+                dInp.style.setProperty('padding', '2px 2px', 'important');
+                dInp.style.setProperty('font-size', '10.5px', 'important');
+            } else if (isLandscapeCompact) {
+                dInp.style.setProperty('width', '106px', 'important');
+                dInp.style.setProperty('min-width', '0px', 'important');
+                dInp.style.setProperty('max-width', '114px', 'important');
+                dInp.style.setProperty('padding', '2px 6px', 'important');
+                dInp.style.setProperty('font-size', '11.5px', 'important');
+            } else {
+                dInp.style.removeProperty('width');
+                dInp.style.removeProperty('min-width');
+                dInp.style.removeProperty('max-width');
+            }
+
+            let curr = dInp.parentElement;
+            while (curr && curr !== headerEl && curr !== document.body) {
+                curr.classList.remove('bs-desktop-only-tool');
+                curr.style.setProperty('display', 'flex', 'important');
+                curr.style.setProperty('visibility', 'visible', 'important');
+                curr.style.setProperty('opacity', '1', 'important');
+
+                if (curr.parentElement === headerEl) {
+                    // 2단 전체 바(날짜 그룹 + 우측 검색창)
+                    curr.classList.add('bs-mobile-second-row-bar');
+                    curr.classList.remove('bs-mobile-period-flex');
+                } else {
+                    // 날짜 입력창들을 직접 감싸는 내부 그룹 -> 절대 양끝으로 벌어지지 않도록 flex-start & width:auto 적용!
+                    curr.classList.add('bs-mobile-period-flex');
+                }
+                curr = curr.parentElement;
+            }
+        });
+
+        window.syncSalesPanelBelowHeader();
+    }
+
+    const origToggleSales = window.toggleSalesSidebar;
+    if (typeof origToggleSales === 'function' && !origToggleSales._patchedBelowHeaderV11) {
+        const wrappedToggleSales = function(e) {
+            origToggleSales.apply(this, arguments);
+            window.syncSalesPanelBelowHeader();
+            setTimeout(window.syncSalesPanelBelowHeader, 50);
+            if (window.isTabletOrMobileViewport()) {
+                const perfW = document.getElementById('perfWidget');
+                if (perfW) perfW.style.setProperty('left', '0px', 'important');
+            }
+        };
+        wrappedToggleSales._patchedBelowHeaderV11 = true;
+        window.toggleSalesSidebar = wrappedToggleSales;
+    }
+
+    // ------------------------------------------------------------------------
+    // [5] 햄버거 클릭 시 열리는 모바일 통합 드로어 패널 생성 (주요 기능 화이트 볼드)
+    // ------------------------------------------------------------------------
+    function ensureMobileDrawerDOM() {
+        const existingOverlay = document.getElementById('bs-mobile-drawer-overlay');
+        if (existingOverlay) existingOverlay.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'bs-mobile-drawer-overlay';
+        overlay.style.cssText = `
+            display: none;
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100dvh !important;
+            background: rgba(0, 0, 0, 0.65) !important;
+            z-index: 2147483642 !important;
+            justify-content: flex-end !important;
+        `;
+
+        overlay.innerHTML = `
+            <div id="bs-mobile-drawer-panel" onclick="event.stopPropagation()" style="width: min(280px, 82vw); height: 100%; background: #1f2937; border-left: 1px solid #374151; padding: 16px 14px; display: flex; flex-direction: column; gap: 14px; color: #fff; box-shadow: -8px 0 25px rgba(0,0,0,0.85); overflow-y: auto; box-sizing: border-box;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 10px;">
+                    <strong style="font-size: 14px; color: #60a5fa;">☰ 시뮬레이터 메뉴</strong>
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false)" style="background: #374151; border: 1px solid #4b5563; color: #e5e7eb; border-radius: 4px; padding: 3px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">닫기 ✕</button>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 11px; color: #9ca3af; margin-bottom: 5px; font-weight: bold;">🔍 계보도 회원/추천인 검색</label>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="text" id="bs-mobile-search-inp" placeholder="이름 또는 번호 입력" onkeydown="if(event.key==='Enter'){ window.runMobileDrawerSearch(); }" style="flex: 1; min-width: 0; background: #111827; border: 1px solid #4b5563; color: #fff; border-radius: 6px; padding: 7px 10px; font-size: 12px; outline: none;">
+                        <button type="button" onclick="window.runMobileDrawerSearch()" style="background: #2563eb; border: 1px solid #3b82f6; color: #fff; border-radius: 6px; padding: 0 12px; font-size: 12px; font-weight: bold; cursor: pointer;">검색</button>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #374151; padding-top: 12px;">
+                    <span style="font-size: 11px; color: #9ca3af; font-weight: bold;">🛠️ 주요 기능 및 도구</span>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); window.toggleTreeMode();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>🌳</span> <span id="bs-mob-tree-mode-label" style="color: #ffffff; font-weight: bold;">후원 ↔ 추천계보도 전환</span>
+                    </button>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); setTimeout(() => window.toggleSettingsMenu(event), 60);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>⚙️</span> <span style="color: #ffffff; font-weight: bold;">카드 표시 항목 & 배지 설정</span>
+                    </button>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleBizNavigator==='function') window.toggleBizNavigator(true);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>🧭</span> <span style="color: #ffffff; font-weight: bold;">비지네스 내비게이터</span>
+                    </button>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleSalesSearchPopup==='function') window.toggleSalesSearchPopup(true);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>📅</span> <span style="color: #ffffff; font-weight: bold;">매출 기간 검색</span>
+                    </button>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.openAIAdvisorPopupWindow==='function') window.openAIAdvisorPopupWindow();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>✨</span> <span style="color: #ffffff; font-weight: bold;">AI 최적 배치 어드바이저</span>
+                    </button>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleSalesSidebar==='function') window.toggleSalesSidebar();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>💳</span> <span style="color: #ffffff; font-weight: bold;">좌측 매출/구독 내역 패널 열기/닫기</span>
+                    </button>
+
+                    <button type="button" id="bs-mob-github-btn" onclick="window.toggleMobileHamburgerDrawer(false); const g=document.getElementById('oneClickGithubBtn'); if(g) g.click();" style="display: ${window.IS_LOCAL_DEV ? 'flex' : 'none'}; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #93c5fd; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>☁️</span> <span>GitHub 원클릭 업로드</span>
+                    </button>
+                </div>
+
+                <div style="margin-top: auto; border-top: 1px solid #374151; padding-top: 12px;">
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.logoutSimulator==='function') window.logoutSimulator();" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 6px; color: #f87171; font-size: 12.5px; font-weight: bold; cursor: pointer;">
+                        <span>🔒</span> <span>시뮬레이터 잠금 / 로그아웃</span>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        overlay.addEventListener('click', () => window.toggleMobileHamburgerDrawer(false));
+        document.body.appendChild(overlay);
+    }
+
+    window.toggleMobileHamburgerDrawer = function(forceShow) {
+        const overlay = document.getElementById('bs-mobile-drawer-overlay');
+        if (!overlay) return;
+        const isShown = overlay.style.display === 'flex';
+        const nextState = (typeof forceShow === 'boolean') ? forceShow : !isShown;
+        overlay.style.display = nextState ? 'flex' : 'none';
+
+        if (nextState) {
+            const modeLbl = document.getElementById('bs-mob-tree-mode-label');
+            if (modeLbl) {
+                modeLbl.innerText = (window.treeMode === 'recommender')
+                    ? '후원계보도로 전환 (현재: 추천)'
+                    : '추천계보도로 전환 (현재: 후원)';
+            }
+        }
+    };
+
+    window.runMobileDrawerSearch = function() {
+        const inp = document.getElementById('bs-mobile-search-inp');
+        const kw = inp ? inp.value.trim() : '';
+        window.toggleMobileHamburgerDrawer(false);
+        const mainInp = document.getElementById('searchInput');
+        if (mainInp) mainInp.value = kw;
+        if (typeof window.searchMember === 'function') {
+            window.searchMember(kw);
+        }
+    };
+
+    // ------------------------------------------------------------------------
+    // [6] 반응형 CSS 미디어 쿼리 주입 (태블릿 768px 아이콘 표시 & 시작~종료일 간격 밀착)
+    // ------------------------------------------------------------------------
+    function injectResponsiveStyles() {
+        let style = document.getElementById('bs-responsive-master-css');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'bs-responsive-master-css';
+            document.head.appendChild(style);
+        }
+
+        style.innerHTML = `
+            :root {
+                --bs-header-bottom: 76px;
+            }
+
+            #canvas-container, .canvas-container, main {
+                touch-action: none !important;
+                -webkit-user-select: none !important;
+                user-select: none !important;
+            }
+            .table-scroll-container, #perfWidget .widget-body, #sales-table-scroll-box {
+                -webkit-overflow-scrolling: touch !important;
+                overscroll-behavior: contain !important;
+            }
+
+            #bs-mobile-hamburger-btn {
+                display: none;
+            }
+
+            header *, .header *, .top-bar *, .top-header-bar * {
+                white-space: nowrap !important;
+            }
+
+            /* 🌟 모든 해상도 공통: 날짜 선택 내부 그룹(.bs-mobile-period-flex)은 절대 양끝으로 벌어지지 않고 좌측으로 촘촘히 밀착! */
+            .bs-mobile-period-flex {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: flex-start !important;
+                width: auto !important;
+                max-width: 100% !important;
+                gap: 5px !important;
+                flex: 0 0 auto !important;
+            }
+
+            /* ----------------------------------------------------------------
+               💻 태블릿 세로(768px) & 태블릿 가로 & 아이폰 가로화면 (641px ~ 1250px)
+               - 1단: 좌측(타이틀+배지) ~ 우측 끝(#bs-top-row-icons-holder 아이콘 전체)
+               - 2단: 좌측(날짜 선택 바 밀착) ~ 우측(전체 계보도 회원 검색창)
+               ---------------------------------------------------------------- */
+            @media screen and (min-width: 641px) and (max-width: 1250px) {
+                header, .header, .top-bar, .top-header-bar {
+                    position: relative !important;
+                    z-index: 2147483550 !important;
+                    display: flex !important;
+                    flex-wrap: wrap !important;
+                    align-items: center !important;
+                    justify-content: flex-start !important;
+                    height: auto !important;
+                    min-height: 48px !important;
+                    padding: 6px 10px !important;
+                    gap: 6px !important;
+                    box-sizing: border-box !important;
+                    width: 100vw !important;
+                    max-width: 100vw !important;
+                }
+
+                header > div:first-child,
+                .header > div:first-child,
+                .top-bar > div:first-child {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: flex-start !important;
+                    width: 100% !important;
+                    padding-right: 210px !important;
+                    gap: 10px !important;
+                    min-height: 32px !important;
+                    box-sizing: border-box !important;
+                }
+
+                .bs-mobile-second-row-bar {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    width: 100% !important;
+                    gap: 8px !important;
+                    box-sizing: border-box !important;
+                }
+            }
+
+            @media screen and (max-width: 1024px) {
+                #salesWidget, aside.left-panel, .sales-panel {
+                    position: fixed !important;
+                    top: var(--bs-header-bottom, 76px) !important;
+                    left: 0 !important;
+                    width: min(320px, 86vw) !important;
+                    max-width: 86vw !important;
+                    height: calc(100dvh - var(--bs-header-bottom, 76px)) !important;
+                    max-height: calc(100dvh - var(--bs-header-bottom, 76px)) !important;
+                    z-index: 2147483500 !important;
+                    box-shadow: 8px 4px 25px rgba(0, 0, 0, 0.75) !important;
+                    border-top: 1px solid #374151 !important;
+                }
+
+                #perfWidget, .perf-widget {
+                    left: 0px !important;
+                    right: 0px !important;
+                    width: 100vw !important;
+                    max-width: 100vw !important;
+                    box-sizing: border-box !important;
+                }
+                #perfWidget .widget-body {
+                    overflow-x: auto !important;
+                    overflow-y: auto !important;
+                }
+                #perfWidget table {
+                    min-width: 1080px !important;
+                }
+
+                #filterWidget {
+                    width: min(510px, 95vw) !important;
+                    min-width: min(510px, 95vw) !important;
+                    max-width: 95vw !important;
+                    left: 2.5vw !important;
+                    right: 2.5vw !important;
+                }
+                #bonusDetailModal {
+                    width: min(740px, 96vw) !important;
+                    min-width: min(740px, 96vw) !important;
+                    max-width: 96vw !important;
+                    height: min(520px, 84dvh) !important;
+                    left: 50% !important;
+                    top: 50% !important;
+                    transform: translate(-50%, -50%) !important;
+                }
+                #addPartnerModal > div,
+                #memberEditModal {
+                    width: min(460px, 94vw) !important;
+                    max-width: 94vw !important;
+                    max-height: 88dvh !important;
+                }
+            }
+
+            /* ----------------------------------------------------------------
+               📱 순수 스마트폰 세로화면 전용 (화면 폭 640px 이하)
+               ---------------------------------------------------------------- */
+            @media screen and (max-width: 640px) {
+                header, .header, .top-bar, .top-header-bar {
+                    position: relative !important;
+                    z-index: 2147483550 !important;
+                    display: flex !important;
+                    flex-wrap: wrap !important;
+                    padding: 6px 8px !important;
+                    gap: 5px !important;
+                    width: 100vw !important;
+                    max-width: 100vw !important;
+                    box-sizing: border-box !important;
+                }
+
+                #bs-mobile-hamburger-btn {
+                    position: absolute !important;
+                    top: 6px !important;
+                    right: 8px !important;
+                    width: 32px !important;
+                    height: 28px !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
+                    background: #1f2937 !important;
+                    border: 1px solid #374151 !important;
+                    border-radius: 6px !important;
+                    color: #e5e7eb !important;
+                    cursor: pointer !important;
+                    z-index: 100 !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                }
+
+                header > div:first-child, .header > div:first-child, .top-bar > div:first-child {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: flex-start !important;
+                    width: 100% !important;
+                    padding-right: 38px !important;
+                    gap: 8px !important;
+                    box-sizing: border-box !important;
+                    min-height: 28px !important;
+                }
+
+                header h1, header h2, header strong, .header-title, .brand-title, .logo-text {
+                    font-size: 13.5px !important;
+                    letter-spacing: -0.5px !important;
+                }
+
+                #header-line-count {
+                    font-size: 11px !important;
+                    padding: 3px 9px !important;
+                    margin: 0 !important;
+                }
+
+                .bs-mobile-second-row-bar,
+                .bs-mobile-period-flex {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    justify-content: space-between !important;
+                    align-items: center !important;
+                    gap: 3px !important;
+                    padding: 4px 6px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                }
+
+                header select, .header select, .top-bar select {
+                    padding: 2px 3px !important;
+                    font-size: 10.5px !important;
+                    height: 25px !important;
+                    width: auto !important;
+                    max-width: 68px !important;
+                    flex-shrink: 0 !important;
+                }
+
+                .bs-period-nav-btn {
+                    padding: 2px 5px !important;
+                    font-size: 10px !important;
+                    height: 25px !important;
+                    min-width: 22px !important;
+                    flex-shrink: 0 !important;
+                }
+
+                .bs-header-date-input,
+                header input[type="date"],
+                .header input[type="date"],
+                #header-start-date,
+                #header-end-date {
+                    width: 84px !important;
+                    min-width: 0px !important;
+                    max-width: 88px !important;
+                    flex: 0 1 84px !important;
+                    padding: 2px 2px !important;
+                    font-size: 10.5px !important;
+                    letter-spacing: -0.3px !important;
+                    height: 25px !important;
+                    text-align: center !important;
+                    box-sizing: border-box !important;
+                }
+
+                .bs-header-date-input::-webkit-calendar-picker-indicator,
+                header input[type="date"]::-webkit-calendar-picker-indicator,
+                #header-start-date::-webkit-calendar-picker-indicator,
+                #header-end-date::-webkit-calendar-picker-indicator {
+                    display: none !important;
+                    -webkit-appearance: none !important;
+                    width: 0 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+
+                #settingsDropdown, #settingsMenu, .settings-menu {
+                    position: fixed !important;
+                    top: 50% !important;
+                    left: 50% !important;
+                    right: auto !important;
+                    transform: translate(-50%, -50%) !important;
+                    max-width: 92vw !important;
+                    max-height: 80dvh !important;
+                    overflow-y: auto !important;
+                    z-index: 2147483644 !important;
+                    box-shadow: 0 20px 50px rgba(0,0,0,0.9) !important;
+                }
+
+                .zoom-controls {
+                    top: auto !important;
+                    bottom: 56px !important;
+                    right: 8px !important;
+                    transform: scale(0.85) !important;
+                    transform-origin: bottom right !important;
+                    z-index: 950 !important;
+                }
+            }
+        `;
+    }
+
+    // ------------------------------------------------------------------------
+    // [7] 모바일/태블릿 맞춤 계보도 초기 배율(Scale) 및 중앙 정렬
+    // ------------------------------------------------------------------------
+    window.centerRootNode = function() {
+        const wrapper = document.getElementById('tree-wrapper') || document.querySelector('.tree-wrapper');
+        const container = document.getElementById('canvas-container') || (wrapper ? wrapper.parentElement : null);
+        if (!wrapper || !container) return;
+
+        if (window.innerWidth <= 480) {
+            window.scale = 0.52;
+        } else if (window.innerWidth <= 640) {
+            window.scale = 0.60;
+        } else if (window.innerHeight <= 450) {
+            window.scale = 0.58;
+        } else if (window.innerWidth <= 1024) {
+            window.scale = 0.72;
+        } else {
+            window.scale = 0.85;
+        }
+
+        const rootCard = document.querySelector('.node-card');
+        if (!rootCard) {
+            setTimeout(window.centerRootNode, 100);
+            return;
+        }
+
+        let offsetLeftSum = 0;
+        let offsetTopSum = 0;
+        let curr = rootCard;
+        while (curr && curr !== wrapper) {
+            offsetLeftSum += curr.offsetLeft;
+            offsetTopSum += curr.offsetTop;
+            curr = curr.offsetParent;
+        }
+        const cardCenterX = offsetLeftSum + (rootCard.offsetWidth / 2);
+        const rootTopY = offsetTopSum;
+
+        const containerWidth = container.clientWidth || window.innerWidth;
+        const topMargin = (window.isMobileViewport() || window.innerHeight <= 450) ? 16 : 40;
+
+        window.panX = (containerWidth / 2) - (cardCenterX * window.scale);
+        window.panY = topMargin - (rootTopY * window.scale);
+
+        wrapper.style.setProperty('transform-origin', '0 0', 'important');
+        wrapper.style.setProperty('transform', `translate(${window.panX}px, ${window.panY}px) scale(${window.scale})`, 'important');
+    };
+    window.resetZoomAndPan = window.centerRootNode;
+
+    // ------------------------------------------------------------------------
+    // [8] 멀티터치 핀치 줌 & 카드 더블탭 편집 & 모바일 인앱 팝업 호환
+    // ------------------------------------------------------------------------
+    function initTouchAndPopupPatches() {
+        const canvas = document.getElementById('canvas-container') || document.querySelector('.canvas-container') || document.querySelector('main') || document.body;
+        if (canvas && canvas.dataset.touchPinchBoundV11 !== 'true') {
+            canvas.dataset.touchPinchBoundV11 = 'true';
+            let initialPinchDist = null, initialScale = 1, pinchCenterX = 0, pinchCenterY = 0;
+            const getTouchDist = (t1, t2) => Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    initialPinchDist = getTouchDist(e.touches[0], e.touches[1]);
+                    initialScale = window.scale || 0.6;
+                    pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2 && initialPinchDist) {
+                    e.preventDefault();
+                    const ratio = getTouchDist(e.touches[0], e.touches[1]) / initialPinchDist;
+                    const targetScale = Math.min(3, Math.max(0.15, initialScale * ratio));
+                    const delta = targetScale - (window.scale || 0.6);
+                    if (Math.abs(delta) > 0.005 && typeof window.changeZoom === 'function') {
+                        window.changeZoom(delta, pinchCenterX, pinchCenterY);
+                    }
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', (e) => {
+                if (e.touches.length < 2) initialPinchDist = null;
+            });
+
+            let lastTapTime = 0, lastTapCardId = null;
+            document.addEventListener('touchend', (e) => {
+                const cardEl = e.target.closest('.node-card');
+                if (!cardEl || e.target.closest('.corner-btn, .btn-add-parent')) return;
+                const memberId = cardEl.id.replace(/^card_/, '');
+                const now = Date.now();
+                if (lastTapCardId === memberId && (now - lastTapTime) < 320) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    lastTapTime = 0;
+                    lastTapCardId = null;
+                    if (window.cardClickTimer) { clearTimeout(window.cardClickTimer); window.cardClickTimer = null; }
+                    if (typeof window.openEditMemberModal === 'function') window.openEditMemberModal(memberId);
+                } else {
+                    lastTapTime = now;
+                    lastTapCardId = memberId;
+                }
+            }, { passive: false });
+        }
+
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#salesWidgetHeader, #salesWidget .widget-header, #salesWidget')) {
+                setTimeout(window.syncSalesPanelBelowHeader, 10);
+            }
+        }, true);
+
+        if (!window._mobilePopupPatchedV11) {
+            window._mobilePopupPatchedV11 = true;
+            const origWindowOpen = window.open;
+            window.open = function(url, windowName, windowFeatures) {
+                const isSimPopup = ['BizNavigatorPopup', 'SalesSearchPopup', 'AIAdvisorPopup'].includes(windowName);
+                if (!isSimPopup || !window.isTabletOrMobileViewport()) {
+                    return origWindowOpen.apply(window, arguments);
+                }
+                let overlayId = `bs-mobile-popup-${windowName}`;
+                let existing = document.getElementById(overlayId);
+                if (existing) existing.remove();
+
+                const overlay = document.createElement('div');
+                overlay.id = overlayId;
+                overlay.style.cssText = 'position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100dvh !important; background:rgba(0,0,0,0.82) !important; z-index:2147483646 !important; display:flex !important; align-items:center !important; justify-content:center !important; padding:6px !important; box-sizing:border-box !important;';
+                const iframe = document.createElement('iframe');
+                iframe.style.cssText = 'width:100% !important; height:100% !important; max-width:960px !important; max-height:96dvh !important; border:1px solid #374151 !important; border-radius:10px !important; background:#111827 !important;';
+                overlay.appendChild(iframe);
+                document.body.appendChild(overlay);
+
+                const fakeWin = iframe.contentWindow;
+                const beforeUnloadHandlers = [];
+                fakeWin.close = function() {
+                    beforeUnloadHandlers.forEach(fn => { try { fn(); } catch (e) {} });
+                    overlay.remove();
+                    fakeWin.closed = true;
+                };
+                const origAddEvent = fakeWin.addEventListener.bind(fakeWin);
+                fakeWin.addEventListener = function(type, listener, options) {
+                    if (type === 'beforeunload') beforeUnloadHandlers.push(listener);
+                    return origAddEvent(type, listener, options);
+                };
+                fakeWin.focus = function() { overlay.style.display = 'flex'; };
+                return fakeWin;
+            };
+        }
+    }
+
+    function bootV11() {
+        ensureViewportMeta();
+        injectResponsiveStyles();
+        ensureMobileDrawerDOM();
+        simplifyPrevNextButtons(document);
+        syncHeaderButtonsAndLayoutByViewport();
+        initTouchAndPopupPatches();
+
+        if (typeof window.updateHeaderLineCount === 'function') {
+            window.updateHeaderLineCount(window.currentSelectedId);
+        }
+
+        window.addEventListener('resize', () => {
+            syncHeaderButtonsAndLayoutByViewport();
+            window.syncSalesPanelBelowHeader();
+        });
+
+        [150, 350, 650, 1000].forEach(delay => {
+            setTimeout(() => {
+                simplifyPrevNextButtons(document);
+                syncHeaderButtonsAndLayoutByViewport();
+                window.syncSalesPanelBelowHeader();
+                if (typeof window.updateHeaderLineCount === 'function') {
+                    window.updateHeaderLineCount(window.currentSelectedId);
+                }
+            }, delay);
+        });
+
+        setTimeout(window.centerRootNode, 350);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootV11);
+    } else {
+        bootV11();
+    }
+})();
