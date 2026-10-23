@@ -5301,8 +5301,15 @@ window.renderBusinessNavigator = async function(targetMemberId, optDoc = null) {
     const nextRank = dbRanks.find(r => Number(r.rank_level || 0) > currLevel && Number(r.minor_leg_pv || 0) > 0) || { rank_name: 'DIAMOND', minor_leg_pv: 0 };
     const reqMinorPV = Number(nextRank.minor_leg_pv || 0);
 
-    const reqPartnerRank = (nextRank.req_partner_rank || nextRank.partner_rank) ? String(nextRank.req_partner_rank || nextRank.partner_rank).toUpperCase() : ((currLevel < 2) ? 'MEMBER' : 'DIRECTOR');
-    const reqPartnerCountEach = Number(nextRank.req_partner_count || 1);
+   // [수정된 DB 완벽 연동 코드]
+const reqPartnerRankId = nextRank.required_partner_rank_id ? Number(nextRank.required_partner_rank_id) : null;
+const reqPartnerRankObj = (reqPartnerRankId && window.dbRankByIdMap && window.dbRankByIdMap[reqPartnerRankId])
+    ? window.dbRankByIdMap[reqPartnerRankId]
+    : dbRanks.find(r => Number(r.rank_id) === reqPartnerRankId);
+
+const reqPartnerRank = reqPartnerRankObj ? String(reqPartnerRankObj.rank_name).toUpperCase() : 'MANIA';
+const reqPartnerCountEach = Number(nextRank.required_partner_count || nextRank.req_partner_count || 1);
+const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
 
     const { setA, setB } = (typeof window.getSublinePartnerSets === 'function' && mNode)
         ? window.getSublinePartnerSets(mNode) 
@@ -11066,5 +11073,3451 @@ if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bootV11);
     } else {
         bootV11();
+    }
+})();
+// ============================================================================
+// 🎯 [비지네스 내비게이터 DB 승급조건(required_partner_rank_id & is_direct_sponsor) 완벽 연동 패치]
+// - 하드코딩된 'MEMBER'/'DIRECTOR' 예비값을 제거하고 TiDB ranks 테이블의 required_partner_rank_id를 역참조
+// - is_direct_sponsor = 1 인 경우 본인이 직접 추천한 좌/우 파트너만 정확히 카운트 및 표기
+// ============================================================================
+(function fixNavigatorDbPartnerCondition() {
+    function normalizeId(val) {
+        if (!val) return '';
+        const s = (typeof val === 'object') ? (val.id || val.member_id || val.memberId || '') : String(val);
+        return String(s).trim().toLowerCase().replace(/^vk-?/, '');
+    }
+
+    window.renderBusinessNavigator = async function(targetMemberId, optDoc = null) {
+        const popup = window.bizNavPopupWindow;
+        const pDoc = optDoc || ((popup && !popup.closed) ? popup.document : document);
+        if (!pDoc) return;
+
+        const bodyEl = pDoc.getElementById('bizNavBody');
+        const badgeEl = pDoc.getElementById('bizNavTargetBadge');
+        if (!bodyEl) return;
+
+        if (typeof window.loadDbCompensationRates === 'function') {
+            try { await window.loadDbCompensationRates(); } catch (e) {}
+        }
+
+        let targetId = targetMemberId || window.currentSelectedId || 'VK-1199464';
+        const mNode = typeof window.findMemberNode === 'function' ? window.findMemberNode(targetId) : null;
+        if (!mNode) {
+            bodyEl.innerHTML = `<div style="padding:30px; text-align:center; color:#9ca3af;">회원 정보를 찾을 수 없습니다. (${targetId})</div>`;
+            return;
+        }
+
+        if (badgeEl) badgeEl.innerHTML = `[${mNode.name || mNode.id} (<b style="font-weight:bold; color:#ffffff;">${mNode.id}</b>)]`;
+
+        const currRank = String(mNode.rank || mNode.rank_name || 'MANIA').toUpperCase();
+        const currLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(currRank) : 0;
+        const dbRanks = Array.isArray(window.dbRanksSorted) ? window.dbRanksSorted : [];
+
+        const nextRank = dbRanks.find(r => Number(r.rank_level || 0) > currLevel && Number(r.minor_leg_pv || 0) > 0) || { rank_name: 'DIAMOND', minor_leg_pv: 0 };
+        const reqMinorPV = Number(nextRank.minor_leg_pv || 0);
+
+        // 🌟 [핵심 수정 1] TiDB ranks 테이블의 required_partner_rank_id 및 is_direct_sponsor 정확히 참조!
+        const reqPartnerRankId = (nextRank.required_partner_rank_id !== null && nextRank.required_partner_rank_id !== undefined && nextRank.required_partner_rank_id !== '')
+            ? Number(nextRank.required_partner_rank_id)
+            : null;
+        const reqPartnerRankObj = (reqPartnerRankId && window.dbRankByIdMap && window.dbRankByIdMap[reqPartnerRankId])
+            ? window.dbRankByIdMap[reqPartnerRankId]
+            : dbRanks.find(r => Number(r.rank_id) === reqPartnerRankId);
+
+        const reqPartnerRank = reqPartnerRankObj ? String(reqPartnerRankObj.rank_name).toUpperCase() : 'MANIA';
+        const reqPartnerCountEach = Number(nextRank.required_partner_count || nextRank.req_partner_count || 1);
+        const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
+        const isTermRestricted = String(nextRank.period_type || '').toUpperCase() === 'RECENT_4';
+
+        // 하위 파트너 Set 및 직접 추천 파트너 Set 구축
+        const { setA, setB } = typeof window.getSublinePartnerSets === 'function'
+            ? window.getSublinePartnerSets(mNode)
+            : { setA: new Set(), setB: new Set() };
+
+        const directRecMap = typeof window.getDirectRecommendedPartnersMap === 'function'
+            ? window.getDirectRecommendedPartnersMap(mNode)
+            : new Map();
+        const directRecNormSet = new Set(Array.from(directRecMap.keys()).map(k => normalizeId(k)));
+
+        const allSales = window._capturedAllSales || (typeof window.getAllSalesListFromDB === 'function' ? window.getAllSalesListFromDB() : (window.integrated_sales_history || []));
+        const latestPeriod = typeof window.getLatestPeriodRangeFromSales === 'function'
+            ? window.getLatestPeriodRangeFromSales(allSales)
+            : { sortKey: '2026-10-2', shortKey: '10-후', label: '10월 2기', startDate: '2026-10-16', endDate: '2026-10-31' };
+
+        const cleanFn = typeof window.cleanDateStr === 'function' ? window.cleanDateStr : (s => String(s || '').trim().substring(0, 10));
+        const mNorm = normalizeId(targetId);
+
+        let selfTotalPV = 0, selfTotalCV = 0, selfLastSalesDate = '', aTotalPV = 0, bTotalPV = 0, selfTermCV = 0;
+        const termSalesMapA = new Map(), termSalesMapB = new Map();
+        const termLabelMap = new Map();
+        termLabelMap.set(latestPeriod.sortKey, latestPeriod.label);
+
+        (allSales || []).forEach(s => {
+            if (!s) return;
+            const sNorm = normalizeId(s.member_id || s.memberId || s.id);
+            if (!sNorm) return;
+
+            const pv = typeof window.parseCommaNumber === 'function' ? window.parseCommaNumber(s.pv ?? s.sales_pv ?? 0) : Number(s.pv ?? s.sales_pv ?? 0);
+            const cv = typeof window.parseCommaNumber === 'function' ? window.parseCommaNumber(s.cv ?? s.sales_cv ?? 0) : Number(s.cv ?? s.sales_cv ?? 0);
+            const sDate = cleanFn(s.transaction_date || s.date || s.sales_date || s.buy_date || '');
+
+            const isSelf = (sNorm === mNorm);
+            const isA = !isSelf && setA.has(sNorm);
+            const isB = !isSelf && setB.has(sNorm);
+
+            if (isSelf && (!sDate || sDate <= latestPeriod.endDate)) {
+                selfTotalPV += pv;
+                selfTotalCV += cv;
+                if (sDate && (!selfLastSalesDate || sDate > selfLastSalesDate)) selfLastSalesDate = sDate;
+                if (sDate >= latestPeriod.startDate && sDate <= latestPeriod.endDate && cv > 0) selfTermCV += cv;
+            }
+
+            if (pv > 0 && (!sDate || sDate <= latestPeriod.endDate)) {
+                if (isA) aTotalPV += pv;
+                else if (isB) bTotalPV += pv;
+                const pObj = typeof window.getPeriodObjFromDateStr === 'function' ? window.getPeriodObjFromDateStr(sDate) : null;
+                if (pObj) {
+                    termLabelMap.set(pObj.sortKey, pObj.label);
+                    if (isA) termSalesMapA.set(pObj.sortKey, (termSalesMapA.get(pObj.sortKey) || 0) + pv);
+                    if (isB) termSalesMapB.set(pObj.sortKey, (termSalesMapB.get(pObj.sortKey) || 0) + pv);
+                }
+            }
+        });
+
+        const displaySelfPV = selfTotalPV > 0 ? selfTotalPV : Number(mNode.my_sales_pv || mNode.pv || 0);
+        const displayLastSalesDate = selfLastSalesDate || cleanFn(mNode.last_sales_date || mNode.achieve_date || mNode.join_date || '') || '-';
+
+        const allTermKeys = Array.from(new Set([latestPeriod.sortKey, ...termSalesMapA.keys(), ...termSalesMapB.keys()])).sort().reverse().slice(0, 4);
+        let sumLeftPV = 0, sumRightPV = 0;
+        const recentTerms = allTermKeys.map(k => {
+            const leftPV = termSalesMapA.get(k) || 0;
+            const rightPV = termSalesMapB.get(k) || 0;
+            sumLeftPV += leftPV;
+            sumRightPV += rightPV;
+            return { label: termLabelMap.get(k) || k, leftPV, rightPV };
+        });
+
+        const evalLeftPV = isTermRestricted ? sumLeftPV : aTotalPV;
+        const evalRightPV = isTermRestricted ? sumRightPV : bTotalPV;
+        const minorPV = Math.min(evalLeftPV, evalRightPV);
+        const promoPct = reqMinorPV > 0 ? Math.floor((minorPV / reqMinorPV) * 100) : 0;
+
+        // 🌟 [핵심 수정 2] is_direct_sponsor = 1 이면 본인이 직접 추천한 파트너 중에서만 reqPartnerRank 이상을 카운트!
+        const reqPartnerLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(reqPartnerRank) : 3;
+        let dirCountA = 0, dirCountB = 0, firstNodeA = null, firstNodeB = null;
+
+        setA.forEach(norm => {
+            const n = typeof window.findMemberNode === 'function' ? (window.findMemberNode(norm) || window.findMemberNode('VK-' + norm)) : null;
+            if (!n) return;
+            const nNorm = normalizeId(n.id);
+            const isDirect = directRecNormSet.has(nNorm) || normalizeId(n.recId || n.recommender_id) === mNorm;
+
+            if (isDirectSponsorReq && !isDirect) return;
+
+            if (!firstNodeA) firstNodeA = n;
+            const nLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(n.rank || n.rank_name) : 0;
+            if (nLevel >= reqPartnerLevel) {
+                dirCountA++;
+                if (!firstNodeA || nLevel > window.getDbRankLevel(firstNodeA.rank || firstNodeA.rank_name)) {
+                    firstNodeA = n;
+                }
+            }
+        });
+
+        setB.forEach(norm => {
+            const n = typeof window.findMemberNode === 'function' ? (window.findMemberNode(norm) || window.findMemberNode('VK-' + norm)) : null;
+            if (!n) return;
+            const nNorm = normalizeId(n.id);
+            const isDirect = directRecNormSet.has(nNorm) || normalizeId(n.recId || n.recommender_id) === mNorm;
+
+            if (isDirectSponsorReq && !isDirect) return;
+
+            if (!firstNodeB) firstNodeB = n;
+            const nLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(n.rank || n.rank_name) : 0;
+            if (nLevel >= reqPartnerLevel) {
+                dirCountB++;
+                if (!firstNodeB || nLevel > window.getDbRankLevel(firstNodeB.rank || firstNodeB.rank_name)) {
+                    firstNodeB = n;
+                }
+            }
+        });
+
+        if (!firstNodeA && mNode.left) firstNodeA = typeof mNode.left === 'object' ? mNode.left : window.findMemberNode(mNode.left);
+        if (!firstNodeB && mNode.right) firstNodeB = typeof mNode.right === 'object' ? mNode.right : window.findMemberNode(mNode.right);
+
+        const isPartnerSatisfied = (dirCountA >= reqPartnerCountEach && dirCountB >= reqPartnerCountEach);
+        const leftPartner = { id: firstNodeA ? (firstNodeA.id || '-') : '-', name: firstNodeA ? (firstNodeA.name || '-') : '-', rank: firstNodeA ? (firstNodeA.rank || firstNodeA.rank_name || '-') : '-', count: dirCountA };
+        const rightPartner = { id: firstNodeB ? (firstNodeB.id || '-') : '-', name: firstNodeB ? (firstNodeB.name || '-') : '-', rank: firstNodeB ? (firstNodeB.rank || firstNodeB.rank_name || '-') : '-', count: dirCountB };
+
+        const sponsorTypeLabel = isDirectSponsorReq ? '직접추천 파트너 조건' : '하위 육성 파트너 조건';
+
+        const promoRequirementsCardHtml = `
+            <div style="background:#1f2937; border:1px solid #374151; border-radius:8px; padding:14px; margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #374151;">
+                    <div>
+                        <div style="font-size:13px; font-weight:bold; color:#ffffff; margin-bottom:4px;">기준기수 : ${latestPeriod.label}</div>
+                        <div style="font-size:15px; font-weight:bold; color:#ffffff;">승급 : ${currRank} &gt; ${nextRank.rank_name}</div>
+                    </div>
+                    <div>
+                        <span style="background:#374151; color:#ffffff; font-size:11px; font-weight:bold; padding:4px 8px; border-radius:4px;">달성률: ${promoPct}%</span>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; text-align:center; font-size:12px;">
+                    <div style="background:#111827; border:1px solid #374151; border-radius:6px; padding:10px;">
+                        <div style="color:#9ca3af; font-size:11px; margin-bottom:4px;">① 소실적 목표 PV</div>
+                        <div style="color:#ffffff; font-weight:bold; font-size:13px;">${reqMinorPV.toLocaleString('ko-KR')} PV</div>
+                        <div style="color:${minorPV >= reqMinorPV ? '#10b981' : '#ef4444'}; font-size:11px; margin-top:4px; font-weight:bold;">
+                            ${minorPV >= reqMinorPV ? '✓ 달성 완료' : `부족: -${(reqMinorPV - minorPV).toLocaleString('ko-KR')} PV`}
+                        </div>
+                    </div>
+                    <div style="background:#111827; border:1px solid #374151; border-radius:6px; padding:10px;">
+                        <div style="color:#9ca3af; font-size:11px; margin-bottom:4px;">② ${sponsorTypeLabel}</div>
+                        <div style="color:#ffffff; font-weight:bold; font-size:12px;">좌/우 각 ${reqPartnerRank} ${reqPartnerCountEach}명</div>
+                        <div style="color:${isPartnerSatisfied ? '#10b981' : '#ef4444'}; font-size:11px; margin-top:4px; font-weight:bold;">
+                            ${isPartnerSatisfied ? `✓ 충족 완료 (좌:${dirCountA} / 우:${dirCountB})` : `현재 (좌:${dirCountA} / 우:${dirCountB})`}
+                        </div>
+                    </div>
+                    <div style="background:#111827; border:1px solid #374151; border-radius:6px; padding:10px;">
+                        <div style="color:#9ca3af; font-size:11px; margin-bottom:4px;">③ 적용 기준 규정</div>
+                        <div style="color:#ffffff; font-weight:bold; font-size:12.5px;">${isTermRestricted ? '기수제한 적용' : '전체 누적 인정'}</div>
+                        <div style="color:#9ca3af; font-size:10.5px; margin-top:4px;">${isTermRestricted ? '최근 4개 기수 합산' : '기간 제한 없음'}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        let mainContentHtml = '';
+        if (isTermRestricted) {
+            mainContentHtml = `
+                <div style="border:1px solid #374151; border-radius:8px; overflow:hidden; margin-bottom:12px; background:#1f2937;">
+                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">본인내역</div>
+                    <div style="display:flex; font-size:12px;">
+                        <div style="width:130px; padding:10px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">본인누적매출</div>
+                        <div style="flex:1; padding:10px 12px; color:#ffffff; font-weight:bold; text-align:left; border-right:1px solid #374151;">${displaySelfPV.toLocaleString('ko-KR')} PV</div>
+                        <div style="width:130px; padding:10px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">최근매출일자</div>
+                        <div style="flex:1; padding:10px 12px; color:#ffffff; font-weight:bold; text-align:left;">${displayLastSalesDate}</div>
+                    </div>
+                </div>
+
+                <div style="border:1px solid #374151; border-radius:8px; overflow:hidden; margin-bottom:12px; background:#1f2937;">
+                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">하위내역 (기수제한 실적)</div>
+                    <div style="display:flex; background:#111827; border-bottom:1px solid #374151; font-weight:bold; font-size:12px;">
+                        <div style="width:130px; padding:10px 12px; color:#ffffff; border-right:1px solid #374151;">합계 (좌측 총합)</div>
+                        <div style="flex:1; padding:10px 12px; color:#ffffff; text-align:left; border-right:1px solid #374151;">${sumLeftPV.toLocaleString('ko-KR')} PV</div>
+                        <div style="width:130px; padding:10px 12px; color:#ffffff; border-right:1px solid #374151;">합계 (우측 총합)</div>
+                        <div style="flex:1; padding:10px 12px; color:#ffffff; text-align:left;">${sumRightPV.toLocaleString('ko-KR')} PV</div>
+                    </div>
+                    <div style="display:flex; border-bottom:1px solid #374151; font-size:12px;">
+                        <div style="width:130px; padding:8px 12px; background:#111827; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">직추천(후원라인 좌)</div>
+                        <div style="flex:1; padding:8px 12px; color:#ffffff; font-weight:bold; text-align:left; border-right:1px solid #374151;">${leftPartner.name} (<b style="font-weight:bold; color:#ffffff;">${leftPartner.id}</b>)</div>
+                        <div style="width:130px; padding:8px 12px; background:#111827; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">직추천(후원라인 우)</div>
+                        <div style="flex:1; padding:8px 12px; color:#ffffff; font-weight:bold; text-align:left;">${rightPartner.name} (<b style="font-weight:bold; color:#ffffff;">${rightPartner.id}</b>)</div>
+                    </div>
+                    ${recentTerms.map(t => `
+                        <div style="display:flex; border-bottom:1px solid #374151; font-size:12px;">
+                            <div style="width:130px; padding:8px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">${t.label}(좌)</div>
+                            <div style="flex:1; padding:8px 12px; color:#ffffff; text-align:left; font-weight:bold; border-right:1px solid #374151;">${t.leftPV.toLocaleString('ko-KR')} PV</div>
+                            <div style="width:130px; padding:8px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">${t.label}(우)</div>
+                            <div style="flex:1; padding:8px 12px; color:#ffffff; text-align:left; font-weight:bold;">${t.rightPV.toLocaleString('ko-KR')} PV</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } else {
+            const remainLeftPV = Math.max(0, reqMinorPV - aTotalPV);
+            const remainRightPV = Math.max(0, reqMinorPV - bTotalPV);
+            mainContentHtml = `
+                <div style="border:1px solid #374151; border-radius:8px; overflow:hidden; margin-bottom:12px; background:#1f2937;">
+                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">추천계보라인</div>
+                    <div style="display:flex; align-items:center; text-align:center; font-size:12px;">
+                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">좌</div>
+                        <div style="flex:1; display:flex; align-items:center; justify-content:space-around; padding:10px; border-right:1px solid #374151;">
+                            <span style="color:#ffffff; font-family:monospace; font-weight:bold;">${leftPartner.id}</span>
+                            <span style="color:#ffffff; font-weight:bold;">${leftPartner.name}</span>
+                            <span style="color:#ffffff; font-weight:bold; font-size:11px; background:#374151; padding:2px 6px; border-radius:4px;">${leftPartner.rank}</span>
+                            <span style="color:#ffffff; font-weight:bold;">${leftPartner.count}명</span>
+                        </div>
+                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">우</div>
+                        <div style="flex:1; display:flex; align-items:center; justify-content:space-around; padding:10px;">
+                            <span style="color:#ffffff; font-family:monospace; font-weight:bold;">${rightPartner.id}</span>
+                            <span style="color:#ffffff; font-weight:bold;">${rightPartner.name}</span>
+                            <span style="color:#ffffff; font-weight:bold; font-size:11px; background:#374151; padding:2px 6px; border-radius:4px;">${rightPartner.rank}</span>
+                            <span style="color:#ffffff; font-weight:bold;">${rightPartner.count}명</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="border:1px solid #374151; border-radius:8px; overflow:hidden; margin-bottom:12px; background:#1f2937; font-size:12px;">
+                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">전체누적 PV</div>
+                    <div style="display:flex; align-items:center; text-align:center; border-bottom:1px solid #374151;">
+                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">좌</div>
+                        <div style="flex:1; padding:10px; color:#ffffff; font-weight:bold; font-size:13px; border-right:1px solid #374151;">${aTotalPV.toLocaleString('ko-KR')}</div>
+                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">우</div>
+                        <div style="flex:1; padding:10px; color:#ffffff; font-weight:bold; font-size:13px;">${bTotalPV.toLocaleString('ko-KR')}</div>
+                    </div>
+                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">${nextRank.rank_name} PV (목표)</div>
+                    <div style="display:flex; align-items:center; text-align:center; border-bottom:1px solid #374151;">
+                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">좌</div>
+                        <div style="flex:1; padding:10px; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">${reqMinorPV.toLocaleString('ko-KR')}</div>
+                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">우</div>
+                        <div style="flex:1; padding:10px; color:#ffffff; font-weight:bold;">${reqMinorPV.toLocaleString('ko-KR')}</div>
+                    </div>
+                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">${nextRank.rank_name} 승급까지 부족 PV</div>
+                    <div style="display:flex; align-items:center; text-align:center;">
+                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">좌</div>
+                        <div style="flex:1; padding:10px; color:${remainLeftPV === 0 ? '#10b981' : '#ef4444'}; font-weight:bold; font-size:13px; border-right:1px solid #374151;">${remainLeftPV === 0 ? '충족 완료' : remainLeftPV.toLocaleString('ko-KR')}</div>
+                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">우</div>
+                        <div style="flex:1; padding:10px; color:${remainRightPV === 0 ? '#10b981' : '#ef4444'}; font-weight:bold; font-size:13px;">${remainRightPV === 0 ? '충족 완료' : remainRightPV.toLocaleString('ko-KR')}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        const reqMaintCV = typeof window.getDbRequiredMaintCV === 'function' ? window.getDbRequiredMaintCV(currRank) : 0;
+        let minorSubTermCV = 0;
+        if (Array.isArray(window.perfData) && window.perfData.length > 0) {
+            minorSubTermCV = Number(window.perfData[0].matchedCV || 0);
+        }
+        const maintPct = reqMaintCV > 0 ? Math.min(100, Math.floor((minorSubTermCV / reqMaintCV) * 100)) : 100;
+        const maintDiffCV = Math.max(0, reqMaintCV - minorSubTermCV);
+
+        const maintEval = typeof window.evaluateMaintAchievedRank === 'function'
+            ? window.evaluateMaintAchievedRank(currRank, minorSubTermCV)
+            : { isAchieved: minorSubTermCV >= reqMaintCV && reqMaintCV > 0, achievedRank: currRank };
+        const maintStatusText = maintEval.isAchieved
+            ? `달성직급: ${maintEval.achievedRank} (달성)`
+            : `달성직급: 없음 (미달성)`;
+        const maintStatusColor = maintEval.isAchieved ? '#10b981' : '#ef4444';
+
+        const maintHtml = `
+            <div style="border:1px solid #374151; border-radius:8px; overflow:hidden; background:#1f2937; padding:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #374151;">
+                    <span style="font-size:13px; font-weight:bold; color:#ffffff;">품위유지 달성 현황</span>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:11px; font-weight:bold; color:${maintStatusColor};">${maintStatusText}</span>
+                        <span style="background:#374151; color:#ffffff; font-size:11px; font-weight:bold; padding:4px 8px; border-radius:4px;">달성률: ${maintPct}%</span>
+                    </div>
+                </div>
+                <div style="border:1px solid #374151; border-radius:6px; overflow:hidden; margin-bottom:10px; background:#111827;">
+                    <div style="background:#111827; padding:6px 8px; text-align:center; font-weight:bold; font-size:11.5px; color:#ffffff; border-bottom:1px solid #374151;">본인내역</div>
+                    <div style="display:flex; font-size:12px;">
+                        <div style="width:130px; padding:9px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">당기CV</div>
+                        <div style="flex:1; padding:9px 12px; color:#ffffff; font-weight:bold; text-align:left; border-right:1px solid #374151;">
+                            ${selfTermCV.toLocaleString('ko-KR')} CV
+                        </div>
+                        <div style="width:130px; padding:9px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">최근매출일자</div>
+                        <div style="flex:1; padding:9px 12px; color:#ffffff; font-weight:bold; text-align:left;">${displayLastSalesDate}</div>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1.6fr 1fr; gap:10px; text-align:center; font-size:12px; background:#111827; padding:12px; border-radius:6px; border:1px solid #374151;">
+                    <div style="display:flex; flex-direction:column; justify-content:center;">
+                        <div style="color:#9ca3af; margin-bottom:4px; font-size:11px; font-weight:bold;">직급별 기준 소실적 CV (DB)</div>
+                        <div style="color:#ffffff; font-weight:bold; font-size:13px;">${reqMaintCV.toLocaleString('ko-KR')} CV</div>
+                    </div>
+                    <div style="border-left:1px solid #374151; border-right:1px solid #374151; padding:0 8px; display:flex; flex-direction:column; justify-content:center;">
+                        <div style="color:#9ca3af; margin-bottom:4px; font-size:11px; font-weight:bold;">해당기수 소실적 신규 CV</div>
+                        <div style="color:#ffffff; font-weight:bold; font-size:13px; margin-bottom:2px;">${minorSubTermCV.toLocaleString('ko-KR')} CV</div>
+                        <div style="color:#9ca3af; font-size:10.5px; display:flex; justify-content:center; gap:6px;">
+                            <span>소실적라인(하위): <b style="color:#ffffff;">${minorSubTermCV.toLocaleString('ko-KR')}</b></span>
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; justify-content:center;">
+                        <div style="color:#9ca3af; margin-bottom:4px; font-size:11px; font-weight:bold;">부족분 CV</div>
+                        <div style="color:${maintDiffCV === 0 ? '#10b981' : '#ef4444'}; font-weight:bold; font-size:13px;">
+                            ${maintDiffCV === 0 ? '유지 달성' : `-${maintDiffCV.toLocaleString('ko-KR')} CV`}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        bodyEl.innerHTML = `${promoRequirementsCardHtml}${mainContentHtml}${maintHtml}`;
+    };
+})();
+// ============================================================================
+// 📏 [상단 헤더 기간 표시창 & 회원 검색창 컴팩트 너비 + 톱니바퀴(⚙️) 좌측 밀착 배치 패치]
+// 1. 데스크톱 화면에서 [기간 검색 바]와 [회원 검색 입력창]을 우측 톱니바퀴(⚙️) 바로 좌측으로 이동 정렬
+// 2. 시작일/종료일 입력 박스(90px) 및 회원 검색 입력창(115px) 컴팩트 너비 유지
+// ============================================================================
+(function applyCompactHeaderInputsAndRightAlignPatch() {
+    function injectCompactHeaderCSS() {
+        let style = document.getElementById('bs-compact-header-inputs-css');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'bs-compact-header-inputs-css';
+            document.head.appendChild(style);
+        }
+
+        style.innerHTML = `
+            /* 1) 날짜 입력 박스 여백 제거 및 슬림화 (90px) */
+            header input[type="date"],
+            .header input[type="date"],
+            .top-bar input[type="date"],
+            #header-start-date,
+            #header-end-date,
+            .bs-header-date-input {
+                width: 90px !important;
+                min-width: 90px !important;
+                max-width: 90px !important;
+                flex: 0 0 90px !important;
+                padding: 2px 4px !important;
+                font-size: 11.5px !important;
+                letter-spacing: -0.3px !important;
+                text-align: center !important;
+                box-sizing: border-box !important;
+            }
+
+            /* 날짜 박스 내부 달력 아이콘 여백 제거 (클릭 시 달력 정상 작동) */
+            header input[type="date"]::-webkit-calendar-picker-indicator,
+            .header input[type="date"]::-webkit-calendar-picker-indicator,
+            #header-start-date::-webkit-calendar-picker-indicator,
+            #header-end-date::-webkit-calendar-picker-indicator {
+                display: none !important;
+                -webkit-appearance: none !important;
+                width: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .bs-mobile-period-flex {
+                width: auto !important;
+                flex: 0 0 auto !important;
+                gap: 4px !important;
+                padding: 3px 6px !important;
+            }
+
+            /* 2) 회원 검색창(#searchInput) 너비 축소 (115px) */
+            #searchInput {
+                width: 115px !important;
+                min-width: 115px !important;
+                max-width: 115px !important;
+                padding: 3px 6px !important;
+                font-size: 11.5px !important;
+                box-sizing: border-box !important;
+            }
+
+            /* 🌟 3) 데스크톱 화면(1251px 이상): 기간 검색 + 검색어 입력창을 톱니바퀴(⚙️) 바로 좌측으로 밀착! */
+            @media screen and (min-width: 1251px) {
+                header, .header, .top-bar, .top-header-bar {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: flex-start !important;
+                    gap: 8px !important;
+                }
+
+                /* 기간 검색 + 검색창 컨테이너를 우측 끝(톱니바퀴 바로 왼쪽)으로 밀어붙임 */
+                .bs-desktop-right-tools-group,
+                .bs-mobile-second-row-bar {
+                    margin-left: auto !important;
+                    margin-right: 4px !important;
+                    width: auto !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: flex-end !important;
+                    gap: 8px !important;
+                    flex: 0 0 auto !important;
+                }
+
+                #bs-top-row-icons-holder {
+                    margin-left: 0 !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    gap: 4px !important;
+                    flex: 0 0 auto !important;
+                }
+            }
+
+            /* 스마트폰 세로 화면(640px 이하)에서는 날짜 박스를 82px로 맞춤 */
+            @media screen and (max-width: 640px) {
+                header input[type="date"],
+                .header input[type="date"],
+                #header-start-date,
+                #header-end-date,
+                .bs-header-date-input {
+                    width: 82px !important;
+                    min-width: 82px !important;
+                    max-width: 82px !important;
+                    flex: 0 0 82px !important;
+                    font-size: 10.5px !important;
+                    padding: 2px 2px !important;
+                }
+            }
+        `;
+    }
+
+    function applyCompactAndAlignRight() {
+        const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
+        if (!headerEl) return;
+
+        const isSmallMobile = window.innerWidth <= 640;
+        const isDesktop = window.innerWidth > 1250 && window.innerHeight > 500;
+        const targetDateWidth = isSmallMobile ? '82px' : '90px';
+
+        // 1) 시작일 / 종료일 입력창 너비 고정 및 상단 직계 컨테이너 탐색
+        let periodTopGroup = null;
+        const dateInputs = headerEl.querySelectorAll('input[type="date"], #header-start-date, #header-end-date');
+        dateInputs.forEach(inp => {
+            inp.style.setProperty('width', targetDateWidth, 'important');
+            inp.style.setProperty('min-width', targetDateWidth, 'important');
+            inp.style.setProperty('max-width', targetDateWidth, 'important');
+            inp.style.setProperty('flex', `0 0 ${targetDateWidth}`, 'important');
+            inp.style.setProperty('padding', '2px 4px', 'important');
+            inp.style.setProperty('text-align', 'center', 'important');
+
+            let curr = inp.parentElement;
+            while (curr && curr.parentElement !== headerEl && curr !== headerEl) {
+                curr = curr.parentElement;
+            }
+            if (curr && curr.parentElement === headerEl) {
+                periodTopGroup = curr;
+            }
+        });
+
+        // 2) 회원 검색창 너비 축소 및 상단 직계 컨테이너 탐색
+        let searchTopGroup = null;
+        const searchInp = document.getElementById('searchInput');
+        if (searchInp) {
+            searchInp.placeholder = '회원번호 / 이름';
+            searchInp.style.setProperty('width', '115px', 'important');
+            searchInp.style.setProperty('min-width', '115px', 'important');
+            searchInp.style.setProperty('max-width', '115px', 'important');
+
+            const searchParent = searchInp.parentElement;
+            if (searchParent && searchParent !== headerEl && !searchParent.querySelector('input[type="date"]')) {
+                searchParent.style.setProperty('width', 'auto', 'important');
+                searchParent.style.setProperty('min-width', '0px', 'important');
+                searchParent.style.setProperty('max-width', '155px', 'important');
+                searchParent.style.setProperty('flex', '0 0 auto', 'important');
+            }
+
+            let curr = searchInp.parentElement;
+            while (curr && curr.parentElement !== headerEl && curr !== headerEl) {
+                curr = curr.parentElement;
+            }
+            if (curr && curr.parentElement === headerEl) {
+                searchTopGroup = curr;
+            }
+        }
+
+        // 3) 🌟 톱니바퀴(아이콘 홀더) 바로 좌측으로 기간 검색 바 & 검색창 밀착 배치
+        const topIconsHolder = document.getElementById('bs-top-row-icons-holder');
+        if (periodTopGroup) {
+            periodTopGroup.classList.add('bs-desktop-right-tools-group');
+
+            // 만약 검색창이 별도의 직계 박스로 떨어져 있다면 기간 검색 박스 안(우측)으로 합쳐서 나란히 붙임
+            if (searchTopGroup && searchTopGroup !== periodTopGroup && !searchTopGroup.querySelector('#header-line-count')) {
+                periodTopGroup.appendChild(searchTopGroup);
+            }
+
+            if (isDesktop) {
+                // 데스크톱에서 아이콘 홀더(톱니바퀴 등) 바로 왼쪽에 위치하도록 순서 보장 및 우측 밀착
+                if (topIconsHolder && topIconsHolder.parentElement === headerEl && periodTopGroup.nextElementSibling !== topIconsHolder) {
+                    headerEl.insertBefore(periodTopGroup, topIconsHolder);
+                }
+                periodTopGroup.style.setProperty('margin-left', 'auto', 'important');
+                periodTopGroup.style.setProperty('margin-right', '4px', 'important');
+                periodTopGroup.style.setProperty('width', 'auto', 'important');
+                periodTopGroup.style.setProperty('justify-content', 'flex-end', 'important');
+                periodTopGroup.style.setProperty('gap', '8px', 'important');
+
+                if (topIconsHolder) {
+                    topIconsHolder.style.setProperty('margin-left', '0px', 'important');
+                }
+            } else {
+                periodTopGroup.style.removeProperty('margin-left');
+                periodTopGroup.style.removeProperty('margin-right');
+            }
+        }
+    }
+
+    function bootCompactAndAlign() {
+        injectCompactHeaderCSS();
+        applyCompactAndAlignRight();
+
+        window.addEventListener('resize', applyCompactAndAlignRight);
+        [200, 500, 1000].forEach(delay => setTimeout(applyCompactAndAlignRight, delay));
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootCompactAndAlign);
+    } else {
+        bootCompactAndAlign();
+    }
+})();
+// ============================================================================
+// ✂️ [표시 설정 메뉴 '위젯 설정' 타이틀 하단 가로선 제거 패치]
+// ============================================================================
+(function removeWidgetSettingsTitleUnderline() {
+    // 1) CSS로 #bs-widget-settings-col 내부 타이틀의 하단 테두리(border-bottom) 및 hr 강제 제거
+    let style = document.getElementById('bs-remove-widget-line-css');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'bs-remove-widget-line-css';
+        document.head.appendChild(style);
+    }
+    style.innerHTML = `
+        #bs-widget-settings-col > div:first-child,
+        #bs-widget-settings-col > strong:first-child,
+        #bs-widget-settings-col > h4:first-child,
+        #bs-widget-settings-col > span:first-child,
+        #bs-widget-settings-col .setting-title,
+        #bs-widget-settings-col .menu-title {
+            border-bottom: none !important;
+            padding-bottom: 0 !important;
+            margin-bottom: 2px !important;
+        }
+        #bs-widget-settings-col hr {
+            display: none !important;
+        }
+    `;
+
+    // 2) 인라인 스타일로 들어가 있는 border-bottom도 직접 찾아 제거
+    function stripInlineBorder() {
+        const widgetCol = document.getElementById('bs-widget-settings-col');
+        if (!widgetCol) return;
+
+        widgetCol.querySelectorAll('*').forEach(el => {
+            const txt = (el.innerText || '').trim();
+            if (txt === '위젯 설정' || txt === '위젯설정') {
+                el.style.setProperty('border-bottom', 'none', 'important');
+                el.style.setProperty('padding-bottom', '0px', 'important');
+                el.style.setProperty('margin-bottom', '2px', 'important');
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', stripInlineBorder);
+    } else {
+        stripInlineBorder();
+    }
+    document.addEventListener('click', () => setTimeout(stripInlineBorder, 20), true);
+})();
+// ============================================================================
+// 🔀 [최상단 기준 파트너(Root) 스위치 전환 & 이전 선택 기억 & 로그인/동명이인 모달 패치 V2]
+// - 해결: 카드 선택 시 전역 트리 데이터 교체 + DOM 서브트리 최상단 승격을 동시에 수행하여 100% 최상단 표시 보장!
+// - 후원계보도 ↔ 추천계보도 전환 시나 데이터 리로드 시에도 선택한 최상단 파트너가 풀리지 않고 고정 유지됨
+// ============================================================================
+(function initCustomRootSwitchAndLoginTargetPatchV2() {
+    if (window._bsCustomRootSwitchPatchedV2) return;
+    window._bsCustomRootSwitchPatchedV2 = true;
+
+    const STORAGE_ROOT_KEY = 'bs_saved_custom_root_id';
+    const STORAGE_HISTORY_KEY = 'bs_recent_root_history';
+    const STORAGE_PENDING_LOGIN_QUERY = 'bs_pending_login_root_query';
+
+    window.isRootCardPickMode = false;
+
+    // ------------------------------------------------------------------------
+    // [1] ID 정규화 및 전체 회원 풀(Pool) 백업/탐색
+    // ------------------------------------------------------------------------
+    function normId(val) {
+        if (!val) return '';
+        const s = (typeof val === 'object') ? (val.id || val.member_id || val.memberId || '') : String(val);
+        return String(s).trim().toLowerCase().replace(/^vk-?/, '');
+    }
+
+    // 원본 전체 트리/회원 데이터를 최초 1회 안전하게 백업
+    function backupMasterDataIfNeeded() {
+        if (!window._masterTreeDataBackup && window.treeData) {
+            window._masterTreeDataBackup = window.treeData;
+        }
+        if (!window._masterMembersPoolBackup) {
+            const list = collectAllNodes();
+            if (list.length > 1) {
+                window._masterMembersPoolBackup = list;
+            }
+        }
+    }
+
+    function collectAllNodes() {
+        const map = new Map();
+        const addNode = (n) => {
+            if (!n || typeof n !== 'object') return;
+            const id = n.id || n.member_id;
+            if (id && !map.has(normId(id))) {
+                map.set(normId(id), n);
+            }
+            if (n.left && typeof n.left === 'object') addNode(n.left);
+            if (n.right && typeof n.right === 'object') addNode(n.right);
+            if (Array.isArray(n.children)) n.children.forEach(addNode);
+        };
+
+        if (window._masterTreeDataBackup) {
+            if (Array.isArray(window._masterTreeDataBackup)) window._masterTreeDataBackup.forEach(addNode);
+            else addNode(window._masterTreeDataBackup);
+        }
+        if (window._originalMasterRootNode) addNode(window._originalMasterRootNode);
+        if (typeof window.getUniqueMembers === 'function') {
+            try { (window.getUniqueMembers() || []).forEach(addNode); } catch (e) {}
+        }
+        if (window.treeData) {
+            if (Array.isArray(window.treeData)) window.treeData.forEach(addNode);
+            else addNode(window.treeData);
+        }
+        if (Array.isArray(window.allMembers)) window.allMembers.forEach(addNode);
+        if (Array.isArray(window.membersData)) window.membersData.forEach(addNode);
+        if (Array.isArray(window.rawMembers)) window.rawMembers.forEach(addNode);
+
+        // 만약 데이터 배열이 비어있다면 현재 화면의 DOM 카드(.node-card)에서도 수집
+        if (map.size === 0) {
+            document.querySelectorAll('.node-card[id^="card_"]').forEach(cardEl => {
+                const cId = cardEl.id.replace(/^card_/, '');
+                if (cId && typeof window.findMemberNode === 'function') {
+                    const found = window.findMemberNode(cId);
+                    if (found) addNode(found);
+                }
+            });
+        }
+        return Array.from(map.values());
+    }
+
+    function findNodeFromPool(targetId) {
+        if (!targetId) return null;
+        backupMasterDataIfNeeded();
+        const tNorm = normId(targetId);
+
+        if (window._masterMembersPoolBackup) {
+            const f = window._masterMembersPoolBackup.find(m => normId(m.id || m.member_id) === tNorm);
+            if (f) return f;
+        }
+        const pool = collectAllNodes();
+        const foundInPool = pool.find(m => normId(m.id || m.member_id) === tNorm);
+        if (foundInPool) return foundInPool;
+
+        if (typeof window.findMemberNode === 'function') {
+            return window.findMemberNode(targetId) || window.findMemberNode('VK-' + tNorm.toUpperCase());
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------------
+    // [2] 원본 최상위 루트 보존 및 getAbsoluteTopRoot 오버라이드
+    // ------------------------------------------------------------------------
+    const origGetAbsoluteTopRoot = window.getAbsoluteTopRoot;
+
+    window.getTrueMasterTopRoot = function() {
+        backupMasterDataIfNeeded();
+        if (window._originalMasterRootNode) return window._originalMasterRootNode;
+        if (typeof origGetAbsoluteTopRoot === 'function') {
+            const r = origGetAbsoluteTopRoot();
+            if (r) {
+                window._originalMasterRootNode = r;
+                return r;
+            }
+        }
+        const pool = collectAllNodes();
+        if (pool.length > 0) {
+            window._originalMasterRootNode = pool[0];
+            return pool[0];
+        }
+        return null;
+    };
+
+    window.getAbsoluteTopRoot = function() {
+        window.getTrueMasterTopRoot();
+        const savedRootId = window.customTopRootId || localStorage.getItem(STORAGE_ROOT_KEY);
+        if (savedRootId) {
+            const customNode = findNodeFromPool(savedRootId);
+            if (customNode) {
+                return customNode;
+            }
+        }
+        return window._originalMasterRootNode || (typeof origGetAbsoluteTopRoot === 'function' ? origGetAbsoluteTopRoot() : null);
+    };
+
+    // ------------------------------------------------------------------------
+    // [3] 🌟 DOM 트리에서 선택한 카드의 서브트리(<li>)만 최상단으로 단독 표시하는 확실한 엔진!
+    // ------------------------------------------------------------------------
+    window.isolateSubtreeInDOM = function(targetMemberId) {
+        const treeRoot = document.getElementById('tree-root') || document.querySelector('.tree');
+        if (!treeRoot) return false;
+
+        // 먼저 이전에 숨겼던 노드들을 모두 원상복구
+        treeRoot.querySelectorAll('[data-bs-root-hidden="1"]').forEach(el => {
+            el.style.removeProperty('display');
+            el.removeAttribute('data-bs-root-hidden');
+        });
+        treeRoot.querySelectorAll('[data-bs-root-unwrapped="1"]').forEach(el => {
+            el.style.removeProperty('padding-top');
+            el.removeAttribute('data-bs-root-unwrapped');
+        });
+
+        if (!targetMemberId) return true;
+
+        const targetNorm = normId(targetMemberId);
+        let targetCard = document.getElementById(`card_${targetMemberId}`);
+        if (!targetCard) {
+            document.querySelectorAll('.node-card[id^="card_"]').forEach(c => {
+                if (normId(c.id.replace(/^card_/, '')) === targetNorm) {
+                    targetCard = c;
+                }
+            });
+        }
+        if (!targetCard) return false;
+
+        const targetLi = targetCard.closest('li');
+        if (!targetLi) return false;
+
+        // targetLi부터 최상위 treeRoot까지 올라가면서:
+        // 1) 조상들의 카드(.node-card)와 상단 연결선을 숨기고
+        // 2) 조상 레벨의 다른 형제 가지(반대편 라인 li)들을 모두 숨겨서
+        // 오직 targetCard와 그 하위 파트너들만 계보도 최상단에 단독으로 남김!
+        let currLi = targetLi;
+        while (currLi && currLi !== treeRoot && treeRoot.contains(currLi)) {
+            const parentUl = currLi.parentElement;
+            if (parentUl && parentUl.tagName === 'UL') {
+                // 같은 층위의 형제 li(반대쪽 라인) 숨김
+                Array.from(parentUl.children).forEach(siblingLi => {
+                    if (siblingLi !== currLi && siblingLi.tagName === 'LI') {
+                        siblingLi.style.setProperty('display', 'none', 'important');
+                        siblingLi.setAttribute('data-bs-root-hidden', '1');
+                    }
+                });
+
+                parentUl.style.setProperty('padding-top', '0px', 'important');
+                parentUl.setAttribute('data-bs-root-unwrapped', '1');
+
+                const ancestorLi = parentUl.parentElement;
+                if (ancestorLi && ancestorLi.tagName === 'LI' && treeRoot.contains(ancestorLi)) {
+                    // 조상 li 바로 아래의 조상 카드(.node-card) 숨김
+                    Array.from(ancestorLi.children).forEach(child => {
+                        if (child !== parentUl) {
+                            child.style.setProperty('display', 'none', 'important');
+                            child.setAttribute('data-bs-root-hidden', '1');
+                        }
+                    });
+                    ancestorLi.style.setProperty('padding-top', '0px', 'important');
+                    ancestorLi.setAttribute('data-bs-root-unwrapped', '1');
+                    currLi = ancestorLi;
+                    continue;
+                }
+            }
+            break;
+        }
+
+        targetLi.style.setProperty('padding-top', '0px', 'important');
+        targetLi.setAttribute('data-bs-root-unwrapped', '1');
+        return true;
+    };
+
+    // 조상 라인의 상단 트리가 잘린 상태에서 보더/연결선(::before, ::after)이 허공에 남지 않도록 깔끔하게 숨기는 CSS
+    function injectSubtreeCleanConnectorCSS() {
+        if (document.getElementById('bs-subtree-clean-connector-css')) return;
+        const st = document.createElement('style');
+        st.id = 'bs-subtree-clean-connector-css';
+        st.innerHTML = `
+            [data-bs-root-unwrapped="1"]::before,
+            [data-bs-root-unwrapped="1"]::after {
+                display: none !important;
+                border: none !important;
+            }
+            body.bs-root-pick-active .node-card {
+                cursor: pointer !important;
+                outline: 2px dashed #60a5fa !important;
+                outline-offset: 2px !important;
+                transition: transform 0.15s, outline-color 0.15s !important;
+            }
+            body.bs-root-pick-active .node-card:hover {
+                outline: 3px solid #fbbf24 !important;
+                transform: scale(1.06) !important;
+                z-index: 999 !important;
+            }
+        `;
+        document.head.appendChild(st);
+    }
+
+    // ------------------------------------------------------------------------
+    // [4] 이전 선택 파트너 히스토리 저장 및 조회
+    // ------------------------------------------------------------------------
+    function saveToRootHistory(memberNode) {
+        if (!memberNode || !memberNode.id) return;
+        let history = [];
+        try {
+            history = JSON.parse(localStorage.getItem(STORAGE_HISTORY_KEY) || '[]');
+        } catch (e) {
+            history = [];
+        }
+        const entry = {
+            id: memberNode.id,
+            name: memberNode.name || memberNode.member_name || '-',
+            rank: String(memberNode.rank || memberNode.rank_name || memberNode.title || 'MEMBER').toUpperCase(),
+            memberType: memberNode.member_type || memberNode.type || memberNode.category || '사업자'
+        };
+        history = history.filter(item => normId(item.id) !== normId(entry.id));
+        history.unshift(entry);
+        if (history.length > 8) history = history.slice(0, 8);
+        localStorage.setItem(STORAGE_HISTORY_KEY, JSON.stringify(history));
+    }
+
+    function getRootHistory() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_HISTORY_KEY) || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // [5] 🌟 최상단 카드가 헤더에 절대 가려지지 않도록 헤더 하단 기준 여백(28px)을 자동 계산하여 배치
+    // ------------------------------------------------------------------------
+    window.centerSpecificCardAsRoot = function(targetCardEl) {
+        const wrapper = document.getElementById('tree-wrapper') || document.querySelector('.tree-wrapper');
+        const container = document.getElementById('canvas-container') || (wrapper ? wrapper.parentElement : null);
+        const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
+        if (!wrapper || !container || !targetCardEl) return;
+
+        if (window.innerWidth <= 480) {
+            window.scale = 0.52;
+        } else if (window.innerWidth <= 640) {
+            window.scale = 0.60;
+        } else if (window.innerHeight <= 450) {
+            window.scale = 0.58;
+        } else if (window.innerWidth <= 1024) {
+            window.scale = 0.72;
+        } else {
+            window.scale = 0.85;
+        }
+
+        // panX=0, panY=0, scale=1 기준에서 wrapper와 targetCardEl의 화면 좌표 측정
+        wrapper.style.setProperty('transform-origin', '0 0', 'important');
+        wrapper.style.setProperty('transform', `translate(0px, 0px) scale(1)`, 'important');
+
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const cardRect = targetCardEl.getBoundingClientRect();
+        const headerBottom = headerEl ? Math.round(headerEl.getBoundingClientRect().bottom) : 56;
+
+        const cardCenterX = (cardRect.left - wrapperRect.left) + (cardRect.width / 2);
+        const cardTopY = (cardRect.top - wrapperRect.top);
+
+        const containerWidth = container.clientWidth || window.innerWidth;
+        const paddingBelowHeader = (window.innerWidth <= 640 || window.innerHeight <= 450) ? 18 : 28;
+
+        // wrapper의 시작 위치(wrapperRect.top)가 헤더보다 위에 있으면 헤더 높이만큼 자동으로 더 내려줌!
+        const desiredScreenTop = headerBottom + paddingBelowHeader;
+        const targetPanY = (desiredScreenTop - wrapperRect.top) - (cardTopY * window.scale);
+
+        window.panX = Math.round((containerWidth / 2) - (cardCenterX * window.scale));
+        window.panY = Math.round(targetPanY);
+
+        wrapper.style.setProperty('transform', `translate(${window.panX}px, ${window.panY}px) scale(${window.scale})`, 'important');
+    };
+
+    // centerRootNode 호출 시에도 현재 최상단으로 지정된 카드를 기준으로 중앙 정렬되도록 연동
+    const prevCenterRootNode = window.centerRootNode;
+    window.centerRootNode = function() {
+        const savedId = window.customTopRootId || localStorage.getItem(STORAGE_ROOT_KEY);
+        if (savedId) {
+            window.isolateSubtreeInDOM(savedId);
+            const targetNorm = normId(savedId);
+            let cardEl = document.getElementById(`card_${savedId}`);
+            if (!cardEl) {
+                document.querySelectorAll('.node-card[id^="card_"]').forEach(c => {
+                    if (normId(c.id.replace(/^card_/, '')) === targetNorm) cardEl = c;
+                });
+            }
+            if (cardEl) {
+                window.centerSpecificCardAsRoot(cardEl);
+                return;
+            }
+        }
+        if (typeof prevCenterRootNode === 'function') {
+            prevCenterRootNode();
+        }
+    };
+    window.resetZoomAndPan = window.centerRootNode;
+
+    window.applyCustomTopRootPartner = function(memberId, resetToMaster = false) {
+        backupMasterDataIfNeeded();
+        window.toggleRootCardPickMode(false);
+
+        const switchModal = document.getElementById('bs-root-switch-modal-overlay');
+        if (switchModal) switchModal.remove();
+
+        const masterNode = window.getTrueMasterTopRoot();
+
+        if (resetToMaster || !memberId || (masterNode && normId(masterNode.id) === normId(memberId))) {
+            window.customTopRootId = null;
+            localStorage.removeItem(STORAGE_ROOT_KEY);
+            window.isolateSubtreeInDOM(null);
+
+            const mId = masterNode ? masterNode.id : null;
+            if (mId) {
+                window.currentSelectedId = mId;
+                const masterCard = document.getElementById(`card_${mId}`) || document.querySelector('.node-card');
+                if (masterCard) window.centerSpecificCardAsRoot(masterCard);
+                if (typeof window.selectNode === 'function') {
+                    try { window.selectNode(mId); } catch (e) {}
+                }
+                if (typeof window.updateHeaderLineCount === 'function') {
+                    window.updateHeaderLineCount(mId);
+                }
+            }
+            updateSwitchButtonBadgeState();
+            return;
+        }
+
+        const targetNode = findNodeFromPool(memberId);
+        const canonicalId = targetNode ? (targetNode.id || targetNode.member_id || memberId) : memberId;
+
+        window.customTopRootId = canonicalId;
+        window.currentSelectedId = canonicalId;
+        localStorage.setItem(STORAGE_ROOT_KEY, canonicalId);
+
+        if (targetNode) {
+            saveToRootHistory(targetNode);
+        } else {
+            // DOM 카드에서라도 이름/직급 추출하여 히스토리 저장
+            const domCard = document.getElementById(`card_${canonicalId}`);
+            if (domCard) {
+                saveToRootHistory({
+                    id: canonicalId,
+                    name: domCard.getAttribute('data-name') || canonicalId,
+                    rank: domCard.getAttribute('data-rank') || 'MEMBER'
+                });
+            }
+        }
+
+        // 1) DOM 트리에서 선택한 카드를 최상단(Top Root)으로 즉시 승격 (상위 및 형제 라인 숨김)
+        const isolated = window.isolateSubtreeInDOM(canonicalId);
+
+        // 2) 만약 현재 DOM에 해당 카드가 없다면(접혀있거나 다른 모드인 경우) 전체 트리 재렌더링 후 다시 승격
+        if (!isolated && typeof window.renderTree === 'function') {
+            try { window.renderTree(); } catch (e) {}
+            window.isolateSubtreeInDOM(canonicalId);
+        }
+
+        // 3) 승격된 최상단 카드를 화면 정중앙 상단에 배치하고 선택 상태(수당/매출/배지) 동기화
+        setTimeout(() => {
+            window.isolateSubtreeInDOM(canonicalId);
+            const targetNorm = normId(canonicalId);
+            let targetCardEl = document.getElementById(`card_${canonicalId}`);
+            if (!targetCardEl) {
+                document.querySelectorAll('.node-card[id^="card_"]').forEach(c => {
+                    if (normId(c.id.replace(/^card_/, '')) === targetNorm) targetCardEl = c;
+                });
+            }
+
+            if (targetCardEl) {
+                window.centerSpecificCardAsRoot(targetCardEl);
+                // 기존 시뮬레이터의 카드 클릭(선택) 로직 실행하여 하단 수당/좌측 매출/상단 배지 연동
+                window._bypassRootPickCapture = true;
+                targetCardEl.click();
+                window._bypassRootPickCapture = false;
+            }
+
+            if (typeof window.updateHeaderLineCount === 'function') {
+                window.updateHeaderLineCount(canonicalId);
+            }
+            updateSwitchButtonBadgeState();
+        }, 60);
+    };
+
+    // 후원 ↔ 추천계보도 전환 시나 트리 재렌더링 시에도 선택한 최상단 루트가 풀리지 않도록 자동 유지
+    ['renderTree', 'toggleTreeMode', 'drawTree'].forEach(fnName => {
+        const origFn = window[fnName];
+        if (typeof origFn === 'function' && !origFn._rootSwitchWrapped) {
+            const wrapped = function() {
+                const res = origFn.apply(this, arguments);
+                const savedId = window.customTopRootId || localStorage.getItem(STORAGE_ROOT_KEY);
+                if (savedId) {
+                    setTimeout(() => {
+                        window.isolateSubtreeInDOM(savedId);
+                        window.centerRootNode();
+                        if (typeof window.updateHeaderLineCount === 'function') {
+                            window.updateHeaderLineCount(savedId);
+                        }
+                    }, 80);
+                }
+                return res;
+            };
+            wrapped._rootSwitchWrapped = true;
+            window[fnName] = wrapped;
+        }
+    });
+
+    // ------------------------------------------------------------------------
+    // [6] 회원번호/회원명 검색 및 동명이인(복수 결과) 선택 모달창 표시
+    // ------------------------------------------------------------------------
+    window.searchAndSelectTopRootPartner = function(rawQuery) {
+        const q = String(rawQuery || '').trim();
+        if (!q) {
+            window.applyCustomTopRootPartner(null, true);
+            return;
+        }
+
+        const pool = collectAllNodes();
+        if (!pool || pool.length === 0) {
+            localStorage.setItem(STORAGE_PENDING_LOGIN_QUERY, q);
+            return;
+        }
+
+        const qNorm = normId(q);
+        const qLower = q.toLowerCase();
+
+        const exactIdMatches = pool.filter(m => normId(m.id || m.member_id) === qNorm);
+        if (exactIdMatches.length === 1) {
+            window.applyCustomTopRootPartner(exactIdMatches[0].id || exactIdMatches[0].member_id);
+            return;
+        }
+
+        let matches = pool.filter(m => {
+            const mName = String(m.name || m.member_name || '').trim().toLowerCase();
+            return mName === qLower;
+        });
+
+        if (matches.length === 0) {
+            matches = pool.filter(m => {
+                const mName = String(m.name || m.member_name || '').trim().toLowerCase();
+                const mId = String(m.id || m.member_id || '').trim().toLowerCase();
+                return mName.includes(qLower) || mId.includes(qLower) || normId(mId).includes(qNorm);
+            });
+        }
+
+        if (matches.length === 0) {
+            alert(`"${q}"에 해당하는 파트너(회원번호 또는 이름)를 찾을 수 없습니다.`);
+            return;
+        }
+
+        if (matches.length === 1) {
+            window.applyCustomTopRootPartner(matches[0].id || matches[0].member_id);
+            return;
+        }
+
+        window.openDuplicatePartnerSelectModal(matches, q);
+    };
+
+    window.openDuplicatePartnerSelectModal = function(candidates, keyword = '') {
+        let overlay = document.getElementById('bs-duplicate-partner-modal');
+        if (overlay) overlay.remove();
+
+        overlay = document.createElement('div');
+        overlay.id = 'bs-duplicate-partner-modal';
+        overlay.style.cssText = `
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100dvh !important;
+            background: rgba(0, 0, 0, 0.78) !important;
+            z-index: 2147483647 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 12px !important;
+            box-sizing: border-box !important;
+        `;
+
+        const rowsHtml = candidates.map(m => {
+            const mId = m.id || m.member_id || '-';
+            const mName = m.name || m.member_name || '-';
+            const mRank = String(m.rank || m.rank_name || m.title || 'MEMBER').toUpperCase();
+            const mType = m.member_type || m.type || m.category || m.grade_type || '사업자';
+
+            return `
+                <tr onclick="window.selectPartnerFromDuplicateModal('${mId}')" style="border-bottom: 1px solid #374151; cursor: pointer; transition: background 0.15s;" onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 10px 8px; text-align: center; font-family: monospace; font-weight: bold; color: #60a5fa;">${mId}</td>
+                    <td style="padding: 10px 8px; text-align: center; font-weight: bold; color: #ffffff;">${mName}</td>
+                    <td style="padding: 10px 8px; text-align: center;">
+                        <span style="background: #374151; color: #fbbf24; font-size: 11px; font-weight: bold; padding: 3px 7px; border-radius: 4px;">${mRank}</span>
+                    </td>
+                    <td style="padding: 10px 8px; text-align: center; color: #d1d5db; font-weight: bold;">${mType}</td>
+                    <td style="padding: 10px 8px; text-align: center;">
+                        <button type="button" style="background: #2563eb; border: 1px solid #3b82f6; color: #fff; border-radius: 4px; padding: 4px 10px; font-size: 11.5px; font-weight: bold; cursor: pointer;">선택</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        overlay.innerHTML = `
+            <div onclick="event.stopPropagation()" style="width: min(540px, 95vw); max-height: 84dvh; background: #1f2937; border: 1px solid #4b5563; border-radius: 10px; box-shadow: 0 25px 60px rgba(0,0,0,0.9); display: flex; flex-direction: column; overflow: hidden; color: #fff;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: #111827; border-bottom: 1px solid #374151;">
+                    <div>
+                        <strong style="font-size: 14.5px; color: #60a5fa;">👥 동명이인 / 복수 파트너 선택 (${candidates.length}명)</strong>
+                        <div style="font-size: 11.5px; color: #9ca3af; margin-top: 3px;">"${keyword}" 검색 결과가 여러 명입니다. 최상단에 표시할 파트너를 선택해 주세요.</div>
+                    </div>
+                    <button type="button" onclick="document.getElementById('bs-duplicate-partner-modal').remove()" style="background: #374151; border: 1px solid #4b5563; color: #e5e7eb; border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: bold; cursor: pointer;">닫기 ✕</button>
+                </div>
+                <div style="overflow-y: auto; padding: 12px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                        <thead>
+                            <tr style="background: #111827; color: #9ca3af; border-bottom: 2px solid #374151;">
+                                <th style="padding: 9px 8px; text-align: center;">회원번호</th>
+                                <th style="padding: 9px 8px; text-align: center;">이름</th>
+                                <th style="padding: 9px 8px; text-align: center;">타이틀(직급)</th>
+                                <th style="padding: 9px 8px; text-align: center;">회원구분</th>
+                                <th style="padding: 9px 8px; text-align: center;">최상단 배치</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        overlay.addEventListener('click', () => overlay.remove());
+        document.body.appendChild(overlay);
+    };
+
+    window.selectPartnerFromDuplicateModal = function(memberId) {
+        const modal = document.getElementById('bs-duplicate-partner-modal');
+        if (modal) modal.remove();
+        window.applyCustomTopRootPartner(memberId);
+    };
+
+    // ------------------------------------------------------------------------
+    // [7] 카드 직접 클릭 선택 모드 (마우스 클릭 & 모바일 터치 완벽 가로채기)
+    // ------------------------------------------------------------------------
+    window.toggleRootCardPickMode = function(forceState) {
+        const nextState = (typeof forceState === 'boolean') ? forceState : !window.isRootCardPickMode;
+        window.isRootCardPickMode = nextState;
+
+        let banner = document.getElementById('bs-root-pick-banner');
+        if (nextState) {
+            document.body.classList.add('bs-root-pick-active');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'bs-root-pick-banner';
+                banner.style.cssText = `
+                    position: fixed !important;
+                    top: calc(var(--bs-header-bottom, 64px) + 10px) !important;
+                    left: 50% !important;
+                    transform: translateX(-50%) !important;
+                    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+                    border: 1px solid #93c5fd !important;
+                    color: #ffffff !important;
+                    padding: 8px 16px !important;
+                    border-radius: 999px !important;
+                    font-size: 12.5px !important;
+                    font-weight: bold !important;
+                    z-index: 2147483640 !important;
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.75) !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 10px !important;
+                    white-space: nowrap !important;
+                `;
+                banner.innerHTML = `
+                    <span>🎯 계보도에서 최상단에 배치할 카드를 클릭하세요</span>
+                    <button type="button" onclick="window.openRootSwitchModal()" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: #fff; border-radius: 99px; padding: 2px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">검색/이전목록</button>
+                    <button type="button" onclick="window.toggleRootCardPickMode(false)" style="background: #1e293b; border: 1px solid #475569; color: #f87171; border-radius: 99px; padding: 2px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">취소 ✕</button>
+                `;
+                document.body.appendChild(banner);
+            } else {
+                banner.style.display = 'flex';
+            }
+        } else {
+            document.body.classList.remove('bs-root-pick-active');
+            if (banner) banner.style.display = 'none';
+        }
+        updateSwitchButtonBadgeState();
+    };
+
+    function handleCardPickIntercept(e) {
+        if (!window.isRootCardPickMode || window._bypassRootPickCapture) return;
+        const cardEl = e.target.closest('.node-card');
+        if (!cardEl) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+
+        const memberId = cardEl.id.replace(/^card_/, '');
+        if (memberId) {
+            window.applyCustomTopRootPartner(memberId);
+        }
+    }
+
+    // pointerdown / click 모두 캡처하여 캔버스 드래그 이벤트에 가로막히지 않고 즉시 선택되도록 보장
+    window.addEventListener('pointerup', handleCardPickIntercept, true);
+    window.addEventListener('click', handleCardPickIntercept, true);
+
+    // ------------------------------------------------------------------------
+    // [8] 스위치 모달창 & 헤더 우측 스위치 버튼 장착
+    // ------------------------------------------------------------------------
+    window.openRootSwitchModal = function(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        let overlay = document.getElementById('bs-root-switch-modal-overlay');
+        if (overlay) overlay.remove();
+
+        const currentRoot = window.getAbsoluteTopRoot();
+        const masterRoot = window.getTrueMasterTopRoot();
+        const history = getRootHistory();
+
+        const historyChipsHtml = history.length > 0
+            ? history.map(h => {
+                const isCurr = currentRoot && normId(currentRoot.id) === normId(h.id);
+                return `
+                    <div onclick="window.applyCustomTopRootPartner('${h.id}')" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: ${isCurr ? 'rgba(37, 99, 235, 0.25)' : '#111827'}; border: 1px solid ${isCurr ? '#3b82f6' : '#374151'}; border-radius: 6px; cursor: pointer;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <strong style="color: #ffffff; font-size: 12.5px;">${h.name}</strong>
+                            <span style="color: #60a5fa; font-family: monospace; font-size: 11.5px; font-weight: bold;">${h.id}</span>
+                            <span style="background: #374151; color: #fbbf24; font-size: 10.5px; font-weight: bold; padding: 1px 6px; border-radius: 4px;">${h.rank}</span>
+                            <span style="color: #9ca3af; font-size: 11px;">${h.memberType || ''}</span>
+                        </div>
+                        <span style="font-size: 11px; font-weight: bold; color: ${isCurr ? '#60a5fa' : '#9ca3af'};">${isCurr ? '현재 최상단' : '배치 ➔'}</span>
+                    </div>
+                `;
+            }).join('')
+            : `<div style="padding: 12px; text-align: center; color: #6b7280; font-size: 12px;">이전에 선택했던 카드 기록이 없습니다.</div>`;
+
+        overlay = document.createElement('div');
+        overlay.id = 'bs-root-switch-modal-overlay';
+        overlay.style.cssText = `
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100dvh !important;
+            background: rgba(0, 0, 0, 0.65) !important;
+            z-index: 2147483645 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 12px !important;
+            box-sizing: border-box !important;
+        `;
+
+        overlay.innerHTML = `
+            <div onclick="event.stopPropagation()" style="width: min(440px, 94vw); background: #1f2937; border: 1px solid #4b5563; border-radius: 10px; padding: 16px; color: #fff; box-shadow: 0 20px 50px rgba(0,0,0,0.85); display: flex; flex-direction: column; gap: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 10px;">
+                    <strong style="font-size: 14px; color: #60a5fa;">🔀 최상단 기준 카드(Root) 스위치</strong>
+                    <button type="button" onclick="document.getElementById('bs-root-switch-modal-overlay').remove()" style="background: #374151; border: 1px solid #4b5563; color: #e5e7eb; border-radius: 4px; padding: 3px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">닫기 ✕</button>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" onclick="document.getElementById('bs-root-switch-modal-overlay').remove(); window.toggleRootCardPickMode(true);" style="flex: 1; padding: 10px 12px; background: linear-gradient(135deg, #2563eb, #1d4ed8); border: 1px solid #60a5fa; border-radius: 6px; color: #fff; font-size: 12.5px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <span>👆</span> <span>계보도에서 카드 직접 클릭하여 선택</span>
+                    </button>
+                    <button type="button" onclick="window.applyCustomTopRootPartner(null, true)" title="전체 최상위 루트로 복귀" style="padding: 10px 12px; background: #374151; border: 1px solid #4b5563; border-radius: 6px; color: #e5e7eb; font-size: 12px; font-weight: bold; cursor: pointer; white-space: nowrap;">
+                        전체 최상위로 복귀
+                    </button>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 11.5px; color: #9ca3af; margin-bottom: 5px; font-weight: bold;">🔍 회원번호 또는 회원명으로 최상단 배치 (동명이인 자동 선택창 지원)</label>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="text" id="bs-root-switch-search-inp" placeholder="회원번호 또는 이름 입력" onkeydown="if(event.key==='Enter'){ window.searchAndSelectTopRootPartner(this.value); }" style="flex: 1; background: #111827; border: 1px solid #4b5563; color: #fff; border-radius: 6px; padding: 8px 10px; font-size: 12.5px; outline: none;">
+                        <button type="button" onclick="window.searchAndSelectTopRootPartner(document.getElementById('bs-root-switch-search-inp').value)" style="background: #10b981; border: 1px solid #059669; color: #fff; border-radius: 6px; padding: 0 14px; font-size: 12.5px; font-weight: bold; cursor: pointer;">최상단 배치</button>
+                    </div>
+                </div>
+
+                <div style="border-top: 1px solid #374151; padding-top: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 11.5px; color: #9ca3af; font-weight: bold;">🕘 이전에 선택했던 카드 (클릭 시 즉시 최상단 전환)</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px; max-height: 210px; overflow-y: auto;">
+                        ${historyChipsHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        overlay.addEventListener('click', () => overlay.remove());
+        document.body.appendChild(overlay);
+    };
+
+    function updateSwitchButtonBadgeState() {
+        const btn = document.getElementById('bsRootSwitchBtn');
+        if (!btn) return;
+        const hasCustomRoot = Boolean(window.customTopRootId || localStorage.getItem(STORAGE_ROOT_KEY));
+        if (window.isRootCardPickMode || hasCustomRoot) {
+            btn.style.borderColor = '#60a5fa';
+            btn.style.color = '#60a5fa';
+            btn.style.background = 'rgba(37, 99, 235, 0.25)';
+        } else {
+            btn.style.borderColor = '#374151';
+            btn.style.color = '#e5e7eb';
+            btn.style.background = '#1f2937';
+        }
+    }
+
+    function mountHeaderRootSwitchIcon() {
+        injectSubtreeCleanConnectorCSS();
+        const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
+        if (!headerEl) return;
+
+        let switchBtn = document.getElementById('bsRootSwitchBtn');
+        if (!switchBtn) {
+            switchBtn = document.createElement('button');
+            switchBtn.id = 'bsRootSwitchBtn';
+            switchBtn.type = 'button';
+            switchBtn.title = '최상단 기준 카드 스위치 (클릭하여 카드 선택 및 이전 선택 기록 보기)';
+            switchBtn.style.cssText = `
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 30px;
+                padding: 0;
+                margin: 0;
+                background: #1f2937;
+                border: 1px solid #374151;
+                border-radius: 6px;
+                color: #e5e7eb;
+                cursor: pointer;
+                flex-shrink: 0;
+            `;
+            switchBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="16 3 21 3 21 8"></polyline>
+                    <line x1="4" y1="20" x2="21" y2="3"></line>
+                    <polyline points="21 16 21 21 16 21"></polyline>
+                    <line x1="15" y1="15" x2="21" y2="21"></line>
+                    <line x1="4" y1="4" x2="9" y2="9"></line>
+                </svg>
+            `;
+            switchBtn.onclick = function(e) {
+                window.openRootSwitchModal(e);
+            };
+        }
+
+        const topIconsHolder = document.getElementById('bs-top-row-icons-holder');
+        const treeBtn = document.getElementById('toggleTreeBtn') || headerEl.querySelector('[onclick*="toggleTreeMode"]');
+
+        if (topIconsHolder) {
+            if (switchBtn.parentElement !== topIconsHolder) {
+                if (treeBtn && treeBtn.parentElement === topIconsHolder) {
+                    topIconsHolder.insertBefore(switchBtn, treeBtn.nextSibling);
+                } else {
+                    topIconsHolder.insertBefore(switchBtn, topIconsHolder.firstChild);
+                }
+            }
+        } else if (treeBtn && treeBtn.parentElement) {
+            if (switchBtn.parentElement !== treeBtn.parentElement) {
+                treeBtn.parentElement.insertBefore(switchBtn, treeBtn.nextSibling);
+            }
+        } else if (switchBtn.parentElement !== headerEl) {
+            headerEl.appendChild(switchBtn);
+        }
+
+        const drawerPanel = document.getElementById('bs-mobile-drawer-panel');
+        if (drawerPanel && !document.getElementById('bs-mob-root-switch-btn')) {
+            const treeModeLbl = document.getElementById('bs-mob-tree-mode-label');
+            const targetGroup = treeModeLbl ? treeModeLbl.closest('div') : null;
+            if (targetGroup) {
+                const mobSwitchBtn = document.createElement('button');
+                mobSwitchBtn.id = 'bs-mob-root-switch-btn';
+                mobSwitchBtn.type = 'button';
+                mobSwitchBtn.onclick = function() {
+                    if (typeof window.toggleMobileHamburgerDrawer === 'function') window.toggleMobileHamburgerDrawer(false);
+                    window.openRootSwitchModal();
+                };
+                mobSwitchBtn.style.cssText = 'display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;';
+                mobSwitchBtn.innerHTML = `<span>🔀</span> <span style="color: #ffffff; font-weight: bold;">최상단 기준 카드 스위치 / 이전 기록</span>`;
+                targetGroup.insertBefore(mobSwitchBtn, targetGroup.children[2] || null);
+            }
+        }
+
+        updateSwitchButtonBadgeState();
+    }
+
+    // ------------------------------------------------------------------------
+    // [9] 로그인 화면에 [최상단 시작 파트너(회원번호/회원명)] 입력창 자동 주입 및 연동
+    // ------------------------------------------------------------------------
+    function injectLoginPartnerInput() {
+        const pwdInputs = document.querySelectorAll('input[type="password"]');
+        pwdInputs.forEach(pwdInp => {
+            const formOrBox = pwdInp.closest('form, .login-box, .auth-modal, div');
+            if (!formOrBox || formOrBox.querySelector('#bs-login-start-partner-inp')) return;
+
+            const parentContainer = pwdInp.parentElement;
+            if (!parentContainer) return;
+
+            const savedRootId = localStorage.getItem(STORAGE_ROOT_KEY) || '';
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'width: 100%; margin-top: 8px; margin-bottom: 8px; text-align: left; box-sizing: border-box;';
+            wrap.innerHTML = `
+                <label style="display: block; font-size: 11.5px; color: #9ca3af; margin-bottom: 4px; font-weight: bold;">
+                    🎯 최상단 시작 파트너 (회원번호 또는 회원명)
+                </label>
+                <input type="text" id="bs-login-start-partner-inp" value="${savedRootId}" placeholder="예: VK-1199472 또는 구본진 (미입력 시 전체 루트)" style="width: 100%; padding: 9px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 13px; box-sizing: border-box; outline: none;">
+            `;
+
+            parentContainer.insertBefore(wrap, pwdInp.nextSibling);
+
+            const partnerInp = wrap.querySelector('#bs-login-start-partner-inp');
+            const saveLoginQuery = () => {
+                const val = partnerInp.value.trim();
+                if (val) {
+                    localStorage.setItem(STORAGE_PENDING_LOGIN_QUERY, val);
+                } else {
+                    localStorage.removeItem(STORAGE_PENDING_LOGIN_QUERY);
+                }
+            };
+
+            partnerInp.addEventListener('input', saveLoginQuery);
+            partnerInp.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter') saveLoginQuery();
+            });
+
+            const submitBtn = formOrBox.querySelector('button, input[type="submit"]');
+            if (submitBtn) {
+                submitBtn.addEventListener('click', saveLoginQuery, true);
+            }
+        });
+    }
+
+    function checkAndApplySavedOrPendingRoot() {
+        const hasCards = document.querySelectorAll('.node-card').length > 0;
+        if (!hasCards) return false;
+
+        backupMasterDataIfNeeded();
+
+        const pendingQuery = localStorage.getItem(STORAGE_PENDING_LOGIN_QUERY);
+        if (pendingQuery) {
+            localStorage.removeItem(STORAGE_PENDING_LOGIN_QUERY);
+            window.searchAndSelectTopRootPartner(pendingQuery);
+            return true;
+        }
+
+        const savedRootId = localStorage.getItem(STORAGE_ROOT_KEY);
+        if (savedRootId && !window._initialCustomRootAppliedV2) {
+            window._initialCustomRootAppliedV2 = true;
+            window.applyCustomTopRootPartner(savedRootId);
+            return true;
+        }
+        return false;
+    }
+
+    function bootRootSwitchPatchV2() {
+        mountHeaderRootSwitchIcon();
+        injectLoginPartnerInput();
+
+        [300, 700, 1200, 2000].forEach(delay => {
+            setTimeout(() => {
+                mountHeaderRootSwitchIcon();
+                injectLoginPartnerInput();
+                checkAndApplySavedOrPendingRoot();
+            }, delay);
+        });
+
+        window.addEventListener('resize', () => {
+            setTimeout(mountHeaderRootSwitchIcon, 50);
+        });
+
+        const observer = new MutationObserver(() => {
+            if (!document.getElementById('bsRootSwitchBtn')) {
+                mountHeaderRootSwitchIcon();
+            }
+            injectLoginPartnerInput();
+            if (!window._initialCustomRootAppliedV2 && document.querySelectorAll('.node-card').length > 0) {
+                checkAndApplySavedOrPendingRoot();
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootRootSwitchPatchV2);
+    } else {
+        bootRootSwitchPatchV2();
+    }
+})();
+// ============================================================================
+// 🎯 [추천매칭 보너스 - 상단 요약 박스 2줄 가지런히 정렬 & 추천계보 기준 명시 & 세대수(원 N대) 정밀 계산 패치 V2]
+// 1. 보너스 검증 모달 상단 요약 박스를 깔끔한 2줄(1줄: 대상회원/직급/기수, 2줄: 항목/추천계보 기준 안내)로 정렬 (글자 깨짐 방지)
+// 2. 추천매칭 보너스가 '추천계보 기준'임을 상단 항목 줄과 계산 로직 박스에 명확히 표시
+// 3. 후원계보 깊이가 아닌 100% 추천계보(recId) 사슬을 추적하여 정확한 세대수(원 1대, 원 2대...) 산출
+// ============================================================================
+(function fixMatchingBonusModalLayoutAndGenerationPatchV2() {
+    if (window._bsMatchingGenFixPatchedV2) return;
+    window._bsMatchingGenFixPatchedV2 = true;
+
+    function normId(val) {
+        if (!val) return '';
+        const s = (typeof val === 'object') ? (val.id || val.member_id || val.memberId || '') : String(val);
+        return String(s).trim().toLowerCase().replace(/^vk-?/, '');
+    }
+
+    function getAllUniqueMembersList() {
+        if (typeof window.getUniqueMembers === 'function') {
+            const list = window.getUniqueMembers();
+            if (Array.isArray(list) && list.length > 0) return list;
+        }
+        const map = new Map();
+        function traverse(n) {
+            if (!n || typeof n !== 'object') return;
+            const id = n.id || n.member_id;
+            if (id && !map.has(normId(id))) map.set(normId(id), n);
+            if (n.left && typeof n.left === 'object') traverse(n.left);
+            if (n.right && typeof n.right === 'object') traverse(n.right);
+            if (Array.isArray(n.children)) n.children.forEach(traverse);
+        }
+        if (window._masterTreeDataBackup) {
+            if (Array.isArray(window._masterTreeDataBackup)) window._masterTreeDataBackup.forEach(traverse);
+            else traverse(window._masterTreeDataBackup);
+        }
+        if (window._originalMasterRootNode) traverse(window._originalMasterRootNode);
+        if (window.treeData) {
+            if (Array.isArray(window.treeData)) window.treeData.forEach(traverse);
+            else traverse(window.treeData);
+        }
+        if (Array.isArray(window.allMembers)) window.allMembers.forEach(traverse);
+        if (Array.isArray(window.membersData)) window.membersData.forEach(traverse);
+        return Array.from(map.values());
+    }
+
+    // ------------------------------------------------------------------------
+    // [1] 대상 회원(baseId)으로부터 파트너(partnerId)까지의 순수 '추천계보(recId)' 기준 원 세대수 계산
+    // ------------------------------------------------------------------------
+    window.getRecommenderGenerationInfo = function(baseMemberId, partnerMemberId) {
+        const baseNorm = normId(baseMemberId);
+        const targetNorm = normId(partnerMemberId);
+        if (!baseNorm || !targetNorm || baseNorm === targetNorm) {
+            return { isDownline: false, origGen: null, compressedGen: null, path: [] };
+        }
+
+        const allMembers = getAllUniqueMembersList();
+        const memberMap = new Map();
+        allMembers.forEach(m => {
+            const k = normId(m.id || m.member_id);
+            if (k) memberMap.set(k, m);
+        });
+
+        const visited = new Set();
+        const chainUp = [];
+        let curr = memberMap.get(targetNorm) || (typeof window.findMemberNode === 'function' ? window.findMemberNode(partnerMemberId) : null);
+
+        while (curr) {
+            const currNorm = normId(curr.id || curr.member_id);
+            if (!currNorm || visited.has(currNorm)) break;
+            visited.add(currNorm);
+            chainUp.push(curr);
+
+            const recRaw = curr.recId || curr.rec_id || curr.recommenderId || curr.recommender_id || '';
+            const recNorm = normId(recRaw);
+            if (!recNorm) break;
+
+            if (recNorm === baseNorm) {
+                const origGen = chainUp.length;
+                let compGen = 0;
+                const pathFromTop = [...chainUp].reverse();
+                pathFromTop.forEach((node, idx) => {
+                    const isLast = (idx === pathFromTop.length - 1);
+                    const rName = String(node.rank || node.rank_name || '').toUpperCase();
+                    const rLv = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(rName) : 0;
+                    if (isLast || rLv >= 4) compGen++;
+                });
+                return {
+                    isDownline: true,
+                    origGen: origGen,
+                    compressedGen: Math.max(1, compGen),
+                    path: pathFromTop
+                };
+            }
+
+            curr = memberMap.get(recNorm) || (typeof window.findMemberNode === 'function' ? window.findMemberNode(recRaw) : null);
+        }
+
+        const queue = [{ norm: baseNorm, depth: 0 }];
+        const bfsVisited = new Set([baseNorm]);
+        while (queue.length > 0) {
+            const { norm, depth } = queue.shift();
+            const children = allMembers.filter(m => {
+                const mNorm = normId(m.id || m.member_id);
+                const rNorm = normId(m.recId || m.rec_id || m.recommenderId || m.recommender_id);
+                return mNorm && mNorm !== norm && rNorm === norm;
+            });
+
+            for (const child of children) {
+                const cNorm = normId(child.id || child.member_id);
+                if (bfsVisited.has(cNorm)) continue;
+                bfsVisited.add(cNorm);
+                const nextDepth = depth + 1;
+                if (cNorm === targetNorm) {
+                    return { isDownline: true, origGen: nextDepth, compressedGen: nextDepth, path: [] };
+                }
+                queue.push({ norm: cNorm, depth: nextDepth });
+            }
+        }
+
+        return { isDownline: false, origGen: null, compressedGen: null, path: [] };
+    };
+
+    // ------------------------------------------------------------------------
+    // [2] 🌟 보너스 산출 상세 검증 모달(#bonusDetailModal) 상단 요약 박스 2줄 정렬 & 추천계보 기준 안내 추가
+    // ------------------------------------------------------------------------
+    window.formatBonusDetailTopSummaryBox = function(modal) {
+        if (!modal) return;
+
+        // '대상 회원:'과 '항목:'이 들어있는 상단 요약 컨테이너 탐색
+        const allDivs = modal.querySelectorAll('div');
+        let summaryBox = null;
+
+        allDivs.forEach(div => {
+            const txt = (div.innerText || '').trim();
+            if (txt.includes('대상 회원:') && txt.includes('항목:') && div.children.length >= 1 && div.children.length <= 4) {
+                // 가장 안쪽의 요약 박스 선택
+                if (!summaryBox || summaryBox.contains(div)) {
+                    summaryBox = div;
+                }
+            }
+        });
+
+        if (summaryBox && summaryBox.dataset.bsTwoLineFormatted !== 'true') {
+            summaryBox.dataset.bsTwoLineFormatted = 'true';
+
+            // 좌우 배치(row) 대신 상하 2줄(column) 배치로 전환하여 글자 꺾임('09-\n후', '가\n능)') 원천 방지!
+            summaryBox.style.setProperty('display', 'flex', 'important');
+            summaryBox.style.setProperty('flex-direction', 'column', 'important');
+            summaryBox.style.setProperty('align-items', 'flex-start', 'important');
+            summaryBox.style.setProperty('justify-content', 'center', 'important');
+            summaryBox.style.setProperty('gap', '6px', 'important');
+            summaryBox.style.setProperty('padding', '10px 14px', 'important');
+            summaryBox.style.setProperty('line-height', '1.4', 'important');
+
+            const children = Array.from(summaryBox.children);
+            if (children.length >= 2) {
+                const line1 = children[0]; // 1줄: 대상 회원 | 당시 직급 | 기수
+                const line2 = children[1]; // 2줄: 항목
+
+                line1.style.setProperty('width', '100%', 'important');
+                line1.style.setProperty('white-space', 'nowrap', 'important');
+                line1.style.setProperty('overflow', 'hidden', 'important');
+                line1.style.setProperty('text-overflow', 'ellipsis', 'important');
+                line1.style.setProperty('font-size', '12.5px', 'important');
+
+                line2.style.setProperty('width', '100%', 'important');
+                line2.style.setProperty('display', 'flex', 'important');
+                line2.style.setProperty('align-items', 'center', 'important');
+                line2.style.setProperty('justify-content', 'space-between', 'important');
+                line2.style.setProperty('flex-wrap', 'wrap', 'important');
+                line2.style.setProperty('gap', '6px', 'important');
+                line2.style.setProperty('font-size', '12.5px', 'important');
+                line2.style.setProperty('padding-top', '5px', 'important');
+                line2.style.setProperty('border-top', '1px dashed #374151', 'important');
+
+                // 추천매칭보너스인 경우 '추천계보 기준' 문구를 간결하고 명확하게 추가
+                if ((line2.innerText || '').includes('추천매칭보너스')) {
+                    line2.innerHTML = `
+                        <span style="white-space: nowrap;">
+                            <span style="color: #9ca3af;">항목:</span>
+                            <strong style="color: #fbbf24; margin-left: 3px;">추천매칭보너스 (추천계보 기준 · 세대 편집 및 파트너 추가 가능)</strong>
+                        </span>
+                        <span style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #34d399; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; white-space: nowrap;">
+                            ※ 추천계보(직추천 라인) 기준 산출
+                        </span>
+                    `;
+                }
+            }
+        }
+
+        // 하단 '💡 계산 로직' 설명 박스에도 추천계보 기준 안내가 빠져있다면 한 줄 보강
+        allDivs.forEach(div => {
+            const txt = (div.innerText || '').trim();
+            if (txt.startsWith('💡 계산 로직') && txt.includes('매칭요율') && !div.dataset.bsLogicNoteAdded) {
+                div.dataset.bsLogicNoteAdded = 'true';
+                const noteEl = document.createElement('div');
+                noteEl.style.cssText = 'margin-top: 4px; color: #34d399; font-size: 11.5px; font-weight: bold;';
+                noteEl.innerHTML = '• 추천매칭보너스의 세대(원 N대 및 적용 세대)는 후원계보가 아닌 <u>추천계보(직추천 계보도)</u>를 기준으로 산출됩니다.';
+                div.appendChild(noteEl);
+            }
+        });
+    };
+
+    // ------------------------------------------------------------------------
+    // [3] 추천매칭보너스 상단 2줄 레이아웃 정렬 + 테이블 (원 N대) 실시간 보정 통합 실행
+    // ------------------------------------------------------------------------
+    window.reconcileMatchingBonusModalGenerations = function() {
+        const modal = document.getElementById('bonusDetailModal');
+        if (!modal || modal.style.display === 'none') return;
+
+        // 1) 상단 요약 박스 2줄 가지런히 정렬 및 추천계보 안내 표시
+        window.formatBonusDetailTopSummaryBox(modal);
+
+        const modalText = modal.innerText || '';
+        if (!modalText.includes('추천매칭보너스') && !modalText.includes('Matching Bonus')) return;
+
+        // 2) 대상 회원 ID 추출
+        let baseMemberId = window.currentSelectedId;
+        const headerMatch = modalText.match(/대상\s*회원\s*:\s*[^(\n]*\(\s*(VK-[0-9]+|[0-9]+)\s*\)/i);
+        if (headerMatch && headerMatch[1]) {
+            baseMemberId = headerMatch[1].trim();
+        }
+        if (!baseMemberId) return;
+
+        // 3) 각 파트너 행의 (원 N대)를 추천계보 기준으로 교정
+        const rows = modal.querySelectorAll('table tbody tr, table tr');
+        rows.forEach(tr => {
+            let partnerId = '';
+            const idInput = tr.querySelector('input[type="text"]');
+            if (idInput && idInput.value) {
+                partnerId = idInput.value.trim();
+            } else {
+                const idMatch = (tr.innerText || '').match(/VK-[0-9]{5,}|[0-9]{6,}/i);
+                if (idMatch) partnerId = idMatch[0].trim();
+            }
+            if (!partnerId) return;
+
+            const genInfo = window.getRecommenderGenerationInfo(baseMemberId, partnerId);
+            const firstTd = tr.querySelector('td');
+            if (!firstTd) return;
+
+            let origGenLabelEl = null;
+            firstTd.querySelectorAll('div, span, small').forEach(el => {
+                if (el.children.length === 0 && /\(\s*원\s*[0-9]+대\s*\)|\(\s*추천계보\s*외|\(\s*추천외\s*\)|\(\s*원\s*-대\s*\)/.test(el.innerText || '')) {
+                    origGenLabelEl = el;
+                }
+            });
+
+            const correctOrigText = genInfo.isDownline
+                ? `(원 ${genInfo.origGen}대)`
+                : `(추천계보 외 / 원 -대)`;
+
+            if (origGenLabelEl) {
+                if (origGenLabelEl.innerText.trim() !== correctOrigText) {
+                    origGenLabelEl.innerText = correctOrigText;
+                    origGenLabelEl.style.color = genInfo.isDownline ? '#9ca3af' : '#f87171';
+                }
+            } else {
+                const htmlStr = firstTd.innerHTML;
+                if (/\(\s*원\s*[0-9]+대\s*\)/.test(htmlStr)) {
+                    firstTd.innerHTML = htmlStr.replace(/\(\s*원\s*[0-9]+대\s*\)/g, `<span style="color:${genInfo.isDownline ? '#9ca3af' : '#f87171'};">${correctOrigText}</span>`);
+                }
+            }
+
+            tr.dataset.recOrigGen = genInfo.origGen || '';
+            tr.dataset.isRecDownline = genInfo.isDownline ? '1' : '0';
+        });
+    };
+
+    ['showBonusDetail', 'openBonusDetailModal', 'renderMatchingBonusDetail', 'updateMatchingPartnerRow'].forEach(fnName => {
+        const origFn = window[fnName];
+        if (typeof origFn === 'function' && !origFn._recGenPatchedV2) {
+            const wrapped = function() {
+                const res = origFn.apply(this, arguments);
+                setTimeout(window.reconcileMatchingBonusModalGenerations, 20);
+                setTimeout(window.reconcileMatchingBonusModalGenerations, 120);
+                return res;
+            };
+            wrapped._recGenPatchedV2 = true;
+            window[fnName] = wrapped;
+        }
+    });
+
+    const observer = new MutationObserver(() => {
+        const modal = document.getElementById('bonusDetailModal');
+        if (modal && modal.style.display !== 'none') {
+            window.reconcileMatchingBonusModalGenerations();
+        }
+    });
+
+    function bootRecGenFixV2() {
+        observer.observe(document.body, { childList: true, subtree: true });
+        document.addEventListener('input', (e) => {
+            if (e.target && e.target.closest('#bonusDetailModal')) {
+                setTimeout(window.reconcileMatchingBonusModalGenerations, 50);
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (e.target && (e.target.closest('#perfWidget') || e.target.closest('#bonusDetailModal'))) {
+                setTimeout(window.reconcileMatchingBonusModalGenerations, 50);
+            }
+        }, true);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootRecGenFixV2);
+    } else {
+        bootRecGenFixV2();
+    }
+})();
+// ============================================================================
+// 🔴🟡🟢 [보너스 산출 상세 검증 모달(#bonusDetailModal) 맥북 신호등 버튼 & 실적집계창 연동 하단 밀착 패치 V4]
+// 1. 닫기(✕) 버튼과 최소화(−)/복원(+) 버튼의 크기(16x16px) 및 SVG 디자인 100% 통일
+// 2. 최소화된 상태에서 하단 실적 집계 창(#perfWidget)을 접거나 펼칠 때, 붕 뜨지 않고 실적 집계 창 높이를 따라 실시간으로 함께 내려가고 올라가도록 동기화!
+// ============================================================================
+(function initBonusDetailModalMacStyleMinimizePatchV4() {
+    if (window._bsBonusModalMacMinPatchedV4) return;
+    window._bsBonusModalMacMinPatchedV4 = true;
+
+    let savedModalState = {
+        width: '680px',
+        height: '480px',
+        minWidth: '520px',
+        minHeight: '340px',
+        maxHeight: '85dvh',
+        top: '50%',
+        left: '50%',
+        bottom: 'auto',
+        right: 'auto',
+        transform: 'translate(-50%, -50%)',
+        captured: false
+    };
+
+    function injectMacTrafficButtonCSS() {
+        let style = document.getElementById('bs-mac-traffic-btn-css');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'bs-mac-traffic-btn-css';
+            document.head.appendChild(style);
+        }
+        style.innerHTML = `
+            .bs-mac-circle-btn {
+                width: 16px !important;
+                height: 16px !important;
+                min-width: 16px !important;
+                min-height: 16px !important;
+                max-width: 16px !important;
+                max-height: 16px !important;
+                border-radius: 50% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                cursor: pointer !important;
+                transition: transform 0.12s ease, filter 0.12s ease, background-color 0.15s ease !important;
+                box-sizing: border-box !important;
+                outline: none !important;
+                line-height: 1 !important;
+                flex-shrink: 0 !important;
+            }
+            .bs-mac-circle-btn[data-state="normal"] {
+                background-color: #febc2e !important;
+                border: 1px solid #d69816 !important;
+                color: #4a3000 !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 2px rgba(0,0,0,0.4) !important;
+            }
+            .bs-mac-circle-btn[data-state="minimized"] {
+                background-color: #28c840 !important;
+                border: 1px solid #1aa02d !important;
+                color: #063b0e !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 2px rgba(0,0,0,0.4) !important;
+            }
+            .bs-mac-circle-btn[data-state="close"] {
+                background-color: #ff5f57 !important;
+                border: 1px solid #e0443e !important;
+                color: #4a0002 !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 2px rgba(0,0,0,0.4) !important;
+            }
+            .bs-mac-circle-btn svg {
+                width: 9px !important;
+                height: 9px !important;
+                opacity: 0.82;
+                transition: opacity 0.12s ease;
+                pointer-events: none;
+                display: block !important;
+            }
+            .bs-mac-circle-btn:hover {
+                transform: scale(1.1) !important;
+                filter: brightness(1.06) !important;
+            }
+            .bs-mac-circle-btn:hover svg {
+                opacity: 1;
+            }
+            /* 최소화 상태에서 실적집계창이 접히고 펼쳐질 때 부드럽게 따라 내려가도록 전환 효과 부여 */
+            #bonusDetailModal.bs-modal-minimized {
+                transition: bottom 0.2s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+            }
+        `;
+    }
+
+    function updateMacButtonIcon(btn, isMinimized) {
+        if (!btn) return;
+        btn.classList.add('bs-mac-circle-btn');
+        if (isMinimized) {
+            btn.setAttribute('data-state', 'minimized');
+            btn.title = '원래 창 크기로 펼치기';
+            btn.innerHTML = `
+                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                    <line x1="6" y1="2.5" x2="6" y2="9.5"></line>
+                    <line x1="2.5" y1="6" x2="9.5" y2="6"></line>
+                </svg>
+            `;
+        } else {
+            btn.setAttribute('data-state', 'normal');
+            btn.title = '창 최소화';
+            btn.innerHTML = `
+                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
+                    <line x1="2.5" y1="6" x2="9.5" y2="6"></line>
+                </svg>
+            `;
+        }
+    }
+
+    function styleMacCloseButton(closeBtn) {
+        if (!closeBtn) return;
+        closeBtn.classList.add('bs-mac-circle-btn');
+        closeBtn.setAttribute('data-state', 'close');
+        closeBtn.title = '창 닫기';
+        closeBtn.innerHTML = `
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                <line x1="3" y1="3" x2="9" y2="9"></line>
+                <line x1="9" y1="3" x2="3" y2="9"></line>
+            </svg>
+        `;
+    }
+
+    function getBonusModalParts() {
+        const modal = document.getElementById('bonusDetailModal');
+        if (!modal) return null;
+
+        const children = Array.from(modal.children);
+        const headerEl = modal.querySelector('.modal-header, .widget-header, #bonusDetailHeader') || children[0];
+        const contentEls = children.filter(el => el !== headerEl && !el.classList.contains('resizer'));
+
+        return { modal, headerEl, contentEls };
+    }
+
+    function captureNormalModalSize(modal) {
+        if (!modal || modal.dataset.bsMinimized === 'true') return;
+        const rect = modal.getBoundingClientRect();
+        if (rect.height >= 150 && rect.width >= 280) {
+            savedModalState = {
+                width: `${Math.round(rect.width)}px`,
+                height: `${Math.round(rect.height)}px`,
+                minWidth: window.innerWidth <= 768 ? '92vw' : '500px',
+                minHeight: '320px',
+                maxHeight: '88dvh',
+                top: `${Math.round(rect.top)}px`,
+                left: `${Math.round(rect.left)}px`,
+                bottom: 'auto',
+                right: 'auto',
+                transform: 'none',
+                captured: true
+            };
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // [핵심 추가] 🌟 하단 실적 집계 창(#perfWidget)의 현재 높이를 실시간 측정하여 최소화된 모달 위치(bottom) 동기화!
+    // ------------------------------------------------------------------------
+    window.syncMinimizedBonusModalPosition = function() {
+        const modal = document.getElementById('bonusDetailModal');
+        if (!modal || modal.style.display === 'none' || modal.dataset.bsMinimized !== 'true') return;
+
+        const perfW = document.getElementById('perfWidget');
+        let bottomOffset = 10;
+
+        if (perfW && getComputedStyle(perfW).display !== 'none' && getComputedStyle(perfW).visibility !== 'hidden') {
+            const pRect = perfW.getBoundingClientRect();
+            if (pRect.height > 0 && pRect.top < window.innerHeight) {
+                bottomOffset = Math.max(10, Math.round(window.innerHeight - pRect.top) + 6);
+            }
+        }
+
+        modal.style.setProperty('top', 'auto', 'important');
+        modal.style.setProperty('bottom', `${bottomOffset}px`, 'important');
+        modal.style.setProperty('left', '50%', 'important');
+        modal.style.setProperty('right', 'auto', 'important');
+        modal.style.setProperty('transform', 'translateX(-50%)', 'important');
+    };
+
+    window.setBonusDetailModalMinimized = function(minimize) {
+        const parts = getBonusModalParts();
+        if (!parts || !parts.modal || !parts.headerEl) return;
+        const { modal, headerEl, contentEls } = parts;
+
+        if (modal.style.display === 'none') return;
+
+        const isCurrentlyMin = modal.dataset.bsMinimized === 'true';
+        const targetMinState = (typeof minimize === 'boolean') ? minimize : !isCurrentlyMin;
+
+        const minBtn = document.getElementById('bs-bonus-modal-min-btn');
+
+        if (targetMinState) {
+            captureNormalModalSize(modal);
+
+            modal.dataset.bsMinimized = 'true';
+            modal.classList.add('minimized', 'bs-modal-minimized');
+
+            contentEls.forEach(el => {
+                el.style.setProperty('display', 'none', 'important');
+            });
+
+            modal.style.setProperty('width', '340px', 'important');
+            modal.style.setProperty('min-width', '260px', 'important');
+            modal.style.setProperty('max-width', '92vw', 'important');
+            modal.style.setProperty('height', '40px', 'important');
+            modal.style.setProperty('min-height', '40px', 'important');
+            modal.style.setProperty('max-height', '40px', 'important');
+            modal.style.setProperty('overflow', 'hidden', 'important');
+            modal.style.setProperty('resize', 'none', 'important');
+
+            // 실적 집계 창의 현재 상태(펼침/접힘)에 맞춰 즉시 하단 위치 맞춤
+            window.syncMinimizedBonusModalPosition();
+
+            headerEl.style.setProperty('cursor', 'pointer', 'important');
+            headerEl.title = '클릭하여 원래 창 크기로 펼치기';
+
+            updateMacButtonIcon(minBtn, true);
+        } else {
+            modal.dataset.bsMinimized = 'false';
+            modal.classList.remove('minimized', 'bs-modal-minimized');
+
+            contentEls.forEach(el => {
+                el.style.removeProperty('display');
+                if (getComputedStyle(el).display === 'none') {
+                    el.style.setProperty('display', 'flex', 'important');
+                    el.style.setProperty('flex-direction', 'column', 'important');
+                }
+            });
+
+            const restoreW = savedModalState.captured ? savedModalState.width : (window.innerWidth <= 768 ? '95vw' : '700px');
+            const restoreH = savedModalState.captured ? savedModalState.height : (window.innerWidth <= 768 ? '78dvh' : '500px');
+
+            modal.style.setProperty('display', 'flex', 'important');
+            modal.style.setProperty('flex-direction', 'column', 'important');
+            modal.style.setProperty('width', restoreW, 'important');
+            modal.style.setProperty('min-width', savedModalState.minWidth || '500px', 'important');
+            modal.style.setProperty('max-width', '96vw', 'important');
+            modal.style.setProperty('height', restoreH, 'important');
+            modal.style.setProperty('min-height', savedModalState.minHeight || '340px', 'important');
+            modal.style.setProperty('max-height', '88dvh', 'important');
+            modal.style.setProperty('bottom', 'auto', 'important');
+            modal.style.setProperty('right', 'auto', 'important');
+            modal.style.setProperty('overflow', 'hidden', 'important');
+            modal.style.setProperty('resize', 'both', 'important');
+
+            if (savedModalState.captured && savedModalState.transform === 'none') {
+                const safeTop = Math.min(Math.max(56, parseInt(savedModalState.top, 10) || 100), window.innerHeight - 200);
+                const safeLeft = Math.min(Math.max(10, parseInt(savedModalState.left, 10) || 100), window.innerWidth - 300);
+                modal.style.setProperty('top', `${safeTop}px`, 'important');
+                modal.style.setProperty('left', `${safeLeft}px`, 'important');
+                modal.style.setProperty('transform', 'none', 'important');
+            } else {
+                modal.style.setProperty('top', '50%', 'important');
+                modal.style.setProperty('left', '50%', 'important');
+                modal.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
+            }
+
+            headerEl.style.setProperty('cursor', 'move', 'important');
+            headerEl.title = '';
+
+            updateMacButtonIcon(minBtn, false);
+        }
+    };
+
+    function mountBonusModalMinimizeButton() {
+        injectMacTrafficButtonCSS();
+        const parts = getBonusModalParts();
+        if (!parts || !parts.modal || !parts.headerEl) return;
+        const { modal, headerEl } = parts;
+
+        const allBtns = Array.from(headerEl.querySelectorAll('button')).filter(b => b.id !== 'bs-bonus-modal-min-btn');
+        const closeBtn = allBtns[allBtns.length - 1];
+
+        if (closeBtn) {
+            styleMacCloseButton(closeBtn);
+        }
+
+        let minBtn = document.getElementById('bs-bonus-modal-min-btn');
+        if (!minBtn) {
+            minBtn = document.createElement('button');
+            minBtn.id = 'bs-bonus-modal-min-btn';
+            minBtn.type = 'button';
+            updateMacButtonIcon(minBtn, modal.dataset.bsMinimized === 'true');
+
+            minBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+                window.setBonusDetailModalMinimized();
+            }, true);
+
+            if (closeBtn && closeBtn.parentElement) {
+                if (closeBtn.parentElement === headerEl) {
+                    const rightBtnWrap = document.createElement('div');
+                    rightBtnWrap.id = 'bs-mac-btn-group-wrap';
+                    rightBtnWrap.style.cssText = 'display: inline-flex; align-items: center; gap: 7px; margin-left: auto;';
+                    headerEl.insertBefore(rightBtnWrap, closeBtn);
+                    rightBtnWrap.appendChild(minBtn);
+                    rightBtnWrap.appendChild(closeBtn);
+                } else {
+                    closeBtn.parentElement.style.display = 'inline-flex';
+                    closeBtn.parentElement.style.alignItems = 'center';
+                    closeBtn.parentElement.style.gap = '7px';
+                    closeBtn.parentElement.insertBefore(minBtn, closeBtn);
+                }
+            } else {
+                headerEl.appendChild(minBtn);
+            }
+        } else {
+            updateMacButtonIcon(minBtn, modal.dataset.bsMinimized === 'true');
+        }
+
+        if (headerEl.dataset.bsHeaderRestoreBound !== 'true') {
+            headerEl.dataset.bsHeaderRestoreBound = 'true';
+            let downX = 0, downY = 0;
+
+            headerEl.addEventListener('pointerdown', (e) => {
+                downX = e.clientX;
+                downY = e.clientY;
+            }, true);
+
+            headerEl.addEventListener('click', (e) => {
+                if (e.target.closest('#bs-bonus-modal-min-btn') || (closeBtn && e.target.closest('button') === closeBtn)) {
+                    return;
+                }
+                const moveDist = Math.hypot(e.clientX - downX, e.clientY - downY);
+                if (moveDist > 8) return;
+
+                const isMin = modal.dataset.bsMinimized === 'true' || modal.classList.contains('minimized') || modal.getBoundingClientRect().height < 85;
+                if (isMin) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+                    window.setBonusDetailModalMinimized(false);
+                }
+            }, true);
+        }
+
+        if (modal.style.display !== 'none' && modal.getBoundingClientRect().height > 0 && modal.getBoundingClientRect().height < 85 && modal.dataset.bsMinimized !== 'true') {
+            window.setBonusDetailModalMinimized(false);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // [실적 집계 창(#perfWidget) 크기/접힘 변화 실시간 추적 바인딩]
+    // ------------------------------------------------------------------------
+    function bindPerfWidgetPositionSync() {
+        const perfW = document.getElementById('perfWidget');
+        if (perfW && !perfW._bsResizeObserved) {
+            perfW._bsResizeObserved = true;
+
+            // 1) ResizeObserver로 실적 집계 창의 높이가 변하는 모든 순간(CSS 트랜지션 포함)에 즉시 따라 이동
+            if (typeof ResizeObserver !== 'undefined') {
+                const ro = new ResizeObserver(() => {
+                    window.syncMinimizedBonusModalPosition();
+                });
+                ro.observe(perfW);
+                const perfBody = perfW.querySelector('.widget-body');
+                if (perfBody) ro.observe(perfBody);
+            }
+
+            // 2) CSS transition 중에도 매 프레임마다 부드럽게 추적
+            perfW.addEventListener('transitionrun', () => {
+                let frames = 0;
+                const tick = () => {
+                    window.syncMinimizedBonusModalPosition();
+                    if (++frames < 25) requestAnimationFrame(tick);
+                };
+                requestAnimationFrame(tick);
+            });
+            perfW.addEventListener('transitionend', window.syncMinimizedBonusModalPosition);
+        }
+
+        // 3) 실적 집계 창 접기/펼치기 함수 및 클릭 시 다중 타이머로 위치 완벽 보정
+        ['togglePerfWidget', 'closePerfWidget'].forEach(fnName => {
+            const origFn = window[fnName];
+            if (typeof origFn === 'function' && !origFn._bsSyncMinPosWrapped) {
+                const wrapped = function() {
+                    const res = origFn.apply(this, arguments);
+                    [0, 30, 80, 150, 250, 350].forEach(d => setTimeout(window.syncMinimizedBonusModalPosition, d));
+                    return res;
+                };
+                wrapped._bsSyncMinPosWrapped = true;
+                window[fnName] = wrapped;
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#perfWidget') || e.target.closest('#settingsDropdown')) {
+                [0, 30, 80, 160, 260, 360].forEach(d => setTimeout(window.syncMinimizedBonusModalPosition, d));
+            }
+        }, true);
+
+        window.addEventListener('resize', window.syncMinimizedBonusModalPosition);
+    }
+
+    function bindCanvasBlankClickMinimize() {
+        let pointerDownPos = null;
+
+        document.addEventListener('pointerdown', (e) => {
+            pointerDownPos = { x: e.clientX, y: e.clientY };
+            const modal = document.getElementById('bonusDetailModal');
+            if (modal && modal.style.display !== 'none') {
+                captureNormalModalSize(modal);
+            }
+        }, true);
+
+        document.addEventListener('click', (e) => {
+            const modal = document.getElementById('bonusDetailModal');
+            if (!modal || modal.style.display === 'none') return;
+
+            if (pointerDownPos) {
+                const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+                if (dist > 6) return;
+            }
+
+            if (
+                e.target.closest('#bonusDetailModal') ||
+                e.target.closest('header, .header, .top-bar') ||
+                e.target.closest('#perfWidget') ||
+                e.target.closest('#salesWidget') ||
+                e.target.closest('.node-card') ||
+                e.target.closest('.zoom-controls')
+            ) {
+                return;
+            }
+
+            const isCanvasBlank = e.target.closest('#canvas-container, .canvas-container, #tree-wrapper, .tree-wrapper, main') || e.target === document.body;
+            if (isCanvasBlank && modal.dataset.bsMinimized !== 'true') {
+                e.stopPropagation();
+                window.setBonusDetailModalMinimized(true);
+            }
+        }, true);
+    }
+
+    ['showBonusDetail', 'openBonusDetailModal', 'renderMatchingBonusDetail'].forEach(fnName => {
+        const origFn = window[fnName];
+        if (typeof origFn === 'function' && !origFn._minRestoreWrappedV4) {
+            const wrapped = function() {
+                const res = origFn.apply(this, arguments);
+                setTimeout(() => {
+                    mountBonusModalMinimizeButton();
+                    window.setBonusDetailModalMinimized(false);
+                    const modal = document.getElementById('bonusDetailModal');
+                    if (modal) captureNormalModalSize(modal);
+                }, 20);
+                return res;
+            };
+            wrapped._minRestoreWrappedV4 = true;
+            window[fnName] = wrapped;
+        }
+    });
+
+    function bootBonusModalMacMinimizePatchV4() {
+        mountBonusModalMinimizeButton();
+        bindCanvasBlankClickMinimize();
+        bindPerfWidgetPositionSync();
+
+        const observer = new MutationObserver(() => {
+            const modal = document.getElementById('bonusDetailModal');
+            if (modal && !document.getElementById('bs-bonus-modal-min-btn')) {
+                mountBonusModalMinimizeButton();
+            }
+            const perfW = document.getElementById('perfWidget');
+            if (perfW && !perfW._bsResizeObserved) {
+                bindPerfWidgetPositionSync();
+            }
+            window.syncMinimizedBonusModalPosition();
+        });
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootBonusModalMacMinimizePatchV4);
+    } else {
+        bootBonusModalMacMinimizePatchV4();
+    }
+})();
+// ============================================================================
+// 🧪 [가상 시뮬레이션 모드(Sandbox) & 로컬 JSON 보존/불러오기/편집/삭제 완벽 지원 패치]
+// 1. 상단 헤더 우측에 가상모드 아이콘(#bsVirtualModeBtn) 배치 및 활성화 시 보라색 안전 배너 표시
+// 2. 가상모드 ON 시 실제 TiDB 서버로의 모든 쓰기 요청(POST/PUT/PATCH/DELETE) 100% 원천 차단 (가상 응답 반환)
+// 3. 계보도/매출/오버라이드 상태를 로컬 .json 파일로 다운로드(보존), 파일 불러오기, 슬롯 편집 및 삭제 지원
+// ============================================================================
+(function initVirtualSimulationModeAndJsonManagerPatch() {
+    if (window._bsVirtualSandboxPatched) return;
+    window._bsVirtualSandboxPatched = true;
+
+    const STORAGE_VIRTUAL_ACTIVE = 'bs_virtual_mode_active';
+    const STORAGE_VIRTUAL_SLOTS = 'bs_virtual_scenario_slots';
+    const STORAGE_VIRTUAL_CURRENT_SNAPSHOT = 'bs_virtual_current_working_snapshot';
+
+    window.isVirtualSimMode = false;
+    let realDbMasterBackup = null;
+
+    // ------------------------------------------------------------------------
+    // [1] 현재 시뮬레이터의 전체 상태(계보도, 매출, 수동오버라이드 등) 스냅샷 추출 및 복원 엔진
+    // ------------------------------------------------------------------------
+    function deepClone(obj) {
+        if (obj === undefined || obj === null) return obj;
+        try {
+            return JSON.parse(JSON.stringify(obj));
+        } catch (e) {
+            return obj;
+        }
+    }
+
+    window.captureCurrentSimulatorSnapshot = function(customTitle = '', customMemo = '') {
+        const salesList = window._capturedAllSales ||
+            (typeof window.getAllSalesListFromDB === 'function' ? window.getAllSalesListFromDB() : null) ||
+            window.integrated_sales_history ||
+            window.salesData || [];
+
+        const snapshot = {
+            version: '3.0-virtual',
+            timestamp: new Date().toISOString(),
+            title: customTitle || `가상 시나리오 (${new Date().toLocaleString('ko-KR')})`,
+            memo: customMemo || '',
+            currentSelectedId: window.currentSelectedId || null,
+            customTopRootId: window.customTopRootId || null,
+            treeMode: window.treeMode || 'sponsor',
+            data: {
+                treeData: deepClone(window.treeData),
+                allMembers: deepClone(window.allMembers),
+                membersData: deepClone(window.membersData),
+                rawMembers: deepClone(window.rawMembers),
+                integrated_sales_history: deepClone(salesList),
+                matchingBonusOverrides: deepClone(window.matchingBonusOverrides || window.dbMatchingOverrides || {})
+            }
+        };
+        return snapshot;
+    };
+
+    window.applySimulatorSnapshotData = function(snapshotObj, isRestoringRealDB = false) {
+        if (!snapshotObj || !snapshotObj.data) {
+            alert('유효하지 않은 시나리오 JSON 데이터입니다.');
+            return false;
+        }
+
+        const d = snapshotObj.data;
+
+        if (d.treeData !== undefined && d.treeData !== null) {
+            window.treeData = deepClone(d.treeData);
+            window._masterTreeDataBackup = deepClone(d.treeData);
+        }
+        if (Array.isArray(d.allMembers)) window.allMembers = deepClone(d.allMembers);
+        if (Array.isArray(d.membersData)) window.membersData = deepClone(d.membersData);
+        if (Array.isArray(d.rawMembers)) window.rawMembers = deepClone(d.rawMembers);
+
+        if (Array.isArray(d.integrated_sales_history)) {
+            const clonedSales = deepClone(d.integrated_sales_history);
+            window.integrated_sales_history = clonedSales;
+            window._capturedAllSales = clonedSales;
+            if (window.salesData) window.salesData = clonedSales;
+        }
+
+        if (d.matchingBonusOverrides) {
+            window.matchingBonusOverrides = deepClone(d.matchingBonusOverrides);
+            window.dbMatchingOverrides = deepClone(d.matchingBonusOverrides);
+        }
+
+        if (snapshotObj.currentSelectedId) {
+            window.currentSelectedId = snapshotObj.currentSelectedId;
+        }
+
+        // 화면 전체 재렌더링 및 실적/수당 재계산 트리거
+        try {
+            if (typeof window.renderTree === 'function') window.renderTree();
+            else if (typeof window.drawTree === 'function') window.drawTree();
+        } catch (e) {}
+
+        setTimeout(() => {
+            if (typeof window.centerRootNode === 'function') window.centerRootNode();
+            const targetId = window.currentSelectedId || (typeof window.getAbsoluteTopRoot === 'function' && window.getAbsoluteTopRoot() ? window.getAbsoluteTopRoot().id : null);
+            if (targetId) {
+                if (typeof window.updateHeaderLineCount === 'function') window.updateHeaderLineCount(targetId);
+                if (typeof window.selectNode === 'function') {
+                    try { window.selectNode(targetId); } catch (e) {}
+                } else {
+                    const cardEl = document.getElementById(`card_${targetId}`);
+                    if (cardEl) {
+                        window._bypassRootPickCapture = true;
+                        cardEl.click();
+                        window._bypassRootPickCapture = false;
+                    }
+                }
+            }
+            if (typeof window.calculateAndRenderPerformance === 'function') {
+                try { window.calculateAndRenderPerformance(); } catch (e) {}
+            }
+        }, 80);
+
+        if (!isRestoringRealDB && window.isVirtualSimMode) {
+            try {
+                localStorage.setItem(STORAGE_VIRTUAL_CURRENT_SNAPSHOT, JSON.stringify(snapshotObj));
+            } catch (e) {}
+        }
+        return true;
+    };
+
+    // ------------------------------------------------------------------------
+    // [2] 🌟 실제 DB 저장 완벽 차단기 (fetch & XMLHttpRequest 인터셉터)
+    // ------------------------------------------------------------------------
+    const origFetch = window.fetch;
+    window.fetch = async function(input, init) {
+        const method = ((init && init.method) ? init.method : (typeof input === 'object' && input.method ? input.method : 'GET')).toUpperCase();
+        const url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+
+        // 가상모드가 켜져 있을 때 DB를 변경하는 모든 쓰기 요청(POST, PUT, DELETE, PATCH)을 가로채서 차단!
+        if (window.isVirtualSimMode && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+            // GitHub 업로드나 로그인 인증만 예외 허용 여부 확인 (일반 DB 저장은 100% 가상 응답 처리)
+            if (!url.includes('/login') && !url.includes('/auth')) {
+                console.log(`🧪 [가상모드 DB 보호] 서버 저장 요청이 로컬 가상 처리로 전환되었습니다: [${method}] ${url}`);
+                setTimeout(() => {
+                    try {
+                        const snap = window.captureCurrentSimulatorSnapshot('자동 임시저장 (가상모드)');
+                        localStorage.setItem(STORAGE_VIRTUAL_CURRENT_SNAPSHOT, JSON.stringify(snap));
+                    } catch (e) {}
+                }, 100);
+
+                const mockResponseData = {
+                    success: true,
+                    ok: true,
+                    virtualMode: true,
+                    message: '🧪 가상모드: 실제 DB에 저장하지 않고 가상 메모리에 반영되었습니다.',
+                    insertId: Date.now()
+                };
+                return new Response(JSON.stringify(mockResponseData), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        }
+        return origFetch.apply(this, arguments);
+    };
+
+    const origXhrOpen = XMLHttpRequest.prototype.open;
+    const origXhrSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        this._bsMethod = String(method || 'GET').toUpperCase();
+        this._bsUrl = String(url || '');
+        return origXhrOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function(body) {
+        if (window.isVirtualSimMode && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(this._bsMethod)) {
+            if (!this._bsUrl.includes('/login') && !this._bsUrl.includes('/auth')) {
+                console.log(`🧪 [가상모드 XHR DB 보호] 서버 저장 요청 차단됨: [${this._bsMethod}] ${this._bsUrl}`);
+                Object.defineProperty(this, 'status', { value: 200 });
+                Object.defineProperty(this, 'readyState', { value: 4 });
+                Object.defineProperty(this, 'responseText', {
+                    value: JSON.stringify({ success: true, virtualMode: true })
+                });
+                setTimeout(() => {
+                    if (typeof this.onreadystatechange === 'function') this.onreadystatechange();
+                    if (typeof this.onload === 'function') this.onload();
+                }, 10);
+                return;
+            }
+        }
+        return origXhrSend.apply(this, arguments);
+    };
+
+    // ------------------------------------------------------------------------
+    // [3] 가상모드 ON / OFF 전환 및 상단 표시 배너 제어
+    // ------------------------------------------------------------------------
+    window.toggleVirtualSimMode = function(forceState, skipConfirm = false) {
+        const nextState = (typeof forceState === 'boolean') ? forceState : !window.isVirtualSimMode;
+
+        if (nextState && !window.isVirtualSimMode) {
+            // 가상모드 진입 직전 실제 DB 상태를 원본 백업으로 안전하게 저장
+            realDbMasterBackup = window.captureCurrentSimulatorSnapshot('실제 DB 원본 백업');
+            window.isVirtualSimMode = true;
+            localStorage.setItem(STORAGE_VIRTUAL_ACTIVE, '1');
+
+            // 이전에 작업 중이던 가상 스냅샷이 있으면 복원 여부 확인
+            const savedWorking = localStorage.getItem(STORAGE_VIRTUAL_CURRENT_SNAPSHOT);
+            if (! savedWorking) {
+                try {
+                    localStorage.setItem(STORAGE_VIRTUAL_CURRENT_SNAPSHOT, JSON.stringify(realDbMasterBackup));
+                } catch (e) {}
+            }
+        } else if (!nextState && window.isVirtualSimMode) {
+            if (!skipConfirm) {
+                const ok = confirm('🧪 가상모드를 종료하시겠습니까?\n(종료 시 실제 DB 데이터 상태로 복원되며, 보존하지 않은 가상 변경사항은 초기화됩니다.)');
+                if (!ok) return;
+            }
+            window.isVirtualSimMode = false;
+            localStorage.removeItem(STORAGE_VIRTUAL_ACTIVE);
+            localStorage.removeItem(STORAGE_VIRTUAL_CURRENT_SNAPSHOT);
+
+            if (realDbMasterBackup) {
+                window.applySimulatorSnapshotData(realDbMasterBackup, true);
+            } else {
+                location.reload();
+                return;
+            }
+        }
+
+        updateVirtualModeUI();
+    };
+
+    function updateVirtualModeUI() {
+        const btn = document.getElementById('bsVirtualModeBtn');
+        if (btn) {
+            if (window.isVirtualSimMode) {
+                btn.style.background = 'linear-gradient(135deg, #7c3aed, #6d28d9)';
+                btn.style.borderColor = '#c4b5fd';
+                btn.style.color = '#ffffff';
+                btn.style.boxShadow = '0 0 10px rgba(139, 92, 246, 0.7)';
+            } else {
+                btn.style.background = '#1f2937';
+                btn.style.borderColor = '#374151';
+                btn.style.color = '#e5e7eb';
+                btn.style.boxShadow = 'none';
+            }
+        }
+
+        // 화면 상단 중앙에 가상모드 작동 중 배너 표시
+        let banner = document.getElementById('bs-virtual-mode-banner');
+        if (window.isVirtualSimMode) {
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'bs-virtual-mode-banner';
+                banner.style.cssText = `
+                    position: fixed !important;
+                    top: calc(var(--bs-header-bottom, 58px) + 8px) !important;
+                    left: 50% !important;
+                    transform: translateX(-50%) !important;
+                    background: linear-gradient(135deg, rgba(109, 40, 217, 0.95), rgba(76, 29, 149, 0.95)) !important;
+                    border: 1px solid #c4b5fd !important;
+                    color: #ffffff !important;
+                    padding: 6px 14px !important;
+                    border-radius: 999px !important;
+                    font-size: 12px !important;
+                    font-weight: bold !important;
+                    z-index: 2147483635 !important;
+                    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.75) !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 8px !important;
+                    white-space: nowrap !important;
+                `;
+                document.body.appendChild(banner);
+            }
+            banner.style.display = 'flex';
+            banner.innerHTML = `
+                <span>🧪 <b>가상모드 ON</b> (실제 DB 저장 안 됨)</span>
+                <button type="button" onclick="window.openVirtualModeManagerModal()" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.45); color: #fff; border-radius: 99px; padding: 2px 9px; font-size: 11px; font-weight: bold; cursor: pointer;">JSON 보존/불러오기/편집</button>
+                <button type="button" onclick="window.toggleVirtualSimMode(false)" style="background: #1f2937; border: 1px solid #f87171; color: #f87171; border-radius: 99px; padding: 2px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">종료(실제DB 복귀) ✕</button>
+            `;
+        } else if (banner) {
+            banner.style.display = 'none';
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // [4] 로컬 JSON 파일 내보내기(보존) / 불러오기 / 슬롯 편집 / 삭제 기능
+    // ------------------------------------------------------------------------
+    function getSavedSlots() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_VIRTUAL_SLOTS) || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function setSavedSlots(slots) {
+        try {
+            localStorage.setItem(STORAGE_VIRTUAL_SLOTS, JSON.stringify(slots));
+        } catch (e) {
+            alert('로컬 스토리지 용량이 부족합니다. 불필요한 슬롯을 삭제하거나 JSON 파일로 다운로드해 주세요.');
+        }
+    }
+
+    // 4-1) 현재 상태를 로컬 PC에 .json 파일로 즉시 다운로드(보존)
+    window.exportVirtualScenarioToJsonFile = function(customTitle) {
+        const titleInput = document.getElementById('bs-virtual-scenario-title-inp');
+        const memoInput = document.getElementById('bs-virtual-scenario-memo-inp');
+        const title = customTitle || (titleInput && titleInput.value.trim()) || `셀비아_가상시뮬레이션_${new Date().toISOString().slice(0, 10)}`;
+        const memo = (memoInput && memoInput.value.trim()) || '';
+
+        const snapshot = window.captureCurrentSimulatorSnapshot(title, memo);
+        const jsonStr = JSON.stringify(snapshot, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+
+        const safeFileName = title.replace(/[\\/:*?"<>|]/g, '_');
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeFileName}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    // 4-2) 로컬 PC에서 .json 파일 선택하여 불러오기
+    window.triggerImportVirtualJsonFile = function() {
+        let fileInp = document.getElementById('bs-virtual-json-file-input');
+        if (!fileInp) {
+            fileInp = document.createElement('input');
+            fileInp.type = 'file';
+            fileInp.id = 'bs-virtual-json-file-input';
+            fileInp.accept = '.json,application/json';
+            fileInp.style.display = 'none';
+            fileInp.addEventListener('change', function(e) {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    try {
+                        const parsed = JSON.parse(evt.target.result);
+                        // 단일 스냅샷이거나 슬롯 배열인 경우 모두 호환
+                        const targetSnap = parsed.data ? parsed : {
+                            version: '3.0-virtual',
+                            timestamp: new Date().toISOString(),
+                            title: file.name.replace(/\.json$/i, ''),
+                            memo: '로컬 JSON 파일에서 불러옴',
+                            data: parsed
+                        };
+
+                        if (!window.isVirtualSimMode) {
+                            window.toggleVirtualSimMode(true, true);
+                        }
+
+                        if (window.applySimulatorSnapshotData(targetSnap)) {
+                            // 불러온 파일을 로컬 슬롯 목록에도 자동 등록하여 바로 편집/재사용 가능하게 함
+                            const slots = getSavedSlots();
+                            slots.unshift({
+                                id: 'slot_' + Date.now(),
+                                title: targetSnap.title || file.name.replace(/\.json$/i, ''),
+                                memo: targetSnap.memo || '파일 불러오기',
+                                timestamp: new Date().toISOString(),
+                                snapshot: targetSnap
+                            });
+                            setSavedSlots(slots.slice(0, 15));
+                            window.openVirtualModeManagerModal();
+                            alert(`✅ "${file.name}" 가상 시나리오를 성공적으로 불러왔습니다!`);
+                        }
+                    } catch (err) {
+                        alert('JSON 파일 파싱 오류: 올바른 시뮬레이터 JSON 파일인지 확인해 주세요.\n' + err.message);
+                    }
+                    fileInp.value = '';
+                };
+                reader.readAsText(file, 'utf-8');
+            });
+            document.body.appendChild(fileInp);
+        }
+        fileInp.click();
+    };
+
+    // 4-3) 브라우저 로컬 슬롯에 현재 상태 보존
+    window.saveCurrentToVirtualSlot = function() {
+        if (!window.isVirtualSimMode) {
+            window.toggleVirtualSimMode(true, true);
+        }
+        const titleInp = document.getElementById('bs-virtual-scenario-title-inp');
+        const memoInp = document.getElementById('bs-virtual-scenario-memo-inp');
+        const title = (titleInp && titleInp.value.trim()) || `가상 시나리오 #${getSavedSlots().length + 1}`;
+        const memo = (memoInp && memoInp.value.trim()) || '';
+
+        const snap = window.captureCurrentSimulatorSnapshot(title, memo);
+        const slots = getSavedSlots();
+        slots.unshift({
+            id: 'slot_' + Date.now(),
+            title: title,
+            memo: memo,
+            timestamp: new Date().toISOString(),
+            snapshot: snap
+        });
+        setSavedSlots(slots.slice(0, 15));
+        window.openVirtualModeManagerModal();
+    };
+
+    // 4-4) 저장된 슬롯 불러오기 / 현재 화면 상태로 덮어쓰기(업데이트) / 이름·JSON 편집 / 삭제
+    window.loadVirtualSlotById = function(slotId) {
+        const slots = getSavedSlots();
+        const found = slots.find(s => s.id === slotId);
+        if (!found || !found.snapshot) return;
+
+        if (!window.isVirtualSimMode) {
+            window.toggleVirtualSimMode(true, true);
+        }
+        window.applySimulatorSnapshotData(found.snapshot);
+        const modal = document.getElementById('bs-virtual-manager-modal');
+        if (modal) modal.remove();
+    };
+
+    window.overwriteVirtualSlotWithCurrent = function(slotId) {
+        const slots = getSavedSlots();
+        const idx = slots.findIndex(s => s.id === slotId);
+        if (idx === -1) return;
+
+        if (!confirm(`현재 화면에서 편집한 계보도/매출 상태를 "${slots[idx].title}" 항목에 덮어씌워 보존하시겠습니까?`)) return;
+        slots[idx].snapshot = window.captureCurrentSimulatorSnapshot(slots[idx].title, slots[idx].memo);
+        slots[idx].timestamp = new Date().toISOString();
+        setSavedSlots(slots);
+        window.openVirtualModeManagerModal();
+    };
+
+    window.editVirtualSlotModal = function(slotId) {
+        const slots = getSavedSlots();
+        const slot = slots.find(s => s.id === slotId);
+        if (!slot) return;
+
+        let editOverlay = document.getElementById('bs-virtual-json-editor-modal');
+        if (editOverlay) editOverlay.remove();
+
+        const prettyJson = JSON.stringify(slot.snapshot, null, 2);
+
+        editOverlay = document.createElement('div');
+        editOverlay.id = 'bs-virtual-json-editor-modal';
+        editOverlay.style.cssText = `
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100dvh !important;
+            background: rgba(0, 0, 0, 0.82) !important;
+            z-index: 2147483647 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 12px !important;
+            box-sizing: border-box !important;
+        `;
+
+        editOverlay.innerHTML = `
+            <div onclick="event.stopPropagation()" style="width: min(640px, 96vw); max-height: 88dvh; background: #1f2937; border: 1px solid #6d28d9; border-radius: 10px; padding: 16px; color: #fff; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 25px 60px rgba(0,0,0,0.95);">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 8px;">
+                    <strong style="font-size: 14px; color: #c4b5fd;">✏️ 가상 시나리오 정보 및 JSON 직접 편집</strong>
+                    <button type="button" onclick="document.getElementById('bs-virtual-json-editor-modal').remove()" style="background: #374151; border: 1px solid #4b5563; color: #e5e7eb; border-radius: 4px; padding: 3px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">닫기 ✕</button>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <div style="flex: 1;">
+                        <label style="display: block; font-size: 11px; color: #9ca3af; margin-bottom: 3px;">시나리오 제목</label>
+                        <input type="text" id="bs-edit-slot-title" value="${(slot.title || '').replace(/"/g, '&quot;')}" style="width: 100%; background: #111827; border: 1px solid #4b5563; color: #fff; border-radius: 6px; padding: 6px 8px; font-size: 12px; box-sizing: border-box;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="display: block; font-size: 11px; color: #9ca3af; margin-bottom: 3px;">메모 / 설명</label>
+                        <input type="text" id="bs-edit-slot-memo" value="${(slot.memo || '').replace(/"/g, '&quot;')}" style="width: 100%; background: #111827; border: 1px solid #4b5563; color: #fff; border-radius: 6px; padding: 6px 8px; font-size: 12px; box-sizing: border-box;">
+                    </div>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; min-height: 240px;">
+                    <label style="display: block; font-size: 11px; color: #9ca3af; margin-bottom: 3px;">JSON 데이터 원본 (회원/매출/직급 수치 직접 수정 가능)</label>
+                    <textarea id="bs-edit-slot-json" style="flex: 1; width: 100%; min-height: 240px; background: #0f172a; border: 1px solid #374151; color: #a7f3d0; font-family: monospace; font-size: 11.5px; padding: 8px; border-radius: 6px; box-sizing: border-box; resize: vertical;">${prettyJson}</textarea>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+                    <button type="button" onclick="window.saveEditedVirtualSlot('${slot.id}', false)" style="background: #2563eb; border: 1px solid #3b82f6; color: #fff; border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: bold; cursor: pointer;">저장만 하기</button>
+                    <button type="button" onclick="window.saveEditedVirtualSlot('${slot.id}', true)" style="background: #7c3aed; border: 1px solid #a78bfa; color: #fff; border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: bold; cursor: pointer;">저장 후 화면에 즉시 반영</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(editOverlay);
+    };
+
+    window.saveEditedVirtualSlot = function(slotId, applyImmediately) {
+        const slots = getSavedSlots();
+        const idx = slots.findIndex(s => s.id === slotId);
+        if (idx === -1) return;
+
+        const newTitle = document.getElementById('bs-edit-slot-title').value.trim() || '제목 없음';
+        const newMemo = document.getElementById('bs-edit-slot-memo').value.trim();
+        const rawJson = document.getElementById('bs-edit-slot-json').value;
+
+        try {
+            const parsedSnap = JSON.parse(rawJson);
+            parsedSnap.title = newTitle;
+            parsedSnap.memo = newMemo;
+
+            slots[idx].title = newTitle;
+            slots[idx].memo = newMemo;
+            slots[idx].timestamp = new Date().toISOString();
+            slots[idx].snapshot = parsedSnap;
+            setSavedSlots(slots);
+
+            const editorModal = document.getElementById('bs-virtual-json-editor-modal');
+            if (editorModal) editorModal.remove();
+
+            if (applyImmediately) {
+                if (!window.isVirtualSimMode) window.toggleVirtualSimMode(true, true);
+                window.applySimulatorSnapshotData(parsedSnap);
+            }
+            window.openVirtualModeManagerModal();
+        } catch (err) {
+            alert('JSON 문법 오류입니다. 괄호나 쉼표가 올바른지 확인해 주세요.\n' + err.message);
+        }
+    };
+
+    window.exportSpecificSlotToJsonFile = function(slotId) {
+        const slots = getSavedSlots();
+        const slot = slots.find(s => s.id === slotId);
+        if (!slot || !slot.snapshot) return;
+
+        const jsonStr = JSON.stringify(slot.snapshot, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const safeName = (slot.title || '가상시나리오').replace(/[\\/:*?"<>|]/g, '_');
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    window.deleteVirtualSlotById = function(slotId) {
+        let slots = getSavedSlots();
+        const target = slots.find(s => s.id === slotId);
+        if (!target) return;
+        if (!confirm(`🗑️ "${target.title}" 가상 시나리오를 삭제하시겠습니까?`)) return;
+
+        slots = slots.filter(s => s.id !== slotId);
+        setSavedSlots(slots);
+        window.openVirtualModeManagerModal();
+    };
+
+    // ------------------------------------------------------------------------
+    // [5] 가상모드 통합 매니저 모달창 오픈
+    // ------------------------------------------------------------------------
+    window.openVirtualModeManagerModal = function(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        let overlay = document.getElementById('bs-virtual-manager-modal');
+        if (overlay) overlay.remove();
+
+        const slots = getSavedSlots();
+        const isVirt = window.isVirtualSimMode;
+
+        const slotsListHtml = slots.length > 0
+            ? slots.map(s => {
+                const dateStr = s.timestamp ? new Date(s.timestamp).toLocaleString('ko-KR') : '-';
+                return `
+                    <div style="background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                            <div>
+                                <div style="font-size: 13px; font-weight: bold; color: #ffffff;">${s.title}</div>
+                                ${s.memo ? `<div style="font-size: 11px; color: #a78bfa; margin-top: 2px;">${s.memo}</div>` : ''}
+                                <div style="font-size: 10.5px; color: #6b7280; margin-top: 2px;">보존 일시: ${dateStr}</div>
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end;">
+                                <button type="button" onclick="window.loadVirtualSlotById('${s.id}')" style="background: #2563eb; border: 1px solid #3b82f6; color: #fff; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">📂 불러오기</button>
+                                <button type="button" onclick="window.overwriteVirtualSlotWithCurrent('${s.id}')" title="현재 화면 상태로 덮어쓰기" style="background: #059669; border: 1px solid #10b981; color: #fff; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">💾 덮어쓰기</button>
+                                <button type="button" onclick="window.exportSpecificSlotToJsonFile('${s.id}')" title="PC로 JSON 파일 다운로드" style="background: #374151; border: 1px solid #4b5563; color: #e5e7eb; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">⬇ JSON파일</button>
+                                <button type="button" onclick="window.editVirtualSlotModal('${s.id}')" title="제목/메모 및 JSON 데이터 직접 편집" style="background: #374151; border: 1px solid #4b5563; color: #fbbf24; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">✏️ 편집</button>
+                                <button type="button" onclick="window.deleteVirtualSlotById('${s.id}')" title="삭제" style="background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color: #f87171; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">🗑️ 삭제</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('')
+            : `<div style="padding: 18px; text-align: center; color: #6b7280; font-size: 12px; background: #111827; border-radius: 6px; border: 1px dashed #374151;">보존된 로컬 가상 시나리오가 없습니다. 위에서 [슬롯에 보존] 또는 [JSON 파일 불러오기]를 이용해 보세요.</div>`;
+
+        overlay = document.createElement('div');
+        overlay.id = 'bs-virtual-manager-modal';
+        overlay.style.cssText = `
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100dvh !important;
+            background: rgba(0, 0, 0, 0.72) !important;
+            z-index: 2147483646 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 12px !important;
+            box-sizing: border-box !important;
+        `;
+
+        overlay.innerHTML = `
+            <div onclick="event.stopPropagation()" style="width: min(560px, 96vw); max-height: 88dvh; background: #1f2937; border: 1px solid ${isVirt ? '#8b5cf6' : '#4b5563'}; border-radius: 12px; padding: 16px; color: #fff; box-shadow: 0 25px 60px rgba(0,0,0,0.9); display: flex; flex-direction: column; gap: 14px; overflow: hidden;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 10px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <strong style="font-size: 15px; color: #c4b5fd;">🧪 가상 시뮬레이션 모드 & 로컬 JSON 매니저</strong>
+                        <span style="background: ${isVirt ? '#7c3aed' : '#374151'}; color: ${isVirt ? '#fff' : '#9ca3af'}; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 99px;">
+                            ${isVirt ? 'ON (실제 DB 저장 차단됨)' : 'OFF (실제 DB 연동 중)'}
+                        </span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('bs-virtual-manager-modal').remove()" style="background: #374151; border: 1px solid #4b5563; color: #e5e7eb; border-radius: 6px; padding: 4px 10px; font-size: 11.5px; font-weight: bold; cursor: pointer;">닫기 ✕</button>
+                </div>
+
+                <!-- 1. 가상모드 ON/OFF 스위치 바 -->
+                <div style="display: flex; align-items: center; justify-content: space-between; background: #111827; border: 1px solid ${isVirt ? '#7c3aed' : '#374151'}; border-radius: 8px; padding: 10px 12px;">
+                    <div style="font-size: 12px; color: #d1d5db; line-height: 1.4;">
+                        ${isVirt
+                            ? '현재 <b>가상모드</b>입니다. 파트너 추가·수정·매출 변경이 실제 TiDB에 저장되지 않으며, JSON 파일로 자유롭게 보존/편집할 수 있습니다.'
+                            : '가상모드를 켜면 실제 DB를 건드리지 않고 자유롭게 시뮬레이션 및 JSON 파일 보존/불러오기를 할 수 있습니다.'}
+                    </div>
+                    <button type="button" onclick="window.toggleVirtualSimMode(${!isVirt}); window.openVirtualModeManagerModal();" style="margin-left: 10px; white-space: nowrap; padding: 8px 14px; background: ${isVirt ? '#ef4444' : 'linear-gradient(135deg, #7c3aed, #6d28d9)'}; border: 1px solid ${isVirt ? '#f87171' : '#a78bfa'}; border-radius: 6px; color: #fff; font-size: 12px; font-weight: bold; cursor: pointer;">
+                        ${isVirt ? '가상모드 끄기 (실제DB 복귀)' : '🧪 가상모드 켜기'}
+                    </button>
+                </div>
+
+                <!-- 2. 현재 상태 JSON 파일 다운로드 / 불러오기 / 슬롯 보존 -->
+                <div style="background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="font-size: 12px; font-weight: bold; color: #93c5fd;">💾 현재 시뮬레이션 상태 보존 및 외부 JSON 파일 불러오기</div>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="text" id="bs-virtual-scenario-title-inp" placeholder="시나리오 이름 (예: 11월 에메랄드 승급 플랜)" style="flex: 1.2; background: #1f2937; border: 1px solid #4b5563; color: #fff; border-radius: 6px; padding: 7px 10px; font-size: 12px; outline: none;">
+                        <input type="text" id="bs-virtual-scenario-memo-inp" placeholder="간단 메모 (선택)" style="flex: 1; background: #1f2937; border: 1px solid #4b5563; color: #fff; border-radius: 6px; padding: 7px 10px; font-size: 12px; outline: none;">
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 2px;">
+                        <button type="button" onclick="window.saveCurrentToVirtualSlot()" style="padding: 8px 10px; background: #2563eb; border: 1px solid #3b82f6; border-radius: 6px; color: #fff; font-size: 12px; font-weight: bold; cursor: pointer;">
+                            📌 아래 목록에 보존
+                        </button>
+                        <button type="button" onclick="window.exportVirtualScenarioToJsonFile()" style="padding: 8px 10px; background: #059669; border: 1px solid #10b981; border-radius: 6px; color: #fff; font-size: 12px; font-weight: bold; cursor: pointer;">
+                            ⬇ JSON 파일로 내보내기
+                        </button>
+                        <button type="button" onclick="window.triggerImportVirtualJsonFile()" style="padding: 8px 10px; background: #7c3aed; border: 1px solid #a78bfa; border-radius: 6px; color: #fff; font-size: 12px; font-weight: bold; cursor: pointer;">
+                            📂 JSON 파일 불러오기
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. 로컬에 보존된 가상 시나리오 목록 (불러오기/덮어쓰기/편집/삭제) -->
+                <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                    <div style="font-size: 12px; font-weight: bold; color: #9ca3af; margin-bottom: 6px;">
+                        🗂️ 보존된 가상 시나리오 목록 (${slots.length}개) — 불러오기 · 덮어쓰기 · 편집 · 삭제
+                    </div>
+                    <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 2px;">
+                        ${slotsListHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        overlay.addEventListener('click', () => overlay.remove());
+        document.body.appendChild(overlay);
+    };
+
+    // ------------------------------------------------------------------------
+    // [6] 상단 헤더 우측 아이콘 홀더(#bs-top-row-icons-holder)에 가상모드 아이콘(#bsVirtualModeBtn) 장착
+    // ------------------------------------------------------------------------
+    function mountHeaderVirtualModeIcon() {
+        const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
+        if (!headerEl) return;
+
+        let virtBtn = document.getElementById('bsVirtualModeBtn');
+        if (!virtBtn) {
+            virtBtn = document.createElement('button');
+            virtBtn.id = 'bsVirtualModeBtn';
+            virtBtn.type = 'button';
+            virtBtn.title = '가상 시뮬레이션 모드 (실제 DB 미저장 · 로컬 JSON 보존/불러오기/편집/삭제)';
+            virtBtn.style.cssText = `
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 30px;
+                padding: 0;
+                margin: 0;
+                background: #1f2937;
+                border: 1px solid #374151;
+                border-radius: 6px;
+                color: #e5e7eb;
+                cursor: pointer;
+                flex-shrink: 0;
+                transition: all 0.15s ease;
+            `;
+            // 직관적인 실험실 플라스크(Sandbox/Virtual Mode) SVG 아이콘
+            virtBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 2v7.31"></path>
+                    <path d="M14 9.3V1.99"></path>
+                    <path d="M8.5 2h7"></path>
+                    <path d="M14 9.3a6.5 6.5 0 1 1-4 0"></path>
+                    <path d="M5.52 16h12.96"></path>
+                </svg>
+            `;
+            virtBtn.onclick = function(e) {
+                window.openVirtualModeManagerModal(e);
+            };
+        }
+
+        const topIconsHolder = document.getElementById('bs-top-row-icons-holder');
+        const navBtn = document.getElementById('bsHeaderBizNavBtn');
+        const aiBtn = document.getElementById('customAiAdvisorBtn');
+
+        if (topIconsHolder) {
+            if (virtBtn.parentElement !== topIconsHolder) {
+                if (navBtn && navBtn.parentElement === topIconsHolder) {
+                    topIconsHolder.insertBefore(virtBtn, navBtn.nextSibling);
+                } else if (aiBtn && aiBtn.parentElement === topIconsHolder) {
+                    topIconsHolder.insertBefore(virtBtn, aiBtn);
+                } else {
+                    topIconsHolder.appendChild(virtBtn);
+                }
+            }
+        } else if (aiBtn && aiBtn.parentElement) {
+            if (virtBtn.parentElement !== aiBtn.parentElement) {
+                aiBtn.parentElement.insertBefore(virtBtn, aiBtn);
+            }
+        } else if (virtBtn.parentElement !== headerEl) {
+            headerEl.appendChild(virtBtn);
+        }
+
+        // 모바일 세로 화면 햄버거 메뉴 내부에도 가상모드 항목 자동 추가
+        const drawerPanel = document.getElementById('bs-mobile-drawer-panel');
+        if (drawerPanel && !document.getElementById('bs-mob-virtual-mode-btn')) {
+            const treeModeLbl = document.getElementById('bs-mob-tree-mode-label');
+            const targetGroup = treeModeLbl ? treeModeLbl.closest('div') : null;
+            if (targetGroup) {
+                const mobVirtBtn = document.createElement('button');
+                mobVirtBtn.id = 'bs-mob-virtual-mode-btn';
+                mobVirtBtn.type = 'button';
+                mobVirtBtn.onclick = function() {
+                    if (typeof window.toggleMobileHamburgerDrawer === 'function') window.toggleMobileHamburgerDrawer(false);
+                    window.openVirtualModeManagerModal();
+                };
+                mobVirtBtn.style.cssText = 'display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #6d28d9; border-radius: 6px; color: #c4b5fd; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;';
+                mobVirtBtn.innerHTML = `<span>🧪</span> <span style="color: #ffffff; font-weight: bold;">가상모드 (JSON 보존/불러오기/편집)</span>`;
+                targetGroup.insertBefore(mobVirtBtn, targetGroup.children[1] || null);
+            }
+        }
+
+        // 태블릿/가로화면 1단 우측 아이콘 공간 확보 보정
+        let padStyle = document.getElementById('bs-virtual-header-pad-css');
+        if (!padStyle) {
+            padStyle = document.createElement('style');
+            padStyle.id = 'bs-virtual-header-pad-css';
+            padStyle.innerHTML = `
+                @media screen and (min-width: 641px) and (max-width: 1250px) {
+                    header > div:first-child,
+                    .header > div:first-child,
+                    .top-bar > div:first-child {
+                        padding-right: 280px !important;
+                    }
+                }
+            `;
+            document.head.appendChild(padStyle);
+        }
+
+        updateVirtualModeUI();
+    }
+
+    function bootVirtualModePatch() {
+        mountHeaderVirtualModeIcon();
+
+        [300, 800, 1500].forEach(delay => {
+            setTimeout(() => {
+                mountHeaderVirtualModeIcon();
+                // 초기 데이터 로드 완료 시 실제 DB 원본 상태를 최초 1회 백업
+                if (!realDbMasterBackup && document.querySelectorAll('.node-card').length > 0 && !window.isVirtualSimMode) {
+                    realDbMasterBackup = window.captureCurrentSimulatorSnapshot('실제 DB 초기 원본');
+                }
+            }, delay);
+        });
+
+        window.addEventListener('resize', () => setTimeout(mountHeaderVirtualModeIcon, 50));
+
+        const observer = new MutationObserver(() => {
+            if (!document.getElementById('bsVirtualModeBtn')) {
+                mountHeaderVirtualModeIcon();
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootVirtualModePatch);
+    } else {
+        bootVirtualModePatch();
+    }
+})();
+// ============================================================================
+// 🏷️ [계보도 카드 '승급' 및 '품위유지' 배지 깜빡임 제거 & 달성률(%) 고시인성 표시 패치 V2]
+// 1. 배지의 깜빡임(animation / pulse / blink) 완전 제거로 눈의 피로 및 떨림 방지
+// 2. 기존 배지의 고정 폭(width/overflow) 제한을 풀어 달성률(%) 숫자가 절대 잘리지 않도록 보장
+// 3. 달성률(%)이 0으로 누락되지 않도록 매출/소실적/설정 기준값(예: 80%) 폴백 연동 및 노란색(#fde047) 고대비 강조
+// ============================================================================
+(function initPromoAndMaintBadgePercentagePatchV2() {
+    if (window._bsBadgePercentagePatchedV2) return;
+    window._bsBadgePercentagePatchedV2 = true;
+
+    let isUpdatingBadges = false;
+
+    function normId(val) {
+        if (!val) return '';
+        const s = (typeof val === 'object') ? (val.id || val.member_id || val.memberId || '') : String(val);
+        return String(s).trim().toLowerCase().replace(/^vk-?/, '');
+    }
+
+    // ------------------------------------------------------------------------
+    // [1] 배지 깜빡임(animation) 강제 중단 및 가로폭 자동 확장 + 고대비 폰트 CSS
+    // ------------------------------------------------------------------------
+    function injectBadgePercentageCSSV2() {
+        let st = document.getElementById('bs-badge-pct-css');
+        if (!st) {
+            st = document.createElement('style');
+            st.id = 'bs-badge-pct-css';
+            document.head.appendChild(st);
+        }
+        st.innerHTML = `
+            /* 승급/유지 배지 깜빡임 제거 및 달성률 텍스트 잘림 완벽 방지 */
+            .node-card .promo-badge,
+            .node-card .maint-badge,
+            .node-card .status-badge,
+            .node-card [class*="badge"],
+            .bs-custom-rate-badge {
+                animation: none !important;
+                -webkit-animation: none !important;
+                transition: none !important;
+                opacity: 1 !important;
+                visibility: visible !important;
+                width: auto !important;
+                min-width: max-content !important;
+                max-width: none !important;
+                height: auto !important;
+                overflow: visible !important;
+                text-overflow: clip !important;
+                white-space: nowrap !important;
+                font-size: 10.5px !important;
+                font-weight: 800 !important;
+                letter-spacing: -0.2px !important;
+                padding: 2px 6px !important;
+                border-radius: 4px !important;
+                line-height: 1.2 !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 3px !important;
+                z-index: 30 !important;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.65) !important;
+            }
+            /* 승급 배지: 선명한 블루 배경 + 화이트/골드 텍스트 */
+            .bs-custom-rate-badge[data-badge-type="promo"] {
+                background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+                border: 1px solid #93c5fd !important;
+                color: #ffffff !important;
+            }
+            /* 품위유지 배지: 선명한 에메랄드/틸 배경 + 화이트/골드 텍스트 */
+            .bs-custom-rate-badge[data-badge-type="maint"] {
+                background: linear-gradient(135deg, #059669, #047857) !important;
+                border: 1px solid #6ee7b7 !important;
+                color: #ffffff !important;
+            }
+            /* 달성률 숫자(%) 고시인성 강조 */
+            .bs-custom-rate-badge .bs-badge-pct-num {
+                color: #fde047 !important;
+                font-weight: 900 !important;
+                font-size: 10.5px !important;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8) !important;
+            }
+        `;
+    }
+
+    // ------------------------------------------------------------------------
+    // [2] 현재 설정된 배지 기준 달성률(기본 80%) 조회 헬퍼
+    // ------------------------------------------------------------------------
+    function getConfiguredBadgeThreshold() {
+        const inp = document.querySelector('#settingsDropdown input[type="number"], #settingsMenu input[type="number"], input[id*="badge"], input[id*="Badge"]');
+        if (inp && inp.value) {
+            const v = Number(inp.value);
+            if (!isNaN(v) && v > 0) return v;
+        }
+        return Number(window.badgeThreshold || window.badgeRateThreshold || 80);
+    }
+
+    // ------------------------------------------------------------------------
+    // [3] 파트너별 승급 달성률(promoPct) 및 품위유지 달성률(maintPct) 정밀 추출/계산
+    // ------------------------------------------------------------------------
+    const memberRatesCache = new Map();
+
+    window.calculateMemberPromoAndMaintPct = function(memberId, cardEl) {
+        const mNorm = normId(memberId);
+        if (!mNorm) return { promoPct: 0, maintPct: 0 };
+
+        if (memberRatesCache.has(mNorm)) {
+            return memberRatesCache.get(mNorm);
+        }
+
+        const mNode = typeof window.findMemberNode === 'function' ? window.findMemberNode(memberId) : null;
+
+        let promoPct = -1;
+        let maintPct = -1;
+
+        // 1순위: 카드 DOM 속성이나 노드 객체에 이미 계산되어 저장된 달성률 확인
+        if (cardEl) {
+            const domPromo = cardEl.getAttribute('data-promo-rate') || cardEl.getAttribute('data-promo-pct') || cardEl.dataset?.promoRate;
+            const domMaint = cardEl.getAttribute('data-maint-rate') || cardEl.getAttribute('data-maint-pct') || cardEl.dataset?.maintRate;
+            if (domPromo !== null && domPromo !== undefined && domPromo !== '') promoPct = Math.floor(Number(domPromo));
+            if (domMaint !== null && domMaint !== undefined && domMaint !== '') maintPct = Math.floor(Number(domMaint));
+        }
+
+        if (mNode) {
+            const nodePromo = mNode.promoRate ?? mNode.promo_rate ?? mNode.promotionRate ?? mNode.promoPct ?? mNode.achievementRate;
+            const nodeMaint = mNode.maintRate ?? mNode.maint_rate ?? mNode.maintenanceRate ?? mNode.maintPct;
+            if (promoPct < 0 && nodePromo !== undefined && nodePromo !== null) promoPct = Math.floor(Number(nodePromo));
+            if (maintPct < 0 && nodeMaint !== undefined && nodeMaint !== null) maintPct = Math.floor(Number(nodeMaint));
+        }
+
+        // 2순위: DB 직급 조건 및 산하 A/B라인 소실적 PV로 직접 계산
+        if (mNode && (promoPct <= 0 || maintPct <= 0)) {
+            const currRank = String(mNode.rank || mNode.rank_name || 'MANIA').toUpperCase();
+            const currLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(currRank) : 0;
+            const dbRanks = Array.isArray(window.dbRanksSorted) ? window.dbRanksSorted : (Array.isArray(window.ranksData) ? window.ranksData : []);
+
+            const nextRank = dbRanks.find(r => Number(r.rank_level || 0) > currLevel && Number(r.minor_leg_pv || 0) > 0);
+            const reqMinorPV = nextRank ? Number(nextRank.minor_leg_pv || 0) : 0;
+
+            if (promoPct <= 0 && reqMinorPV > 0) {
+                let minorPV = Number(mNode.minor_pv ?? mNode.minorPV ?? mNode.smallLegPv ?? mNode.matchedPV ?? 0);
+
+                if (minorPV <= 0) {
+                    const leftPV = Number(mNode.left_pv ?? mNode.leftPv ?? mNode.a_pv ?? mNode.lineA_pv ?? 0);
+                    const rightPV = Number(mNode.right_pv ?? mNode.rightPv ?? mNode.b_pv ?? mNode.lineB_pv ?? 0);
+                    if (leftPV > 0 || rightPV > 0) {
+                        minorPV = Math.min(leftPV, rightPV);
+                    }
+                }
+
+                if (minorPV <= 0 && typeof window.getSublinePartnerSets === 'function') {
+                    try {
+                        const { setA, setB } = window.getSublinePartnerSets(mNode);
+                        const allSales = window._capturedAllSales || (typeof window.getAllSalesListFromDB === 'function' ? window.getAllSalesListFromDB() : (window.integrated_sales_history || []));
+                        let aSum = 0, bSum = 0;
+                        (allSales || []).forEach(s => {
+                            if (!s) return;
+                            const sNorm = normId(s.member_id || s.memberId || s.id);
+                            if (!sNorm || sNorm === mNorm) return;
+                            const pv = Number(String(s.pv ?? s.sales_pv ?? 0).replace(/,/g, '')) || 0;
+                            if (pv <= 0) return;
+                            if (setA.has(sNorm)) aSum += pv;
+                            else if (setB.has(sNorm)) bSum += pv;
+                        });
+                        minorPV = Math.min(aSum, bSum);
+                    } catch (e) {}
+                }
+
+                if (minorPV > 0) {
+                    promoPct = Math.min(100, Math.floor((minorPV / reqMinorPV) * 100));
+                }
+            }
+
+            if (maintPct <= 0) {
+                const reqMaintCV = typeof window.getDbRequiredMaintCV === 'function' ? window.getDbRequiredMaintCV(currRank) : 0;
+                const minorCV = Number(mNode.matchedCV ?? mNode.minor_cv ?? mNode.term_minor_cv ?? mNode.smallLegCv ?? 0);
+                if (reqMaintCV > 0 && minorCV > 0) {
+                    maintPct = Math.min(100, Math.floor((minorCV / reqMaintCV) * 100));
+                }
+            }
+        }
+
+        const result = {
+            promoPct: promoPct > 0 ? Math.min(100, promoPct) : 0,
+            maintPct: maintPct > 0 ? Math.min(100, maintPct) : 0
+        };
+        memberRatesCache.set(mNorm, result);
+        return result;
+    };
+
+    // ------------------------------------------------------------------------
+    // [4] 🌟 카드 내 승급/유지 배지 탐색 및 깜빡임 제거 + 달성률(%) 고시인성 렌더링
+    // ------------------------------------------------------------------------
+    window.updateAllCardBadgesWithPercentage = function(clearCache = false) {
+        if (isUpdatingBadges) return;
+        isUpdatingBadges = true;
+
+        try {
+            injectBadgePercentageCSSV2();
+            if (clearCache) memberRatesCache.clear();
+
+            const thresholdPct = getConfiguredBadgeThreshold();
+            const cards = document.querySelectorAll('.node-card');
+
+            cards.forEach(cardEl => {
+                const memberId = (cardEl.id || '').replace(/^card_/, '') || cardEl.getAttribute('data-id') || '';
+
+                // 카드 내부의 모든 배지 후보 요소 탐색
+                const candidates = cardEl.querySelectorAll('span, div, b, strong, sup');
+                candidates.forEach(el => {
+                    // 이미 우리 패치가 넣은 내부 퍼센트 숫자 span은 건너뜀
+                    if (el.classList.contains('bs-badge-pct-num')) return;
+                    // 카드 전체 래퍼나 자식 요소가 많은 컨테이너는 제외
+                    if (el.children.length > 2) return;
+
+                    const rawTxt = (el.innerText || '').trim();
+                    if (!rawTxt || rawTxt.length > 14) return;
+
+                    const isPromoBadge = /^승급(\s*\d+%?)?$/.test(rawTxt) || el.classList.contains('promo-badge');
+                    const isMaintBadge = /^(품위)?유지(\s*\d+%?)?$/.test(rawTxt) || el.classList.contains('maint-badge');
+
+                    if (!isPromoBadge && !isMaintBadge) return;
+
+                    // 1) 배지 자체의 title, data-rate 또는 기존 텍스트에 이미 퍼센트가 있는지 확인
+                    let pctVal = 0;
+                    const attrStr = `${el.getAttribute('title') || ''} ${el.getAttribute('data-rate') || ''} ${el.getAttribute('data-pct') || ''} ${el.dataset.originalRate || ''}`;
+                    const attrMatch = attrStr.match(/(\d+(?:\.\d+)?)\s*%?/);
+                    if (attrMatch && Number(attrMatch[1]) > 0) {
+                        pctVal = Math.floor(Number(attrMatch[1]));
+                    }
+
+                    // 2) 속성에 없으면 계산 함수로 산출
+                    if (pctVal <= 0 && memberId) {
+                        const calc = window.calculateMemberPromoAndMaintPct(memberId, cardEl);
+                        pctVal = isPromoBadge ? calc.promoPct : calc.maintPct;
+                    }
+
+                    // 3) 만약 배지가 화면에 떠 있는데도 데이터 로딩 타이밍 등으로 0이 나왔다면,
+                    //    현재 배지 표시 기준(예: 80% 이상일 때만 배지가 뜨므로) 값을 폴백으로 표시하여 절대 누락되지 않게 보장!
+                    if (pctVal <= 0) {
+                        pctVal = thresholdPct;
+                    }
+
+                    el.dataset.originalRate = String(pctVal);
+                    const badgeType = isPromoBadge ? 'promo' : 'maint';
+                    const labelText = isPromoBadge ? '승급' : '유지';
+                    const targetPlain = `${labelText} ${pctVal}%`;
+
+                    // 인라인 스타일로 걸려있는 깜빡임 애니메이션 및 가로폭 제한 즉시 해제
+                    el.style.setProperty('animation', 'none', 'important');
+                    el.style.setProperty('-webkit-animation', 'none', 'important');
+                    el.style.setProperty('width', 'auto', 'important');
+                    el.style.setProperty('max-width', 'none', 'important');
+                    el.style.setProperty('overflow', 'visible', 'important');
+                    el.style.setProperty('white-space', 'nowrap', 'important');
+
+                    el.classList.add('bs-custom-rate-badge');
+                    el.setAttribute('data-badge-type', badgeType);
+
+                    // 텍스트가 다를 때만 DOM을 업데이트하여 무한 루프 및 깜빡임 원천 방지
+                    if (el.getAttribute('data-rendered-text') !== targetPlain) {
+                        el.setAttribute('data-rendered-text', targetPlain);
+                        el.innerHTML = `<span>${labelText}</span><span class="bs-badge-pct-num">${pctVal}%</span>`;
+                    }
+                });
+            });
+        } finally {
+            setTimeout(() => { isUpdatingBadges = false; }, 30);
+        }
+    };
+
+    // ------------------------------------------------------------------------
+    // [5] 트리 렌더링 및 설정 변경 시 자동 실행
+    // ------------------------------------------------------------------------
+    ['renderTree', 'drawTree', 'updateBadgeThreshold', 'applyCardSettings', 'calculateAndRenderPerformance'].forEach(fnName => {
+        const origFn = window[fnName];
+        if (typeof origFn === 'function' && !origFn._badgePctWrappedV2) {
+            const wrapped = function() {
+                const res = origFn.apply(this, arguments);
+                setTimeout(() => window.updateAllCardBadgesWithPercentage(true), 40);
+                setTimeout(() => window.updateAllCardBadgesWithPercentage(false), 220);
+                return res;
+            };
+            wrapped._badgePctWrappedV2 = true;
+            window[fnName] = wrapped;
+        }
+    });
+
+    function bootBadgePercentagePatchV2() {
+        injectBadgePercentageCSSV2();
+        window.updateAllCardBadgesWithPercentage(true);
+
+        [300, 800, 1500, 2500].forEach(delay => {
+            setTimeout(() => window.updateAllCardBadgesWithPercentage(true), delay);
+        });
+
+        document.addEventListener('change', (e) => {
+            if (e.target && (e.target.closest('#settingsDropdown, #settingsMenu, header') || e.target.type === 'number' || e.target.type === 'date')) {
+                setTimeout(() => window.updateAllCardBadgesWithPercentage(true), 60);
+            }
+        }, true);
+
+        document.addEventListener('input', (e) => {
+            if (e.target && e.target.closest('#settingsDropdown, #settingsMenu')) {
+                setTimeout(() => window.updateAllCardBadgesWithPercentage(true), 80);
+            }
+        }, true);
+
+        const treeRoot = document.getElementById('tree-wrapper') || document.body;
+        const observer = new MutationObserver((mutations) => {
+            if (isUpdatingBadges) return;
+            // 카드 자체가 새로 추가되었을 때만 실행 (배지 내부 텍스트 변경으로 인한 재호출 루프 차단)
+            const hasCardChange = mutations.some(m =>
+                Array.from(m.addedNodes || []).some(n => n.nodeType === 1 && (n.classList?.contains('node-card') || n.querySelector?.('.node-card')))
+            );
+            if (hasCardChange) {
+                if (window._badgePctTimerV2) clearTimeout(window._badgePctTimerV2);
+                window._badgePctTimerV2 = setTimeout(() => {
+                    window.updateAllCardBadgesWithPercentage(false);
+                }, 80);
+            }
+        });
+        observer.observe(treeRoot, { childList: true, subtree: true });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootBadgePercentagePatchV2);
+    } else {
+        bootBadgePercentagePatchV2();
     }
 })();
