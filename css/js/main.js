@@ -10014,7 +10014,7 @@ if (document.readyState === 'loading') {
         const btn = document.createElement('button');
         btn.id = 'bsLogoutBtn';
         btn.type = 'button';
-        btn.title = '잠금 / 로그아웃';
+        btn.title = '로그아웃';
         btn.style.cssText = 'display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; margin-left:4px; background:transparent; color:#f87171; border:1px solid transparent; border-radius:6px; cursor:pointer;';
         btn.innerHTML = '🔒';
         btn.onclick = window.logoutSimulator;
@@ -10540,7 +10540,7 @@ if (document.readyState === 'loading') {
                     <span style="font-size: 11px; color: #9ca3af; font-weight: bold;">🛠️ 주요 기능 및 도구</span>
 
                     <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); window.toggleTreeMode();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>🌳</span> <span id="bs-mob-tree-mode-label" style="color: #ffffff; font-weight: bold;">후원 ↔ 추천계보도 전환</span>
+                        <span>🌳</span> <span id="bs-mob-tree-mode-label" style="color: #ffffff; font-weight: bold;">계보도 전환</span>
                     </button>
 
                     <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); setTimeout(() => window.toggleSettingsMenu(event), 60);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
@@ -10548,7 +10548,7 @@ if (document.readyState === 'loading') {
                     </button>
 
                     <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleBizNavigator==='function') window.toggleBizNavigator(true);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>🧭</span> <span style="color: #ffffff; font-weight: bold;">비지네스 내비게이터</span>
+                        <span>🧭</span> <span style="color: #ffffff; font-weight: bold;">내비게이터</span>
                     </button>
 
                     <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleSalesSearchPopup==='function') window.toggleSalesSearchPopup(true);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
@@ -10556,11 +10556,11 @@ if (document.readyState === 'loading') {
                     </button>
 
                     <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.openAIAdvisorPopupWindow==='function') window.openAIAdvisorPopupWindow();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>✨</span> <span style="color: #ffffff; font-weight: bold;">AI 최적 배치 어드바이저</span>
+                        <span>✨</span> <span style="color: #ffffff; font-weight: bold;">AI 어드바이저</span>
                     </button>
 
                     <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleSalesSidebar==='function') window.toggleSalesSidebar();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>💳</span> <span style="color: #ffffff; font-weight: bold;">좌측 매출/구독 내역 패널 열기/닫기</span>
+                        <span>💳</span> <span style="color: #ffffff; font-weight: bold;">매출/구독</span>
                     </button>
 
                     <button type="button" id="bs-mob-github-btn" onclick="window.toggleMobileHamburgerDrawer(false); const g=document.getElementById('oneClickGithubBtn'); if(g) g.click();" style="display: ${window.IS_LOCAL_DEV ? 'flex' : 'none'}; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #93c5fd; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
@@ -10570,7 +10570,7 @@ if (document.readyState === 'loading') {
 
                 <div style="margin-top: auto; border-top: 1px solid #374151; padding-top: 12px;">
                     <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.logoutSimulator==='function') window.logoutSimulator();" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 6px; color: #f87171; font-size: 12.5px; font-weight: bold; cursor: pointer;">
-                        <span>🔒</span> <span>시뮬레이터 잠금 / 로그아웃</span>
+                        <span>🔒</span> <span>로그아웃</span>
                     </button>
                 </div>
             </div>
@@ -10591,8 +10591,8 @@ if (document.readyState === 'loading') {
             const modeLbl = document.getElementById('bs-mob-tree-mode-label');
             if (modeLbl) {
                 modeLbl.innerText = (window.treeMode === 'recommender')
-                    ? '후원계보도로 전환 (현재: 추천)'
-                    : '추천계보도로 전환 (현재: 후원)';
+                    ? '후원계보도'
+                    : '추천계보도';
             }
         }
     };
@@ -13406,22 +13406,26 @@ if (document.readyState === 'loading') {
     }
 })();
 // ============================================================================
-// 🏷️ [배지 기준 10% 단위 조절 + 헤더 '내비게이터' 아이콘 버튼 생성 + 창 너비 기억/높이 자동 조절 패치 V34]
-// 1. 표시설정의 '배지 표시 기준 (달성률)' 입력란을 10% 단위(step=10, 10%~100%)로 변경되도록 적용!
-// 2. 표시설정 드롭다운 내의 '내비게이터' 체크박스를 상단 헤더 영역의 전용 나침반 아이콘 버튼으로 이동!
-// 3. V33의 내비게이터 창 너비 영구 기억, DIRECTOR 미만 품위유지 숨김 & 높이 자동 조절, 배지 동기화 완벽 유지!
+// 🏷️ [검색 돋보기 아이콘 '검색창 우측' 완벽 복원 + 줌 확대('+') 아이콘 복원/보호 + 헤더 3대 아이콘 고정 패치 V41]
+// 1. 슬라이드 박스로 잘못 이동된 '검색 돋보기 아이콘'과 계보도 '확대(+) 아이콘'을 즉시 원래 자리로 자동 복원!
+// 2. 돋보기 SVG, 검색창 인접 버튼, 줌 컨트롤('+', '-', '⊙', '↗↙')을 100% 판별하여 슬라이드 박스 이동 원천 차단!
+// 3. 헤더에는 [검색 돋보기], [표시설정(톱니바퀴)], [잠금(자물쇠)]만 남기고 나머지는 모두 세로 슬라이드 박스에 배치!
 // ============================================================================
-(function initHeaderNavIconAndStep10BadgePatchV34() {
-    if (window._bsBadgeAndNavFinalV34) return;
-    window._bsBadgeAndNavFinalV34 = true;
+(function initRestoreSearchIconAndVerticalSlideDockV41() {
+    if (window._bsBadgeAndNavFinalV41) return;
+    window._bsBadgeAndNavFinalV41 = true;
 
     // 1) 이전 패치 스타일 태그 청소
     document.querySelectorAll('style[id*="bs-badge-"], style[id*="bs-final-clean-badge"]').forEach(s => s.remove());
+    ['bsHeaderSlideZone', 'bsRightAutoSlideDock'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    });
 
-    function ensureBadgeAndHeaderCSSV34() {
-        if (document.getElementById('bs-badge-final-v34-css')) return;
+    function ensureVerticalDockAndBadgeCSSV41() {
+        if (document.getElementById('bs-badge-final-v41-css')) return;
         const st = document.createElement('style');
-        st.id = 'bs-badge-final-v34-css';
+        st.id = 'bs-badge-final-v41-css';
         st.textContent = [
             '.node-card, .node-card * {',
             '    animation: none !important;',
@@ -13437,38 +13441,100 @@ if (document.readyState === 'loading') {
             '.bs-v30-hide {',
             '    display: none !important;',
             '}',
-            '/* 상단 헤더 내비게이터 아이콘 버튼 스타일 */',
-            '#bsHeaderBizNavIconBtn {',
-            '    display: inline-flex;',
-            '    align-items: center;',
-            '    justify-content: center;',
-            '    width: 30px;',
-            '    height: 30px;',
-            '    border-radius: 6px;',
-            '    border: 1px solid transparent;',
-            '    background: transparent;',
-            '    color: #9ca3af;',
-            '    cursor: pointer;',
-            '    padding: 0;',
-            '    margin: 0 2px;',
-            '    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;',
+            '/* 🌟 본문 영역 우측 중앙 세로형(Vertical) 자동 슬라이드 독 */',
+            '#bsBodyVerticalSlideDock {',
+            '    position: fixed !important;',
+            '    top: 52% !important;',
+            '    right: 0 !important;',
+            '    transform: translate(calc(100% - 14px), -50%) !important;',
+            '    z-index: 999980 !important;',
+            '    display: flex !important;',
+            '    flex-direction: row !important;',
+            '    align-items: center !important;',
+            '    transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1) !important;',
+            '    pointer-events: auto !important;',
             '}',
-            '#bsHeaderBizNavIconBtn:hover {',
-            '    background: rgba(255, 255, 255, 0.08);',
-            '    color: #f3f4f6;',
+            '#bsBodyVerticalSlideDock:hover,',
+            '#bsBodyVerticalSlideDock.bs-vdock-open {',
+            '    transform: translate(0, -50%) !important;',
             '}',
-            '#bsHeaderBizNavIconBtn.bs-nav-active {',
-            '    background: rgba(37, 99, 235, 0.22);',
-            '    border-color: rgba(96, 165, 250, 0.55);',
-            '    color: #60a5fa;',
-            '    box-shadow: 0 0 8px rgba(37, 99, 235, 0.35);',
+            '#bsBodyVerticalSlideHandle {',
+            '    width: 14px !important;',
+            '    height: 64px !important;',
+            '    background: linear-gradient(180deg, #1e293b, #0f172a) !important;',
+            '    border: 1px solid rgba(96, 165, 250, 0.5) !important;',
+            '    border-right: none !important;',
+            '    border-radius: 7px 0 0 7px !important;',
+            '    display: flex !important;',
+            '    align-items: center !important;',
+            '    justify-content: center !important;',
+            '    color: #60a5fa !important;',
+            '    font-size: 9px !important;',
+            '    font-weight: 900 !important;',
+            '    cursor: pointer !important;',
+            '    box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.5) !important;',
+            '    user-select: none !important;',
+            '}',
+            '#bsBodyVerticalSlideDock:hover #bsBodyVerticalSlideHandle,',
+            '#bsBodyVerticalSlideDock.bs-vdock-open #bsBodyVerticalSlideHandle {',
+            '    border-color: rgba(75, 85, 99, 0.75) !important;',
+            '    color: #9ca3af !important;',
+            '}',
+            '#bsBodyVerticalSlideTray {',
+            '    display: flex !important;',
+            '    flex-direction: column !important;',
+            '    align-items: center !important;',
+            '    justify-content: center !important;',
+            '    gap: 6px !important;',
+            '    padding: 10px 8px !important;',
+            '    background: rgba(17, 24, 39, 0.96) !important;',
+            '    backdrop-filter: blur(10px) !important;',
+            '    border: 1px solid rgba(75, 85, 99, 0.75) !important;',
+            '    border-right: none !important;',
+            '    border-radius: 10px 0 0 10px !important;',
+            '    box-shadow: -6px 4px 20px rgba(0, 0, 0, 0.7) !important;',
+            '}',
+            '.bs-vdock-icon-btn {',
+            '    display: inline-flex !important;',
+            '    align-items: center !important;',
+            '    justify-content: center !important;',
+            '    width: 34px !important;',
+            '    height: 34px !important;',
+            '    min-width: 34px !important;',
+            '    min-height: 34px !important;',
+            '    border-radius: 8px !important;',
+            '    border: 1px solid transparent !important;',
+            '    background: rgba(31, 41, 55, 0.55) !important;',
+            '    color: #d1d5db !important;',
+            '    cursor: pointer !important;',
+            '    padding: 0 !important;',
+            '    margin: 0 !important;',
+            '    box-sizing: border-box !important;',
+            '    transition: all 0.15s ease !important;',
+            '}',
+            '.bs-vdock-icon-btn:hover {',
+            '    background: rgba(55, 65, 81, 0.9) !important;',
+            '    color: #ffffff !important;',
+            '    transform: scale(1.05) !important;',
+            '}',
+            '.bs-vdock-icon-btn.bs-nav-active {',
+            '    background: rgba(37, 99, 235, 0.28) !important;',
+            '    border-color: rgba(96, 165, 250, 0.65) !important;',
+            '    color: #60a5fa !important;',
+            '    box-shadow: 0 0 10px rgba(37, 99, 235, 0.45) !important;',
+            '}',
+            '.bs-vdock-divider {',
+            '    width: 22px !important;',
+            '    height: 1px !important;',
+            '    background: rgba(75, 85, 99, 0.65) !important;',
+            '    margin: 2px 0 !important;',
             '}'
         ].join('\n');
         document.head.appendChild(st);
     }
 
     // ------------------------------------------------------------------------
-    // [1] 🌟 표시설정의 '배지 표시 기준 (달성률)'을 10% 단위(step="10")로 변경!
+    // [1] 표시설정의 '배지 표시 기준 (달성률)'을 10% 단위(step="10")로 변경
     // ------------------------------------------------------------------------
     function normalizeToStep10(val) {
         let num = parseInt(val, 10);
@@ -13477,7 +13543,6 @@ if (document.readyState === 'loading') {
         return Math.max(10, Math.min(100, Math.round(num / 10) * 10));
     }
 
-    // 초기 로드 시 localStorage에 1% 같은 비정상 단위가 있으면 80%(또는 10% 단위)로 정렬
     const initStoredPct = parseInt(localStorage.getItem('bs_badge_threshold_pct') || '80', 10);
     if (isNaN(initStoredPct) || initStoredPct < 10 || initStoredPct % 10 !== 0) {
         const fixedPct = initStoredPct < 10 ? 80 : normalizeToStep10(initStoredPct);
@@ -13490,7 +13555,6 @@ if (document.readyState === 'loading') {
             const pTxt = (inp.parentElement ? inp.parentElement.innerText : '') || '';
             const rowTxt = (inp.closest('div') ? inp.closest('div').innerText : '') || '';
             if (pTxt.includes('배지') || pTxt.includes('달성률') || rowTxt.includes('배지 표시 기준') || (inp.id || '').toLowerCase().includes('badge')) {
-                // 10% 단위 속성 강제 부여
                 if (inp.getAttribute('step') !== '10') inp.setAttribute('step', '10');
                 if (inp.getAttribute('min') !== '10') inp.setAttribute('min', '10');
                 if (inp.getAttribute('max') !== '100') inp.setAttribute('max', '100');
@@ -13505,8 +13569,8 @@ if (document.readyState === 'loading') {
                     localStorage.setItem('bs_badge_threshold_pct', String(snapped));
                 }
 
-                if (!inp._v34Step10Bound) {
-                    inp._v34Step10Bound = true;
+                if (!inp._v41Step10Bound) {
+                    inp._v41Step10Bound = true;
                     inp.addEventListener('change', () => {
                         const snapped = normalizeToStep10(inp.value);
                         inp.value = String(snapped);
@@ -13514,7 +13578,7 @@ if (document.readyState === 'loading') {
                         if (typeof window.renderTreeCardStatusBadges === 'function') {
                             window.renderTreeCardStatusBadges();
                         }
-                        window.syncBadgeTitlesToTextV34();
+                        window.syncBadgeTitlesToTextV41();
                     });
                 }
             }
@@ -13539,148 +13603,506 @@ if (document.readyState === 'loading') {
     }
 
     // ------------------------------------------------------------------------
-    // [2] 🌟 표시설정의 '내비게이터' 항목을 숨기고, 상단 헤더 영역에 아이콘 버튼으로 배치!
+    // [2] 🌟 검색 돋보기 아이콘 & 줌 확대('+') 아이콘 복원/보호 & 헤더 3대 아이콘 고정!
     // ------------------------------------------------------------------------
-    function findOriginalNavigatorCheckbox() {
-        if (typeof window.findBizNavigatorCheckbox === 'function') {
-            try {
-                const cb = window.findBizNavigatorCheckbox();
-                if (cb) return cb;
-            } catch (e) {}
-        }
+    function findSettingCheckboxByKeywords(keywords) {
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
         for (const cb of checkboxes) {
+            if (cb.closest('#perfWidget')) continue;
             const labelEl = cb.closest('label') || cb.parentElement;
-            const txt = (labelEl ? labelEl.innerText : '').trim();
-            if (txt.includes('내비게이터') || txt.includes('네비게이터')) {
+            const txt = (labelEl ? labelEl.innerText : '').replace(/\s+/g, ' ').trim();
+            if (!txt || txt.length > 30) continue;
+            if (keywords.some(kw => txt.includes(kw))) {
                 return cb;
             }
         }
         return null;
     }
 
-    function updateHeaderNavIconActiveState() {
-        const btn = document.getElementById('bsHeaderBizNavIconBtn');
-        if (!btn) return;
-        const cb = findOriginalNavigatorCheckbox();
-        const popupOpen = Boolean(window.bizNavPopupWindow && !window.bizNavPopupWindow.closed);
-        const isActive = popupOpen || (cb ? cb.checked : false);
-        if (isActive) {
-            btn.classList.add('bs-nav-active');
-        } else {
-            btn.classList.remove('bs-nav-active');
-        }
-    }
+    function hideMovedSettingsItemsInDropdown() {
+        const targetChecks = [
+            findSettingCheckboxByKeywords(['매출/구독', '매출구독']),
+            findSettingCheckboxByKeywords(['실적/수당', '실적수당']),
+            findSettingCheckboxByKeywords(['내비게이터', '네비게이터']),
+            findSettingCheckboxByKeywords(['매출 기간 검색', '기간 검색', '매출기간'])
+        ];
 
-    function setupHeaderNavigatorIconAndHideDropdownItem() {
-        ensureBadgeAndHeaderCSSV34();
-
-        // 1) 표시설정 드롭다운 내의 '내비게이터' 체크박스 줄 숨기기 (기능 유지를 위해 DOM에는 남겨둠)
-        const navCb = findOriginalNavigatorCheckbox();
-        if (navCb) {
-            const rowEl = navCb.closest('label') || navCb.parentElement;
-            if (rowEl && rowEl.tagName !== 'BODY' && rowEl.id !== 'settingsDropdown') {
+        targetChecks.forEach(cb => {
+            if (!cb) return;
+            const rowEl = cb.closest('label') || cb.parentElement;
+            if (rowEl && rowEl.tagName !== 'BODY') {
                 rowEl.style.setProperty('display', 'none', 'important');
             }
-        }
+        });
 
-        // 2) 상단 헤더 아이콘 영역에 내비게이터 나침반 아이콘 버튼 추가 (중복 생성 방지)
-        if (document.getElementById('bsHeaderBizNavIconBtn')) {
-            updateHeaderNavIconActiveState();
-            return;
-        }
-
-        // 헤더 내 설정(톱니바퀴) 버튼 또는 우측 아이콘 툴바 찾기
-        const headerEl = document.querySelector('header, .header, .top-bar') || document.body;
-        let targetToolbar = null;
-        let gearBtn = null;
-
-        const candidates = headerEl.querySelectorAll('button, a, div[role="button"], i, svg');
-        for (const el of candidates) {
-            const btn = el.closest('button') || (el.tagName === 'BUTTON' ? el : null);
-            if (!btn) continue;
-            const titleOrId = ((btn.title || '') + ' ' + (btn.id || '') + ' ' + (btn.getAttribute('onclick') || '')).toLowerCase();
-            if (titleOrId.includes('setting') || titleOrId.includes('설정') || titleOrId.includes('표시')) {
-                gearBtn = btn;
-                targetToolbar = btn.parentElement;
-                break;
-            }
-        }
-
-        // 만약 title로 못 찾으면 검색창 우측의 버튼 그룹 탐색
-        if (!targetToolbar) {
-            const searchInput = headerEl.querySelector('input[placeholder*="회원"], input[type="search"], input[type="text"]');
-            if (searchInput) {
-                let p = searchInput.parentElement;
-                while (p && p !== headerEl && p.querySelectorAll('button').length < 3) {
-                    p = p.parentElement;
+        document.querySelectorAll('div, span, p, h3, h4, h5, label, b, strong').forEach(el => {
+            if (el.children.length > 0) return;
+            const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (txt === '위젯 설정' || txt === '팝업 설정') {
+                el.style.setProperty('display', 'none', 'important');
+                const prev = el.previousElementSibling;
+                if (prev && (prev.tagName === 'HR' || (prev.textContent || '').trim() === '')) {
+                    prev.style.setProperty('display', 'none', 'important');
                 }
-                if (p) {
-                    const btns = p.querySelectorAll('button');
-                    if (btns.length >= 2) {
-                        gearBtn = btns[0];
-                        targetToolbar = gearBtn.parentElement;
+                const parent = el.parentElement;
+                if (parent && parent.tagName !== 'BODY' && !parent.querySelector('input[type="number"]')) {
+                    const parentTxt = (parent.innerText || '').replace(/\s+/g, ' ').trim();
+                    if (parentTxt === '' || parentTxt === '위젯 설정' || parentTxt === '팝업 설정') {
+                        parent.style.setProperty('display', 'none', 'important');
                     }
                 }
             }
+        });
+    }
+
+    // 헤더의 검색어 입력창('회원번호 / 이름') 요소 찾기
+    function findHeaderSearchInput() {
+        const headerEl = document.querySelector('header, .header, .top-bar') || document.body;
+        return headerEl.querySelector('input[placeholder*="회원"], input[placeholder*="이름"], input[placeholder*="검색"], input[type="search"], #searchInput');
+    }
+
+    // 🌟 계보도 우측 상단 줌 컨트롤 박스('-', '⊙', '↗↙', '+') 컨테이너 찾기
+    function findZoomControlBoxContainer() {
+        const bySelector = document.querySelector('.zoom-controls, #zoomControls, #zoom-controls, [class*="zoom-control" i]');
+        if (bySelector) return bySelector;
+
+        const allBtns = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]'));
+        for (const b of allBtns) {
+            if (b.closest('#bsBodyVerticalSlideDock')) continue;
+            const r = b.getBoundingClientRect();
+            if (r.top < 45 || r.top > 160) continue;
+
+            const meta = ((b.id || '') + ' ' + (b.title || '') + ' ' + (b.getAttribute('onclick') || '') + ' ' + (b.innerText || '') + ' ' + (b.innerHTML || '')).toLowerCase();
+            if (
+                meta.includes('zoomout') || meta.includes('zoom_out') || meta.includes('축소') ||
+                (b.innerText || '').trim() === '-' || (b.innerText || '').trim() === '−' ||
+                (meta.includes('x1="5"') && meta.includes('y1="12"') && meta.includes('x2="19"') && !meta.includes('y1="5"'))
+            ) {
+                return b.parentElement;
+            }
+        }
+        return null;
+    }
+
+    // 🌟 해당 요소가 계보도 줌 컨트롤 버튼('+', '-', '⊙', '↗↙')인지 판별하는 함수!
+    function isZoomControlButton(el) {
+        if (!el) return false;
+        const zoomBox = findZoomControlBoxContainer();
+        if (zoomBox && zoomBox.contains(el)) return true;
+
+        const txt = (el.innerText || '').trim();
+        if (txt === '+' || txt === '＋' || txt === '-' || txt === '−') return true;
+
+        const meta = (
+            (el.id || '') + ' ' +
+            (el.title || '') + ' ' +
+            (el.className || '') + ' ' +
+            (el.getAttribute('onclick') || '') + ' ' +
+            (el.getAttribute('aria-label') || '') + ' ' +
+            (el.innerHTML || '')
+        ).toLowerCase();
+
+        if (
+            meta.includes('zoomin') || meta.includes('zoom_in') || meta.includes('zoomout') ||
+            meta.includes('zoomreset') || meta.includes('확대') || meta.includes('축소')
+        ) {
+            return true;
         }
 
-        if (!targetToolbar) return;
+        // 순수 '+' 플러스 아이콘 SVG 판별 (수직선 + 수평선 십자 구조)
+        if (!meta.includes('<circle') && !meta.includes('<rect') && !meta.includes('<polygon')) {
+            const hasVertLine = (meta.includes('x1="12"') && meta.includes('x2="12"')) || meta.includes('m12 5v14') || meta.includes('m12,5v14');
+            const hasHorizLine = (meta.includes('y1="12"') && meta.includes('y2="12"')) || meta.includes('m5 12h14') || meta.includes('m5,12h14');
+            if (hasVertLine && hasHorizLine) {
+                return true;
+            }
+        }
 
-        const navBtn = document.createElement('button');
-        navBtn.id = 'bsHeaderBizNavIconBtn';
-        navBtn.type = 'button';
-        navBtn.title = '비지네스 내비게이터 (승급 & 품위유지 가이드)';
-        // 깔끔한 나침반(Compass) 벡터 아이콘
-        navBtn.innerHTML = `
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
-            </svg>
-        `;
+        return false;
+    }
 
-        // 클릭 시 기존 내비게이터 체크박스 토글 및 팝업창 열기/닫기 실행!
-        navBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const cb = findOriginalNavigatorCheckbox();
-            const isPopupOpen = Boolean(window.bizNavPopupWindow && !window.bizNavPopupWindow.closed);
+    // 🌟 해당 요소가 '검색 돋보기 아이콘'인지 100% 정확히 판별하는 함수!
+    function isSearchMagnifierIcon(el) {
+        if (!el) return false;
+        // 우리가 직접 만든 매출 기간 검색 버튼(달력+돋보기)은 제외
+        if (el.id === 'bsVDockPeriodSearchBtn') return false;
 
-            if (isPopupOpen) {
-                try { window.bizNavPopupWindow.close(); } catch (err) {}
-                if (cb && cb.checked) {
-                    cb.checked = false;
-                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+        const meta = (
+            (el.id || '') + ' ' +
+            (el.title || '') + ' ' +
+            (el.className || '') + ' ' +
+            (el.getAttribute('onclick') || '') + ' ' +
+            (el.getAttribute('aria-label') || '') + ' ' +
+            (el.innerHTML || '')
+        ).toLowerCase();
+
+        // 1) 키워드 판별 (search, 검색, 돋보기, findMember 등)
+        if (meta.includes('search') || meta.includes('검색') || meta.includes('돋보기') || meta.includes('findmember') || meta.includes('handlesearch')) {
+            return true;
+        }
+
+        // 2) 돋보기 SVG 기하학적 특징 판별:
+        //    표준 돋보기 아이콘은 <circle cx="11" cy="11" r="8"> 와 <line x1="21" y1="21" x2="16.65" y2="16.65"> (또는 path m21 21-4.3-4.3)으로 구성됨!
+        //    (단, 달력 아이콘 rect가 없는 순수 돋보기만 해당)
+        if (!meta.includes('<rect') && meta.includes('<circle')) {
+            if (
+                meta.includes('16.65') ||
+                meta.includes('4.35') ||
+                meta.includes('4.3') ||
+                (meta.includes('cx="11"') && meta.includes('r="8"')) ||
+                (meta.includes('cx="10"') && meta.includes('r="7"')) ||
+                (meta.includes('21') && meta.includes('15'))
+            ) {
+                return true;
+            }
+        }
+
+        // 3) 검색 입력창과 같은 부모 컨테이너 안에 들어있는 버튼인 경우
+        const searchInp = findHeaderSearchInput();
+        if (searchInp && searchInp.parentElement && searchInp.parentElement.contains(el)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    // 🌟 만약 이전 버전에 의해 '검색 돋보기 아이콘' 또는 '줌 확대(+) 아이콘'이 슬라이드 박스로 옮겨져 있다면 즉시 원래 자리로 복원!
+    function restoreSearchIconToHeaderIfMoved() {
+        const searchInp = findHeaderSearchInput();
+        const zoomBox = findZoomControlBoxContainer();
+
+        const tray = document.getElementById('bsBodyVerticalSlideTray');
+        if (!tray) return;
+
+        const children = Array.from(tray.children);
+        children.forEach(el => {
+            // V41에서 만든 4대 고정 버튼 및 구분선은 패스
+            if (
+                el.id === 'bsVDockSalesWidgetBtn' ||
+                el.id === 'bsVDockPerfWidgetBtn' ||
+                el.id === 'bsVDockBizNavBtn' ||
+                el.id === 'bsVDockPeriodSearchBtn' ||
+                el.classList.contains('bs-vdock-divider')
+            ) {
+                return;
+            }
+
+            // 1) 줌 확대('+') 아이콘이 슬라이드 박스에 들어있다면 즉시 줌 컨트롤 박스 우측 끝으로 복원!
+            if (isZoomControlButton(el)) {
+                el.classList.remove('bs-vdock-icon-btn');
+                if (zoomBox) {
+                    zoomBox.appendChild(el);
                 }
-            } else {
-                if (cb) {
-                    cb.checked = true;
-                    cb.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                const targetId = window.currentSelectedId || 'VK-1199464';
-                if (typeof window.openBizNavigatorPopupWindow === 'function') {
-                    window.openBizNavigatorPopupWindow(targetId);
-                } else if (typeof window.forceOpenBizNavPopup === 'function') {
-                    window.forceOpenBizNavPopup(targetId);
-                } else if (typeof window.toggleBizNavigator === 'function') {
-                    window.toggleBizNavigator(true);
+                return;
+            }
+
+            // 2) 검색 돋보기 아이콘이 슬라이드 박스에 들어있다면 검색어 입력창 바로 우측으로 복원!
+            if (isSearchMagnifierIcon(el) && searchInp) {
+                el.classList.remove('bs-vdock-icon-btn');
+                const searchContainer = searchInp.parentElement;
+                if (searchContainer) {
+                    if (searchInp.nextSibling) {
+                        searchContainer.insertBefore(el, searchInp.nextSibling);
+                    } else {
+                        searchContainer.appendChild(el);
+                    }
                 }
             }
-            setTimeout(updateHeaderNavIconActiveState, 80);
-            setTimeout(updateHeaderNavIconActiveState, 300);
         });
+    }
 
-        // 톱니바퀴(설정) 버튼 바로 앞이나 뒤에 자연스럽게 배치
-        if (gearBtn && gearBtn.parentElement === targetToolbar) {
-            targetToolbar.insertBefore(navBtn, gearBtn.nextSibling);
-        } else {
-            targetToolbar.appendChild(navBtn);
+    // 🌟 아이콘이 헤더/본문 원래 자리에 남겨야 할 아이콘([검색 돋보기], [줌 확대 '+'], [표시설정 톱니바퀴], [잠금 자물쇠])인지 판별!
+    function shouldKeepIconInHeader(el) {
+        if (!el) return false;
+
+        // 1) 검색 돋보기 아이콘 또는 줌 컨트롤('+') 버튼이면 무조건 원래 자리에 유지!
+        if (isSearchMagnifierIcon(el) || isZoomControlButton(el)) return true;
+
+        const meta = (
+            (el.id || '') + ' ' +
+            (el.title || '') + ' ' +
+            (el.className || '') + ' ' +
+            (el.getAttribute('onclick') || '') + ' ' +
+            (el.getAttribute('aria-label') || '') + ' ' +
+            (el.innerHTML || '')
+        ).toLowerCase();
+
+        // 클라우드(cloud/upload/backup/db), 교차화살표(shuffle), 계보도(sitemap/tree), 스파클(sparkle/star)은 무조건 슬라이드 박스로 이동(false 반환)!
+        if (
+            meta.includes('cloud') || meta.includes('upload') || meta.includes('backup') ||
+            meta.includes('sync') || meta.includes('db') || meta.includes('클라우드') ||
+            meta.includes('백업') || meta.includes('저장') || meta.includes('교차') ||
+            meta.includes('shuffle') || meta.includes('sparkle') || meta.includes('m16 16l-4-4') ||
+            meta.includes('18 10h-1.26') || meta.includes('a8 8 0 1 0')
+        ) {
+            return false;
         }
 
-        updateHeaderNavIconActiveState();
+        // 2) 표시설정(톱니바퀴) 판별
+        const isGear =
+            meta.includes('setting') || meta.includes('설정') || meta.includes('표시') ||
+            meta.includes('gear') || meta.includes('cog') || meta.includes('19.4 15') || meta.includes('19.4,15');
+        if (isGear) return true;
+
+        // 3) 잠금/로그아웃(자물쇠) 판별
+        const isLock =
+            meta.includes('lock') || meta.includes('잠금') || meta.includes('로그아웃') ||
+            meta.includes('logout') || meta.includes('m7 11v7') || meta.includes('m7 11v-4') ||
+            meta.includes('a5 5 0 0 1 10 0v4') || (meta.includes('rect') && meta.includes('y="11"'));
+        if (isLock) return true;
+
+        return false;
+    }
+
+    function extractRemainingHeaderIconsToMove() {
+        const headerEl = document.querySelector('header, .header, .top-bar') || document.body;
+        const searchInp = findHeaderSearchInput();
+        const zoomBox = findZoomControlBoxContainer();
+
+        // 검색어 입력창 및 그 우측 돋보기 버튼 영역(searchInp.parentElement 전체)의 오른쪽 끝 좌표를 기준점으로 설정
+        let minRightToolbarX = 350;
+        let maxHeaderIconTop = 48; // 기본 상단 헤더 높이 제한 (줌 컨트롤 박스는 top이 55px 이상이므로 원천 배제!)
+        if (searchInp) {
+            const searchBoxEl = searchInp.parentElement || searchInp;
+            const sbRect = searchBoxEl.getBoundingClientRect();
+            if (sbRect.right > 0) {
+                minRightToolbarX = sbRect.right + 12; // 검색창 박스(돋보기 포함) 우측 바깥의 아이콘들만 탐색!
+            }
+            if (sbRect.bottom > 0) {
+                maxHeaderIconTop = sbRect.bottom + 8; // 검색창과 같은 상단 헤더 줄에 있는 아이콘만 탐색!
+            }
+        }
+
+        const svgList = Array.from(headerEl.querySelectorAll('svg, i, img'));
+        const iconWrappers = [];
+
+        svgList.forEach(svg => {
+            if (svg.closest('#bsBodyVerticalSlideDock') || svg.closest('#settingsDropdown')) return;
+            // 검색창 부모 박스 안에 들어있는 돋보기 SVG는 절대 건드리지 않음!
+            if (searchInp && searchInp.parentElement && searchInp.parentElement.contains(svg)) return;
+            // 🌟 계보도 우측 상단 줌 컨트롤 박스('-', '⊙', '↗↙', '+') 내부 아이콘은 절대 건드리지 않음!
+            if (zoomBox && zoomBox.contains(svg)) return;
+
+            const rect = svg.getBoundingClientRect();
+            if (rect.width === 0 || rect.top > maxHeaderIconTop || rect.left < minRightToolbarX) return;
+
+            let wrapper = svg.closest('button, a, label') || svg.parentElement;
+            if (!wrapper || wrapper === headerEl || wrapper === document.body) return;
+
+            if (wrapper.querySelectorAll('svg').length > 1) {
+                wrapper = svg.parentElement;
+            }
+
+            if (!iconWrappers.includes(wrapper)) {
+                iconWrappers.push(wrapper);
+            }
+        });
+
+        iconWrappers.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+
+        const toMove = [];
+        iconWrappers.forEach(el => {
+            if (shouldKeepIconInHeader(el)) return;
+            toMove.push(el);
+        });
+
+        return toMove;
+    }
+
+    function updateAllVerticalDockIconsActiveState() {
+        const salesBtn = document.getElementById('bsVDockSalesWidgetBtn');
+        if (salesBtn) {
+            const cb = findSettingCheckboxByKeywords(['매출/구독', '매출구독']);
+            salesBtn.classList.toggle('bs-nav-active', Boolean(cb && cb.checked));
+        }
+        const perfBtn = document.getElementById('bsVDockPerfWidgetBtn');
+        if (perfBtn) {
+            const cb = findSettingCheckboxByKeywords(['실적/수당', '실적수당']);
+            perfBtn.classList.toggle('bs-nav-active', Boolean(cb && cb.checked));
+        }
+        const navBtn = document.getElementById('bsVDockBizNavBtn');
+        if (navBtn) {
+            const cb = findSettingCheckboxByKeywords(['내비게이터', '네비게이터']);
+            const popupOpen = Boolean(window.bizNavPopupWindow && !window.bizNavPopupWindow.closed);
+            navBtn.classList.toggle('bs-nav-active', Boolean(popupOpen || (cb && cb.checked)));
+        }
+        const periodBtn = document.getElementById('bsVDockPeriodSearchBtn');
+        if (periodBtn) {
+            const cb = findSettingCheckboxByKeywords(['매출 기간 검색', '기간 검색', '매출기간']);
+            periodBtn.classList.toggle('bs-nav-active', Boolean(cb && cb.checked));
+        }
+    }
+
+    function makeVDockBtn(id, title, svgHtml, onClickFn) {
+        let btn = document.getElementById(id);
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.id = id;
+            btn.type = 'button';
+            btn.className = 'bs-vdock-icon-btn';
+            btn.title = title;
+            btn.innerHTML = svgHtml;
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                onClickFn(e);
+                setTimeout(updateAllVerticalDockIconsActiveState, 60);
+                setTimeout(updateAllVerticalDockIconsActiveState, 250);
+            });
+        }
+        return btn;
+    }
+
+    function buildAndSyncBodyVerticalSlideDock() {
+        ensureVerticalDockAndBadgeCSSV41();
+        hideMovedSettingsItemsInDropdown();
+
+        // 🌟 먼저 슬라이드 박스에 잘못 들어가 있는 검색 돋보기 아이콘 및 줌 확대(+) 아이콘이 있다면 즉시 복원!
+        restoreSearchIconToHeaderIfMoved();
+
+        let dock = document.getElementById('bsBodyVerticalSlideDock');
+        let tray = document.getElementById('bsBodyVerticalSlideTray');
+
+        if (!dock) {
+            dock = document.createElement('div');
+            dock.id = 'bsBodyVerticalSlideDock';
+
+            const handle = document.createElement('div');
+            handle.id = 'bsBodyVerticalSlideHandle';
+            handle.title = '마우스를 올리면 도구 메뉴가 열립니다';
+            handle.textContent = '❮';
+
+            tray = document.createElement('div');
+            tray.id = 'bsBodyVerticalSlideTray';
+
+            const salesBtn = makeVDockBtn(
+                'bsVDockSalesWidgetBtn',
+                '매출/구독',
+                `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <line x1="10" y1="9" x2="8" y2="9"></line>
+                </svg>`,
+                () => {
+                    const cb = findSettingCheckboxByKeywords(['매출/구독', '매출구독']);
+                    if (cb) cb.click();
+                    else if (typeof window.togglePerfSidebar === 'function') window.togglePerfSidebar();
+                }
+            );
+
+            const perfBtn = makeVDockBtn(
+                'bsVDockPerfWidgetBtn',
+                '실적/수당',
+                `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                    <line x1="2" y1="20" x2="22" y2="20"></line>
+                </svg>`,
+                () => {
+                    const cb = findSettingCheckboxByKeywords(['실적/수당', '실적수당']);
+                    if (cb) cb.click();
+                    else if (typeof window.toggleFoldPerfWidget === 'function') window.toggleFoldPerfWidget();
+                }
+            );
+
+            const navBtn = makeVDockBtn(
+                'bsVDockBizNavBtn',
+                '내비게이터',
+                `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                </svg>`,
+                () => {
+                    const cb = findSettingCheckboxByKeywords(['내비게이터', '네비게이터']);
+                    const isPopupOpen = Boolean(window.bizNavPopupWindow && !window.bizNavPopupWindow.closed);
+                    if (isPopupOpen) {
+                        try { window.bizNavPopupWindow.close(); } catch (err) {}
+                        if (cb && cb.checked) cb.click();
+                    } else {
+                        if (cb && !cb.checked) cb.click();
+                        const targetId = window.currentSelectedId || 'VK-1199464';
+                        if (typeof window.openBizNavigatorPopupWindow === 'function') {
+                            window.openBizNavigatorPopupWindow(targetId);
+                        } else if (typeof window.forceOpenBizNavPopup === 'function') {
+                            window.forceOpenBizNavPopup(targetId);
+                        }
+                    }
+                }
+            );
+
+            const periodBtn = makeVDockBtn(
+                'bsVDockPeriodSearchBtn',
+                '매출 기간 검색',
+                `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                    <circle cx="14.5" cy="15.5" r="2.5"></circle>
+                    <line x1="16.5" y1="17.5" x2="18.5" y2="19.5"></line>
+                </svg>`,
+                () => {
+                    const cb = findSettingCheckboxByKeywords(['매출 기간 검색', '기간 검색', '매출기간']);
+                    if (cb) cb.click();
+                }
+            );
+
+            tray.appendChild(salesBtn);
+            tray.appendChild(perfBtn);
+            tray.appendChild(navBtn);
+            tray.appendChild(periodBtn);
+
+            dock.appendChild(handle);
+            dock.appendChild(tray);
+            document.body.appendChild(dock);
+
+            let closeTimer = null;
+            window.addEventListener('mousemove', (ev) => {
+                const d = document.getElementById('bsBodyVerticalSlideDock');
+                if (!d) return;
+
+                const inBodyVerticalRange = ev.clientY >= 70 && ev.clientY <= (window.innerHeight - 50);
+                const nearRightEdge = (window.innerWidth - ev.clientX) <= 22 && inBodyVerticalRange;
+                const isHoveringDock = d.matches(':hover');
+
+                if (nearRightEdge || isHoveringDock) {
+                    clearTimeout(closeTimer);
+                    d.classList.add('bs-vdock-open');
+                    handle.textContent = '❯';
+                } else if (d.classList.contains('bs-vdock-open')) {
+                    clearTimeout(closeTimer);
+                    closeTimer = setTimeout(() => {
+                        if (!d.matches(':hover')) {
+                            d.classList.remove('bs-vdock-open');
+                            handle.textContent = '❮';
+                        }
+                    }, 200);
+                }
+            }, { passive: true });
+        }
+
+        if (tray) {
+            const remainingIcons = extractRemainingHeaderIconsToMove();
+            if (remainingIcons.length > 0) {
+                if (!tray.querySelector('.bs-vdock-divider')) {
+                    const divider = document.createElement('div');
+                    divider.className = 'bs-vdock-divider';
+                    tray.appendChild(divider);
+                }
+                remainingIcons.forEach(iconEl => {
+                    iconEl.classList.add('bs-vdock-icon-btn');
+                    tray.appendChild(iconEl);
+                });
+            }
+        }
+
+        updateAllVerticalDockIconsActiveState();
     }
 
     // ------------------------------------------------------------------------
-    // [3] V33의 내비게이터 창 너비(Width) 영구 기억 & 직급별 높이 자동 조절 유지
+    // [3] 내비게이터 창 너비(Width) 영구 기억 & 직급별 높이 자동 조절 유지
     // ------------------------------------------------------------------------
     function isDirectorOrAboveRank(rankStr) {
         const r = String(rankStr || '').trim().toUpperCase();
@@ -13713,9 +14135,9 @@ if (document.readyState === 'loading') {
     function bindPopupWidthLock(win) {
         if (!win || win === window || win.closed) return;
 
-        if (!win._nativeResizeToV34 && typeof win.resizeTo === 'function') {
-            const nativeResizeTo = win._nativeResizeToV33 || win.resizeTo.bind(win);
-            win._nativeResizeToV34 = nativeResizeTo;
+        if (!win._nativeResizeToV41 && typeof win.resizeTo === 'function') {
+            const nativeResizeTo = win._nativeResizeToV40 || win._nativeResizeToV39 || win._nativeResizeToV38 || win._nativeResizeToV37 || win._nativeResizeToV36 || win._nativeResizeToV35 || win._nativeResizeToV34 || win._nativeResizeToV33 || win.resizeTo.bind(win);
+            win._nativeResizeToV41 = nativeResizeTo;
 
             win.resizeTo = function(reqW, reqH) {
                 const lockedW = getSavedUserNavWidth();
@@ -13728,8 +14150,8 @@ if (document.readyState === 'loading') {
             };
         }
 
-        if (!win._widthListenerBoundV34) {
-            win._widthListenerBoundV34 = true;
+        if (!win._widthListenerBoundV41) {
+            win._widthListenerBoundV41 = true;
             let resizeTimer = null;
             win.addEventListener('resize', () => {
                 if (isProgrammaticResizing) return;
@@ -13741,13 +14163,13 @@ if (document.readyState === 'loading') {
                 }, 150);
             });
             win.addEventListener('unload', () => {
-                setTimeout(updateHeaderNavIconActiveState, 100);
+                setTimeout(updateAllVerticalDockIconsActiveState, 100);
             });
         }
     }
 
     const origWindowOpen = window.open;
-    if (typeof origWindowOpen === 'function' && !origWindowOpen._v34Wrapped) {
+    if (typeof origWindowOpen === 'function' && !origWindowOpen._v41Wrapped) {
         const wrappedWindowOpen = function(url, target, features) {
             let modFeatures = String(features || '');
             if ((target && String(target).toLowerCase().includes('nav')) || modFeatures.includes('width=')) {
@@ -13761,11 +14183,11 @@ if (document.readyState === 'loading') {
             const popWin = origWindowOpen.call(this, url, target, modFeatures);
             if (popWin) {
                 bindPopupWidthLock(popWin);
-                setTimeout(updateHeaderNavIconActiveState, 80);
+                setTimeout(updateAllVerticalDockIconsActiveState, 80);
             }
             return popWin;
         };
-        wrappedWindowOpen._v34Wrapped = true;
+        wrappedWindowOpen._v41Wrapped = true;
         window.open = wrappedWindowOpen;
     }
 
@@ -13818,7 +14240,7 @@ if (document.readyState === 'loading') {
                     ? Math.min(maxScreenH, Math.max(contentTotalH, 760))
                     : Math.min(maxScreenH, Math.max(contentTotalH, 420));
 
-                const nativeResize = win._nativeResizeToV34 || win._nativeResizeToV33 || win.resizeTo.bind(win);
+                const nativeResize = win._nativeResizeToV41 || win._nativeResizeToV40 || win._nativeResizeToV39 || win._nativeResizeToV38 || win._nativeResizeToV37 || win._nativeResizeToV36 || win._nativeResizeToV35 || win._nativeResizeToV34 || win._nativeResizeToV33 || win.resizeTo.bind(win);
                 if (Math.abs((win.outerWidth || 0) - lockedUserWidth) > 5 || Math.abs((win.outerHeight || 0) - targetHeight) > 12) {
                     isProgrammaticResizing = true;
                     try {
@@ -13836,7 +14258,7 @@ if (document.readyState === 'loading') {
             if (popup && !popup.closed) {
                 bindPopupWidthLock(popup);
             }
-            updateHeaderNavIconActiveState();
+            updateAllVerticalDockIconsActiveState();
 
             const docs = [];
             if (optDoc) docs.push(optDoc);
@@ -13944,7 +14366,7 @@ if (document.readyState === 'loading') {
     };
 
     const origRenderNav = window.renderBusinessNavigator;
-    if (typeof origRenderNav === 'function' && !origRenderNav._v34Wrapped) {
+    if (typeof origRenderNav === 'function' && !origRenderNav._v41Wrapped) {
         const wrappedRenderNav = async function(targetMemberId, optDoc) {
             isProgrammaticResizing = true;
             const r = await origRenderNav.apply(this, arguments);
@@ -13955,12 +14377,12 @@ if (document.readyState === 'loading') {
             }, 60);
             return r;
         };
-        wrappedRenderNav._v34Wrapped = true;
+        wrappedRenderNav._v41Wrapped = true;
         window.renderBusinessNavigator = wrappedRenderNav;
     }
 
     const origOpenNavPopup = window.openBizNavigatorPopupWindow;
-    if (typeof origOpenNavPopup === 'function' && !origOpenNavPopup._v34Wrapped) {
+    if (typeof origOpenNavPopup === 'function' && !origOpenNavPopup._v41Wrapped) {
         const wrappedOpenPopup = function(targetMemberId) {
             isProgrammaticResizing = true;
             const r = origOpenNavPopup.apply(this, arguments);
@@ -13973,7 +14395,7 @@ if (document.readyState === 'loading') {
             setTimeout(() => { isProgrammaticResizing = false; }, 550);
             return r;
         };
-        wrappedOpenPopup._v34Wrapped = true;
+        wrappedOpenPopup._v41Wrapped = true;
         window.openBizNavigatorPopupWindow = wrappedOpenPopup;
     }
 
@@ -13981,7 +14403,7 @@ if (document.readyState === 'loading') {
     // [4] 카드 배지 표시 & 10% 단위 기준값 연동
     // ------------------------------------------------------------------------
     const origEvalStatus = window.evaluateMemberCardBadgeStatus;
-    if (typeof origEvalStatus === 'function' && !origEvalStatus._v34Wrapped) {
+    if (typeof origEvalStatus === 'function' && !origEvalStatus._v41Wrapped) {
         const wrappedEval = function(memberId, teamMap, preferredOrderKey) {
             const res = origEvalStatus.apply(this, arguments);
             if (!res) return res;
@@ -14012,19 +14434,19 @@ if (document.readyState === 'loading') {
             res.showMaintBadge = (res.maintPct >= thresholdPct);
             return res;
         };
-        wrappedEval._v34Wrapped = true;
+        wrappedEval._v41Wrapped = true;
         window.evaluateMemberCardBadgeStatus = wrappedEval;
     }
 
-    let isSyncingV34 = false;
+    let isSyncingV41 = false;
 
-    window.syncBadgeTitlesToTextV34 = function() {
-        if (isSyncingV34) return;
-        isSyncingV34 = true;
+    window.syncBadgeTitlesToTextV41 = function() {
+        if (isSyncingV41) return;
+        isSyncingV41 = true;
 
         try {
-            ensureBadgeAndHeaderCSSV34();
-            setupHeaderNavigatorIconAndHideDropdownItem();
+            ensureVerticalDockAndBadgeCSSV41();
+            buildAndSyncBodyVerticalSlideDock();
             const thresholdPct = getUserSettingThresholdPct();
 
             document.querySelectorAll('.bs-card-top-badges span, .node-card span').forEach(el => {
@@ -14075,46 +14497,46 @@ if (document.readyState === 'loading') {
                 }
             });
         } finally {
-            isSyncingV34 = false;
+            isSyncingV41 = false;
         }
     };
 
     const origRenderFn = window.renderTreeCardStatusBadges;
-    if (typeof origRenderFn === 'function' && !origRenderFn._v34Wrapped) {
+    if (typeof origRenderFn === 'function' && !origRenderFn._v41Wrapped) {
         const wrappedRender = async function() {
             const r = await origRenderFn.apply(this, arguments);
-            window.syncBadgeTitlesToTextV34();
+            window.syncBadgeTitlesToTextV41();
             return r;
         };
-        wrappedRender._v34Wrapped = true;
+        wrappedRender._v41Wrapped = true;
         window.renderTreeCardStatusBadges = wrappedRender;
     }
 
-    function bootV34() {
-        ensureBadgeAndHeaderCSSV34();
-        setupHeaderNavigatorIconAndHideDropdownItem();
+    function bootV41() {
+        ensureVerticalDockAndBadgeCSSV41();
+        buildAndSyncBodyVerticalSlideDock();
         setupBadgeThresholdInputStep10();
 
         if (typeof window.renderTreeCardStatusBadges === 'function') {
             window.renderTreeCardStatusBadges();
         } else {
-            window.syncBadgeTitlesToTextV34();
+            window.syncBadgeTitlesToTextV41();
         }
         window.hideMaintSectionInNavigatorIfUnderDirector();
 
         [150, 400, 900, 1800].forEach(d => {
             setTimeout(() => {
-                setupHeaderNavigatorIconAndHideDropdownItem();
+                buildAndSyncBodyVerticalSlideDock();
                 setupBadgeThresholdInputStep10();
-                window.syncBadgeTitlesToTextV34();
+                window.syncBadgeTitlesToTextV41();
                 window.hideMaintSectionInNavigatorIfUnderDirector();
             }, d);
         });
 
         const treeWrapper = document.getElementById('tree-wrapper') || document.body;
         const observer = new MutationObserver(() => {
-            if (!isSyncingV34) {
-                window.syncBadgeTitlesToTextV34();
+            if (!isSyncingV41) {
+                window.syncBadgeTitlesToTextV41();
             }
         });
         observer.observe(treeWrapper, { childList: true, subtree: true });
@@ -14125,33 +14547,33 @@ if (document.readyState === 'loading') {
                     if (typeof window.renderTreeCardStatusBadges === 'function') {
                         window.renderTreeCardStatusBadges();
                     }
-                    window.syncBadgeTitlesToTextV34();
+                    window.syncBadgeTitlesToTextV41();
                 }, 30);
             }
         }, true);
 
         document.addEventListener('change', () => {
             setTimeout(() => {
-                window.syncBadgeTitlesToTextV34();
+                window.syncBadgeTitlesToTextV41();
                 window.hideMaintSectionInNavigatorIfUnderDirector();
-                updateHeaderNavIconActiveState();
+                updateAllVerticalDockIconsActiveState();
             }, 50);
         }, true);
 
         document.addEventListener('click', () => {
             setTimeout(() => {
-                setupHeaderNavigatorIconAndHideDropdownItem();
+                buildAndSyncBodyVerticalSlideDock();
                 setupBadgeThresholdInputStep10();
-                window.syncBadgeTitlesToTextV34();
+                window.syncBadgeTitlesToTextV41();
                 window.hideMaintSectionInNavigatorIfUnderDirector();
-                updateHeaderNavIconActiveState();
+                updateAllVerticalDockIconsActiveState();
             }, 80);
         }, true);
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bootV34);
+        document.addEventListener('DOMContentLoaded', bootV41);
     } else {
-        bootV34();
+        bootV41();
     }
 })();
