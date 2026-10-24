@@ -13406,10 +13406,10 @@ if (document.readyState === 'loading') {
     }
 })();
 // ============================================================================
-// 🏷️ [검색 돋보기 아이콘 '검색창 우측' 완벽 복원 + 줌 확대('+') 아이콘 복원/보호 + 헤더 3대 아이콘 고정 패치 V41]
-// 1. 슬라이드 박스로 잘못 이동된 '검색 돋보기 아이콘'과 계보도 '확대(+) 아이콘'을 즉시 원래 자리로 자동 복원!
-// 2. 돋보기 SVG, 검색창 인접 버튼, 줌 컨트롤('+', '-', '⊙', '↗↙')을 100% 판별하여 슬라이드 박스 이동 원천 차단!
-// 3. 헤더에는 [검색 돋보기], [표시설정(톱니바퀴)], [잠금(자물쇠)]만 남기고 나머지는 모두 세로 슬라이드 박스에 배치!
+// 🏷️ [헤더 4개 아이콘 슬라이드바 완벽 이동 + 검색 돋보기 고정 + 줌 확대('+') 복원 패치 V41]
+// 1. 보내주신 V41의 헤더 아이콘 추출 방식을 그대로 사용하여 헤더의 4개 아이콘을 세로 슬라이드 바로 100% 이동!
+// 2. 상단 헤더 높이(rect.top <= 45px) 조건과 줌 컨트롤 보호 및 자동 복구 로직으로 확대('+') 버튼 완벽 유지!
+// 3. 수정하신 툴팁 명칭('매출/구독', '실적/수당', '내비게이터', '매출 기간 검색') 100% 그대로 유지!
 // ============================================================================
 (function initRestoreSearchIconAndVerticalSlideDockV41() {
     if (window._bsBadgeAndNavFinalV41) return;
@@ -13603,7 +13603,105 @@ if (document.readyState === 'loading') {
     }
 
     // ------------------------------------------------------------------------
-    // [2] 🌟 검색 돋보기 아이콘 & 줌 확대('+') 아이콘 복원/보호 & 헤더 3대 아이콘 고정!
+    // [2] 🌟 줌 컨트롤 박스('-', '⊙', '↗↙', '+') 보호 및 확대('+') 아이콘 복원!
+    // ------------------------------------------------------------------------
+    function findZoomControlBox() {
+        const bySel = document.querySelector('.zoom-controls, #zoomControls, #zoom-controls, [class*="zoom-control" i]');
+        if (bySel) return bySel;
+
+        // 본문 영역(top > 45px)에서 축소('-') 아이콘이나 리셋('⊙') 아이콘이 들어있는 박스 탐색
+        const allBtns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+        for (const b of allBtns) {
+            if (b.closest('#bsBodyVerticalSlideDock')) continue;
+            const r = b.getBoundingClientRect();
+            if (r.top >= 46 && r.top <= 160 && r.left > window.innerWidth * 0.4) {
+                if (b.parentElement && b.parentElement.children.length >= 2 && b.parentElement.children.length <= 6) {
+                    return b.parentElement;
+                }
+            }
+        }
+        return null;
+    }
+
+    function ensureZoomPlusButtonRestored() {
+        try {
+            const zoomBox = findZoomControlBox();
+            if (!zoomBox) return null;
+
+            // 1) 만약 세로 슬라이드 박스(#bsBodyVerticalSlideTray)에 줌 버튼('+')이 잘못 들어가 있다면 즉시 줌 박스로 복원!
+            const tray = document.getElementById('bsBodyVerticalSlideTray');
+            if (tray) {
+                Array.from(tray.children).forEach(el => {
+                    if (
+                        el.id === 'bsVDockSalesWidgetBtn' ||
+                        el.id === 'bsVDockPerfWidgetBtn' ||
+                        el.id === 'bsVDockBizNavBtn' ||
+                        el.id === 'bsVDockPeriodSearchBtn' ||
+                        el.classList.contains('bs-vdock-divider')
+                    ) {
+                        return;
+                    }
+                    const meta = ((el.id || '') + ' ' + (el.title || '') + ' ' + (el.getAttribute('onclick') || '') + ' ' + (el.innerText || '') + ' ' + (el.innerHTML || '')).toLowerCase();
+                    const isPlus =
+                        meta.includes('zoom') || meta.includes('확대') ||
+                        (el.innerText || '').trim() === '+' || (el.innerText || '').trim() === '＋' ||
+                        (!meta.includes('<circle') && !meta.includes('<rect') && meta.includes('12') && meta.includes('5') && meta.includes('19'));
+
+                    if (isPlus) {
+                        el.classList.remove('bs-vdock-icon-btn', 'bs-v30-hide');
+                        el.style.removeProperty('display');
+                        zoomBox.appendChild(el);
+                    }
+                });
+            }
+
+            // 2) 줌 박스에 현재 버튼이 3개('-', '⊙', '↗↙')뿐이고 '+' 버튼이 없다면 즉시 끝에 생성!
+            const children = Array.from(zoomBox.children);
+            if (children.length === 3 && !document.getElementById('bsRestoredZoomInBtn')) {
+                const sampleBtn = children[0];
+                const plusBtn = document.createElement(sampleBtn.tagName || 'BUTTON');
+                plusBtn.id = 'bsRestoredZoomInBtn';
+                plusBtn.className = sampleBtn.className || '';
+                if (sampleBtn.getAttribute('style')) {
+                    plusBtn.setAttribute('style', sampleBtn.getAttribute('style'));
+                }
+                plusBtn.title = '확대';
+                plusBtn.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                `;
+                plusBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const minusOnclick = sampleBtn.getAttribute('onclick') || '';
+                    if (minusOnclick) {
+                        const plusCode = minusOnclick
+                            .replace(/zoomOut/gi, 'zoomIn')
+                            .replace(/zoom_out/gi, 'zoom_in')
+                            .replace(/'out'/gi, "'in'")
+                            .replace(/"out"/gi, '"in"')
+                            .replace(/-\s*0\./g, '0.')
+                            .replace(/-\s*1/g, '1');
+                        if (plusCode !== minusOnclick) {
+                            try { new Function(plusCode)(); return; } catch (err) {}
+                        }
+                    }
+                    if (typeof window.zoomIn === 'function') { window.zoomIn(); return; }
+                    if (typeof window.changeZoom === 'function') { window.changeZoom(0.1); return; }
+                    if (typeof window.zoomTree === 'function') { window.zoomTree(0.1); return; }
+                });
+                zoomBox.appendChild(plusBtn);
+            }
+
+            return zoomBox;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // [3] 🌟 보내주신 V41의 헤더 아이콘 추출 로직 복원 (헤더 4개 아이콘 -> 슬라이드바 이동!)
     // ------------------------------------------------------------------------
     function findSettingCheckboxByKeywords(keywords) {
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
@@ -13655,76 +13753,13 @@ if (document.readyState === 'loading') {
         });
     }
 
-    // 헤더의 검색어 입력창('회원번호 / 이름') 요소 찾기
     function findHeaderSearchInput() {
         const headerEl = document.querySelector('header, .header, .top-bar') || document.body;
         return headerEl.querySelector('input[placeholder*="회원"], input[placeholder*="이름"], input[placeholder*="검색"], input[type="search"], #searchInput');
     }
 
-    // 🌟 계보도 우측 상단 줌 컨트롤 박스('-', '⊙', '↗↙', '+') 컨테이너 찾기
-    function findZoomControlBoxContainer() {
-        const bySelector = document.querySelector('.zoom-controls, #zoomControls, #zoom-controls, [class*="zoom-control" i]');
-        if (bySelector) return bySelector;
-
-        const allBtns = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]'));
-        for (const b of allBtns) {
-            if (b.closest('#bsBodyVerticalSlideDock')) continue;
-            const r = b.getBoundingClientRect();
-            if (r.top < 45 || r.top > 160) continue;
-
-            const meta = ((b.id || '') + ' ' + (b.title || '') + ' ' + (b.getAttribute('onclick') || '') + ' ' + (b.innerText || '') + ' ' + (b.innerHTML || '')).toLowerCase();
-            if (
-                meta.includes('zoomout') || meta.includes('zoom_out') || meta.includes('축소') ||
-                (b.innerText || '').trim() === '-' || (b.innerText || '').trim() === '−' ||
-                (meta.includes('x1="5"') && meta.includes('y1="12"') && meta.includes('x2="19"') && !meta.includes('y1="5"'))
-            ) {
-                return b.parentElement;
-            }
-        }
-        return null;
-    }
-
-    // 🌟 해당 요소가 계보도 줌 컨트롤 버튼('+', '-', '⊙', '↗↙')인지 판별하는 함수!
-    function isZoomControlButton(el) {
-        if (!el) return false;
-        const zoomBox = findZoomControlBoxContainer();
-        if (zoomBox && zoomBox.contains(el)) return true;
-
-        const txt = (el.innerText || '').trim();
-        if (txt === '+' || txt === '＋' || txt === '-' || txt === '−') return true;
-
-        const meta = (
-            (el.id || '') + ' ' +
-            (el.title || '') + ' ' +
-            (el.className || '') + ' ' +
-            (el.getAttribute('onclick') || '') + ' ' +
-            (el.getAttribute('aria-label') || '') + ' ' +
-            (el.innerHTML || '')
-        ).toLowerCase();
-
-        if (
-            meta.includes('zoomin') || meta.includes('zoom_in') || meta.includes('zoomout') ||
-            meta.includes('zoomreset') || meta.includes('확대') || meta.includes('축소')
-        ) {
-            return true;
-        }
-
-        // 순수 '+' 플러스 아이콘 SVG 판별 (수직선 + 수평선 십자 구조)
-        if (!meta.includes('<circle') && !meta.includes('<rect') && !meta.includes('<polygon')) {
-            const hasVertLine = (meta.includes('x1="12"') && meta.includes('x2="12"')) || meta.includes('m12 5v14') || meta.includes('m12,5v14');
-            const hasHorizLine = (meta.includes('y1="12"') && meta.includes('y2="12"')) || meta.includes('m5 12h14') || meta.includes('m5,12h14');
-            if (hasVertLine && hasHorizLine) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    // 🌟 해당 요소가 '검색 돋보기 아이콘'인지 100% 정확히 판별하는 함수!
     function isSearchMagnifierIcon(el) {
         if (!el) return false;
-        // 우리가 직접 만든 매출 기간 검색 버튼(달력+돋보기)은 제외
         if (el.id === 'bsVDockPeriodSearchBtn') return false;
 
         const meta = (
@@ -13736,14 +13771,10 @@ if (document.readyState === 'loading') {
             (el.innerHTML || '')
         ).toLowerCase();
 
-        // 1) 키워드 판별 (search, 검색, 돋보기, findMember 등)
         if (meta.includes('search') || meta.includes('검색') || meta.includes('돋보기') || meta.includes('findmember') || meta.includes('handlesearch')) {
             return true;
         }
 
-        // 2) 돋보기 SVG 기하학적 특징 판별:
-        //    표준 돋보기 아이콘은 <circle cx="11" cy="11" r="8"> 와 <line x1="21" y1="21" x2="16.65" y2="16.65"> (또는 path m21 21-4.3-4.3)으로 구성됨!
-        //    (단, 달력 아이콘 rect가 없는 순수 돋보기만 해당)
         if (!meta.includes('<rect') && meta.includes('<circle')) {
             if (
                 meta.includes('16.65') ||
@@ -13757,7 +13788,6 @@ if (document.readyState === 'loading') {
             }
         }
 
-        // 3) 검색 입력창과 같은 부모 컨테이너 안에 들어있는 버튼인 경우
         const searchInp = findHeaderSearchInput();
         if (searchInp && searchInp.parentElement && searchInp.parentElement.contains(el)) {
             return true;
@@ -13766,17 +13796,17 @@ if (document.readyState === 'loading') {
         return false;
     }
 
-    // 🌟 만약 이전 버전에 의해 '검색 돋보기 아이콘' 또는 '줌 확대(+) 아이콘'이 슬라이드 박스로 옮겨져 있다면 즉시 원래 자리로 복원!
     function restoreSearchIconToHeaderIfMoved() {
+        ensureZoomPlusButtonRestored();
+
         const searchInp = findHeaderSearchInput();
-        const zoomBox = findZoomControlBoxContainer();
+        if (!searchInp) return;
 
         const tray = document.getElementById('bsBodyVerticalSlideTray');
         if (!tray) return;
 
         const children = Array.from(tray.children);
         children.forEach(el => {
-            // V41에서 만든 4대 고정 버튼 및 구분선은 패스
             if (
                 el.id === 'bsVDockSalesWidgetBtn' ||
                 el.id === 'bsVDockPerfWidgetBtn' ||
@@ -13787,17 +13817,7 @@ if (document.readyState === 'loading') {
                 return;
             }
 
-            // 1) 줌 확대('+') 아이콘이 슬라이드 박스에 들어있다면 즉시 줌 컨트롤 박스 우측 끝으로 복원!
-            if (isZoomControlButton(el)) {
-                el.classList.remove('bs-vdock-icon-btn');
-                if (zoomBox) {
-                    zoomBox.appendChild(el);
-                }
-                return;
-            }
-
-            // 2) 검색 돋보기 아이콘이 슬라이드 박스에 들어있다면 검색어 입력창 바로 우측으로 복원!
-            if (isSearchMagnifierIcon(el) && searchInp) {
+            if (isSearchMagnifierIcon(el)) {
                 el.classList.remove('bs-vdock-icon-btn');
                 const searchContainer = searchInp.parentElement;
                 if (searchContainer) {
@@ -13811,12 +13831,9 @@ if (document.readyState === 'loading') {
         });
     }
 
-    // 🌟 아이콘이 헤더/본문 원래 자리에 남겨야 할 아이콘([검색 돋보기], [줌 확대 '+'], [표시설정 톱니바퀴], [잠금 자물쇠])인지 판별!
     function shouldKeepIconInHeader(el) {
         if (!el) return false;
-
-        // 1) 검색 돋보기 아이콘 또는 줌 컨트롤('+') 버튼이면 무조건 원래 자리에 유지!
-        if (isSearchMagnifierIcon(el) || isZoomControlButton(el)) return true;
+        if (isSearchMagnifierIcon(el)) return true;
 
         const meta = (
             (el.id || '') + ' ' +
@@ -13827,7 +13844,17 @@ if (document.readyState === 'loading') {
             (el.innerHTML || '')
         ).toLowerCase();
 
-        // 클라우드(cloud/upload/backup/db), 교차화살표(shuffle), 계보도(sitemap/tree), 스파클(sparkle/star)은 무조건 슬라이드 박스로 이동(false 반환)!
+        // 줌 컨트롤('+') 아이콘은 절대 이동하지 않음!
+        if (
+            el.id === 'bsRestoredZoomInBtn' ||
+            meta.includes('zoom') || meta.includes('확대') || meta.includes('축소') ||
+            (el.innerText || '').trim() === '+' ||
+            (!meta.includes('<circle') && !meta.includes('<rect') && meta.includes('12') && meta.includes('5') && meta.includes('19'))
+        ) {
+            return true;
+        }
+
+        // 클라우드(cloud/upload/backup/db), 교차화살표(shuffle), 계보도(sitemap/tree), 스파클(sparkle/star)은 무조건 슬라이드 박스로 이동!
         if (
             meta.includes('cloud') || meta.includes('upload') || meta.includes('backup') ||
             meta.includes('sync') || meta.includes('db') || meta.includes('클라우드') ||
@@ -13838,13 +13865,11 @@ if (document.readyState === 'loading') {
             return false;
         }
 
-        // 2) 표시설정(톱니바퀴) 판별
         const isGear =
             meta.includes('setting') || meta.includes('설정') || meta.includes('표시') ||
             meta.includes('gear') || meta.includes('cog') || meta.includes('19.4 15') || meta.includes('19.4,15');
         if (isGear) return true;
 
-        // 3) 잠금/로그아웃(자물쇠) 판별
         const isLock =
             meta.includes('lock') || meta.includes('잠금') || meta.includes('로그아웃') ||
             meta.includes('logout') || meta.includes('m7 11v7') || meta.includes('m7 11v-4') ||
@@ -13854,22 +13879,18 @@ if (document.readyState === 'loading') {
         return false;
     }
 
+    // 🌟 보내주신 V41의 추출 방식 그대로 사용하되, rect.top <= 45 (상단 헤더 내부) 조건으로 줌 컨트롤 박스만 제외!
     function extractRemainingHeaderIconsToMove() {
         const headerEl = document.querySelector('header, .header, .top-bar') || document.body;
         const searchInp = findHeaderSearchInput();
-        const zoomBox = findZoomControlBoxContainer();
+        const zoomBox = ensureZoomPlusButtonRestored();
 
-        // 검색어 입력창 및 그 우측 돋보기 버튼 영역(searchInp.parentElement 전체)의 오른쪽 끝 좌표를 기준점으로 설정
         let minRightToolbarX = 350;
-        let maxHeaderIconTop = 48; // 기본 상단 헤더 높이 제한 (줌 컨트롤 박스는 top이 55px 이상이므로 원천 배제!)
         if (searchInp) {
             const searchBoxEl = searchInp.parentElement || searchInp;
             const sbRect = searchBoxEl.getBoundingClientRect();
             if (sbRect.right > 0) {
-                minRightToolbarX = sbRect.right + 12; // 검색창 박스(돋보기 포함) 우측 바깥의 아이콘들만 탐색!
-            }
-            if (sbRect.bottom > 0) {
-                maxHeaderIconTop = sbRect.bottom + 8; // 검색창과 같은 상단 헤더 줄에 있는 아이콘만 탐색!
+                minRightToolbarX = sbRect.right + 12;
             }
         }
 
@@ -13878,13 +13899,12 @@ if (document.readyState === 'loading') {
 
         svgList.forEach(svg => {
             if (svg.closest('#bsBodyVerticalSlideDock') || svg.closest('#settingsDropdown')) return;
-            // 검색창 부모 박스 안에 들어있는 돋보기 SVG는 절대 건드리지 않음!
             if (searchInp && searchInp.parentElement && searchInp.parentElement.contains(svg)) return;
-            // 🌟 계보도 우측 상단 줌 컨트롤 박스('-', '⊙', '↗↙', '+') 내부 아이콘은 절대 건드리지 않음!
             if (zoomBox && zoomBox.contains(svg)) return;
 
             const rect = svg.getBoundingClientRect();
-            if (rect.width === 0 || rect.top > maxHeaderIconTop || rect.left < minRightToolbarX) return;
+            // 🌟 상단 헤더 아이콘의 top은 약 10~35px이고, 본문 줌 컨트롤 박스는 top이 52px 이상이므로 rect.top > 45 조건으로 완벽 분리!
+            if (rect.width === 0 || rect.top > 45 || rect.left < minRightToolbarX) return;
 
             let wrapper = svg.closest('button, a, label') || svg.parentElement;
             if (!wrapper || wrapper === headerEl || wrapper === document.body) return;
@@ -13955,8 +13975,6 @@ if (document.readyState === 'loading') {
     function buildAndSyncBodyVerticalSlideDock() {
         ensureVerticalDockAndBadgeCSSV41();
         hideMovedSettingsItemsInDropdown();
-
-        // 🌟 먼저 슬라이드 박스에 잘못 들어가 있는 검색 돋보기 아이콘 및 줌 확대(+) 아이콘이 있다면 즉시 복원!
         restoreSearchIconToHeaderIfMoved();
 
         let dock = document.getElementById('bsBodyVerticalSlideDock');
@@ -14098,11 +14116,12 @@ if (document.readyState === 'loading') {
             }
         }
 
+        ensureZoomPlusButtonRestored();
         updateAllVerticalDockIconsActiveState();
     }
 
     // ------------------------------------------------------------------------
-    // [3] 내비게이터 창 너비(Width) 영구 기억 & 직급별 높이 자동 조절 유지
+    // [4] 내비게이터 창 너비(Width) 영구 기억 & 직급별 높이 자동 조절 유지
     // ------------------------------------------------------------------------
     function isDirectorOrAboveRank(rankStr) {
         const r = String(rankStr || '').trim().toUpperCase();
@@ -14400,7 +14419,7 @@ if (document.readyState === 'loading') {
     }
 
     // ------------------------------------------------------------------------
-    // [4] 카드 배지 표시 & 10% 단위 기준값 연동
+    // [5] 카드 배지 표시 & 10% 단위 기준값 연동
     // ------------------------------------------------------------------------
     const origEvalStatus = window.evaluateMemberCardBadgeStatus;
     if (typeof origEvalStatus === 'function' && !origEvalStatus._v41Wrapped) {
