@@ -9607,7 +9607,7 @@ if (document.readyState === 'loading') {
             aiBtn = document.createElement('button');
             aiBtn.id = 'customAiAdvisorBtn';
             aiBtn.type = 'button';
-            aiBtn.setAttribute('title', 'AI 전략 어드바이저 (최적 매출 배치 시뮬레이션)');
+            aiBtn.setAttribute('title', 'AI 어드바이저');
             aiBtn.style.cssText = `
                 display: inline-flex;
                 align-items: center;
@@ -12443,7 +12443,7 @@ if (document.readyState === 'loading') {
             switchBtn = document.createElement('button');
             switchBtn.id = 'bsRootSwitchBtn';
             switchBtn.type = 'button';
-            switchBtn.title = '최상단 기준 카드 스위치 (클릭하여 카드 선택 및 이전 선택 기록 보기)';
+            switchBtn.title = '가상모드';
             switchBtn.style.cssText = `
                 display: inline-flex;
                 align-items: center;
@@ -13406,14 +13406,14 @@ if (document.readyState === 'loading') {
     }
 })();
 // ============================================================================
-// 🏷️ [헤더 4개 아이콘 슬라이드바 완벽 이동 + 검색 돋보기 고정 + 줌 확대('+') 복원 패치 V41]
-// 1. 보내주신 V41의 헤더 아이콘 추출 방식을 그대로 사용하여 헤더의 4개 아이콘을 세로 슬라이드 바로 100% 이동!
-// 2. 상단 헤더 높이(rect.top <= 45px) 조건과 줌 컨트롤 보호 및 자동 복구 로직으로 확대('+') 버튼 완벽 유지!
+// 🏷️ [배지 달성률 '원형 - / + 버튼 UI' 적용 + 헤더 4개 아이콘 슬라이드바 이동 + 줌 확대('+') 복원 패치 V43]
+// 1. 표시설정의 '배지 표시 기준 (달성률)'을 원형 마이너스(-) / 플러스(+) 버튼과 중앙 % 표시 UI로 변경!
+// 2. 헤더의 4개 아이콘을 세로 슬라이드 바로 이동하고 검색 돋보기 및 줌 확대('+') 버튼 완벽 보호/복원!
 // 3. 수정하신 툴팁 명칭('매출/구독', '실적/수당', '내비게이터', '매출 기간 검색') 100% 그대로 유지!
 // ============================================================================
-(function initRestoreSearchIconAndVerticalSlideDockV41() {
-    if (window._bsBadgeAndNavFinalV41) return;
-    window._bsBadgeAndNavFinalV41 = true;
+(function initCustomStepperAndVerticalSlideDockV43() {
+    if (window._bsBadgeAndNavFinalV43) return;
+    window._bsBadgeAndNavFinalV43 = true;
 
     // 1) 이전 패치 스타일 태그 청소
     document.querySelectorAll('style[id*="bs-badge-"], style[id*="bs-final-clean-badge"]').forEach(s => s.remove());
@@ -13422,10 +13422,10 @@ if (document.readyState === 'loading') {
         if (el) el.remove();
     });
 
-    function ensureVerticalDockAndBadgeCSSV41() {
-        if (document.getElementById('bs-badge-final-v41-css')) return;
+    function ensureVerticalDockAndBadgeCSSV43() {
+        if (document.getElementById('bs-badge-final-v43-css')) return;
         const st = document.createElement('style');
-        st.id = 'bs-badge-final-v41-css';
+        st.id = 'bs-badge-final-v43-css';
         st.textContent = [
             '.node-card, .node-card * {',
             '    animation: none !important;',
@@ -13440,6 +13440,48 @@ if (document.readyState === 'loading') {
             '}',
             '.bs-v30-hide {',
             '    display: none !important;',
+            '}',
+            '/* 🌟 배지 표시 기준 원형 - / + 스테퍼 UI 스타일 */',
+            '.bs-pct-stepper-wrap {',
+            '    display: flex !important;',
+            '    align-items: center !important;',
+            '    justify-content: center !important;',
+            '    gap: 20px !important;',
+            '    width: 100% !important;',
+            '    padding: 8px 0 4px 0 !important;',
+            '    margin-top: 4px !important;',
+            '    user-select: none !important;',
+            '}',
+            '.bs-pct-stepper-btn {',
+            '    width: 34px !important;',
+            '    height: 34px !important;',
+            '    min-width: 34px !important;',
+            '    min-height: 34px !important;',
+            '    border-radius: 50% !important;',
+            '    background: #2b303c !important;',
+            '    border: 1px solid rgba(255, 255, 255, 0.06) !important;',
+            '    color: #e5e7eb !important;',
+            '    display: inline-flex !important;',
+            '    align-items: center !important;',
+            '    justify-content: center !important;',
+            '    cursor: pointer !important;',
+            '    padding: 0 !important;',
+            '    transition: background 0.15s ease, transform 0.1s ease !important;',
+            '}',
+            '.bs-pct-stepper-btn:hover {',
+            '    background: #3b4252 !important;',
+            '    color: #ffffff !important;',
+            '}',
+            '.bs-pct-stepper-btn:active {',
+            '    transform: scale(0.94) !important;',
+            '}',
+            '.bs-pct-stepper-val {',
+            '    font-size: 14px !important;',
+            '    font-weight: 600 !important;',
+            '    color: #f3f4f6 !important;',
+            '    min-width: 44px !important;',
+            '    text-align: center !important;',
+            '    letter-spacing: 0.3px !important;',
             '}',
             '/* 🌟 본문 영역 우측 중앙 세로형(Vertical) 자동 슬라이드 독 */',
             '#bsBodyVerticalSlideDock {',
@@ -13534,7 +13576,7 @@ if (document.readyState === 'loading') {
     }
 
     // ------------------------------------------------------------------------
-    // [1] 표시설정의 '배지 표시 기준 (달성률)'을 10% 단위(step="10")로 변경
+    // [1] 🌟 표시설정의 '배지 표시 기준 (달성률)'을 원형 [-] 80% [+] 스테퍼 UI로 변경!
     // ------------------------------------------------------------------------
     function normalizeToStep10(val) {
         let num = parseInt(val, 10);
@@ -13560,26 +13602,104 @@ if (document.readyState === 'loading') {
                 if (inp.getAttribute('max') !== '100') inp.setAttribute('max', '100');
 
                 const curVal = parseInt(inp.value, 10);
-                if (isNaN(curVal) || curVal < 10) {
-                    const saved = normalizeToStep10(localStorage.getItem('bs_badge_threshold_pct') || '80');
-                    inp.value = String(saved);
-                } else if (curVal % 10 !== 0) {
-                    const snapped = normalizeToStep10(curVal);
-                    inp.value = String(snapped);
-                    localStorage.setItem('bs_badge_threshold_pct', String(snapped));
+                let validVal = normalizeToStep10(localStorage.getItem('bs_badge_threshold_pct') || '80');
+                if (!isNaN(curVal) && curVal >= 10) {
+                    validVal = normalizeToStep10(curVal);
+                    localStorage.setItem('bs_badge_threshold_pct', String(validVal));
                 }
+                inp.value = String(validVal);
 
-                if (!inp._v41Step10Bound) {
-                    inp._v41Step10Bound = true;
-                    inp.addEventListener('change', () => {
-                        const snapped = normalizeToStep10(inp.value);
-                        inp.value = String(snapped);
-                        localStorage.setItem('bs_badge_threshold_pct', String(snapped));
-                        if (typeof window.renderTreeCardStatusBadges === 'function') {
-                            window.renderTreeCardStatusBadges();
+                // 🌟 기존 숫자 input 및 '% 이상' 텍스트를 숨기고 원형 [-] 80% [+] 스테퍼 장착!
+                let rowContainer = inp.closest('div');
+                if (rowContainer) {
+                    // 만약 inp의 직계 부모가 작은 우측 래퍼(span/div)라면 한 단계 위쪽 행(row) 컨테이너를 찾음
+                    if (rowContainer.parentElement && (rowContainer.parentElement.innerText || '').includes('배지 표시 기준') && !(rowContainer.innerText || '').includes('배지 표시 기준')) {
+                        rowContainer = rowContainer.parentElement;
+                    }
+
+                    // 기존 input과 '% 이상' 글자 숨기기
+                    inp.style.setProperty('display', 'none', 'important');
+                    Array.from(inp.parentElement.childNodes).forEach(node => {
+                        if (node !== inp && node.nodeType === 3 && (node.textContent || '').includes('%')) {
+                            node.textContent = '';
+                        } else if (node !== inp && node.nodeType === 1 && !node.classList.contains('bs-pct-stepper-wrap')) {
+                            const t = (node.innerText || '').trim();
+                            if (t.includes('%') || t.includes('이상')) {
+                                node.style.setProperty('display', 'none', 'important');
+                            }
                         }
-                        window.syncBadgeTitlesToTextV41();
                     });
+
+                    // 행 레이아웃을 위(라벨) / 아래(원형 버튼 스테퍼) 구조로 깔끔하게 정렬
+                    rowContainer.style.setProperty('display', 'flex', 'important');
+                    rowContainer.style.setProperty('flex-direction', 'column', 'important');
+                    rowContainer.style.setProperty('align-items', 'stretch', 'important');
+                    rowContainer.style.setProperty('gap', '6px', 'important');
+
+                    let stepper = rowContainer.querySelector('.bs-pct-stepper-wrap');
+                    if (!stepper) {
+                        stepper = document.createElement('div');
+                        stepper.className = 'bs-pct-stepper-wrap';
+
+                        const minusBtn = document.createElement('button');
+                        minusBtn.type = 'button';
+                        minusBtn.className = 'bs-pct-stepper-btn';
+                        minusBtn.title = '10% 감소';
+                        minusBtn.innerHTML = `
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        `;
+
+                        const valDisplay = document.createElement('span');
+                        valDisplay.className = 'bs-pct-stepper-val';
+                        valDisplay.textContent = `${validVal}%`;
+
+                        const plusBtn = document.createElement('button');
+                        plusBtn.type = 'button';
+                        plusBtn.className = 'bs-pct-stepper-btn';
+                        plusBtn.title = '10% 증가';
+                        plusBtn.innerHTML = `
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        `;
+
+                        const updatePctByDelta = (delta) => {
+                            const current = normalizeToStep10(inp.value || localStorage.getItem('bs_badge_threshold_pct') || '80');
+                            const next = Math.max(10, Math.min(100, current + delta));
+                            inp.value = String(next);
+                            valDisplay.textContent = `${next}%`;
+                            localStorage.setItem('bs_badge_threshold_pct', String(next));
+
+                            inp.dispatchEvent(new Event('input', { bubbles: true }));
+                            inp.dispatchEvent(new Event('change', { bubbles: true }));
+
+                            if (typeof window.renderTreeCardStatusBadges === 'function') {
+                                window.renderTreeCardStatusBadges();
+                            }
+                            window.syncBadgeTitlesToTextV43();
+                        };
+
+                        minusBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            updatePctByDelta(-10);
+                        });
+
+                        plusBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            updatePctByDelta(10);
+                        });
+
+                        stepper.appendChild(minusBtn);
+                        stepper.appendChild(valDisplay);
+                        stepper.appendChild(plusBtn);
+                        rowContainer.appendChild(stepper);
+                    } else {
+                        const valDisplay = stepper.querySelector('.bs-pct-stepper-val');
+                        if (valDisplay) valDisplay.textContent = `${validVal}%`;
+                    }
                 }
             }
         });
@@ -13590,7 +13710,8 @@ if (document.readyState === 'loading') {
         const inputs = document.querySelectorAll('input[type="number"]');
         for (const inp of inputs) {
             const pTxt = (inp.parentElement ? inp.parentElement.innerText : '') || '';
-            if (pTxt.includes('배지') || pTxt.includes('달성률') || (inp.id || '').toLowerCase().includes('badge')) {
+            const rowTxt = (inp.closest('div') ? inp.closest('div').innerText : '') || '';
+            if (pTxt.includes('배지') || pTxt.includes('달성률') || rowTxt.includes('배지') || (inp.id || '').toLowerCase().includes('badge')) {
                 const v = parseInt(inp.value, 10);
                 if (!isNaN(v) && v >= 10 && v <= 100) {
                     const step10Val = Math.max(10, Math.min(100, Math.round(v / 10) * 10));
@@ -13603,13 +13724,12 @@ if (document.readyState === 'loading') {
     }
 
     // ------------------------------------------------------------------------
-    // [2] 🌟 줌 컨트롤 박스('-', '⊙', '↗↙', '+') 보호 및 확대('+') 아이콘 복원!
+    // [2] 줌 컨트롤 박스('-', '⊙', '↗↙', '+') 보호 및 확대('+') 아이콘 복원
     // ------------------------------------------------------------------------
     function findZoomControlBox() {
         const bySel = document.querySelector('.zoom-controls, #zoomControls, #zoom-controls, [class*="zoom-control" i]');
         if (bySel) return bySel;
 
-        // 본문 영역(top > 45px)에서 축소('-') 아이콘이나 리셋('⊙') 아이콘이 들어있는 박스 탐색
         const allBtns = Array.from(document.querySelectorAll('button, div[role="button"]'));
         for (const b of allBtns) {
             if (b.closest('#bsBodyVerticalSlideDock')) continue;
@@ -13628,7 +13748,6 @@ if (document.readyState === 'loading') {
             const zoomBox = findZoomControlBox();
             if (!zoomBox) return null;
 
-            // 1) 만약 세로 슬라이드 박스(#bsBodyVerticalSlideTray)에 줌 버튼('+')이 잘못 들어가 있다면 즉시 줌 박스로 복원!
             const tray = document.getElementById('bsBodyVerticalSlideTray');
             if (tray) {
                 Array.from(tray.children).forEach(el => {
@@ -13655,7 +13774,6 @@ if (document.readyState === 'loading') {
                 });
             }
 
-            // 2) 줌 박스에 현재 버튼이 3개('-', '⊙', '↗↙')뿐이고 '+' 버튼이 없다면 즉시 끝에 생성!
             const children = Array.from(zoomBox.children);
             if (children.length === 3 && !document.getElementById('bsRestoredZoomInBtn')) {
                 const sampleBtn = children[0];
@@ -13701,7 +13819,7 @@ if (document.readyState === 'loading') {
     }
 
     // ------------------------------------------------------------------------
-    // [3] 🌟 보내주신 V41의 헤더 아이콘 추출 로직 복원 (헤더 4개 아이콘 -> 슬라이드바 이동!)
+    // [3] 헤더 아이콘 추출 로직 (헤더 4개 아이콘 -> 세로 슬라이드바 이동)
     // ------------------------------------------------------------------------
     function findSettingCheckboxByKeywords(keywords) {
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
@@ -13844,7 +13962,6 @@ if (document.readyState === 'loading') {
             (el.innerHTML || '')
         ).toLowerCase();
 
-        // 줌 컨트롤('+') 아이콘은 절대 이동하지 않음!
         if (
             el.id === 'bsRestoredZoomInBtn' ||
             meta.includes('zoom') || meta.includes('확대') || meta.includes('축소') ||
@@ -13854,7 +13971,6 @@ if (document.readyState === 'loading') {
             return true;
         }
 
-        // 클라우드(cloud/upload/backup/db), 교차화살표(shuffle), 계보도(sitemap/tree), 스파클(sparkle/star)은 무조건 슬라이드 박스로 이동!
         if (
             meta.includes('cloud') || meta.includes('upload') || meta.includes('backup') ||
             meta.includes('sync') || meta.includes('db') || meta.includes('클라우드') ||
@@ -13879,7 +13995,6 @@ if (document.readyState === 'loading') {
         return false;
     }
 
-    // 🌟 보내주신 V41의 추출 방식 그대로 사용하되, rect.top <= 45 (상단 헤더 내부) 조건으로 줌 컨트롤 박스만 제외!
     function extractRemainingHeaderIconsToMove() {
         const headerEl = document.querySelector('header, .header, .top-bar') || document.body;
         const searchInp = findHeaderSearchInput();
@@ -13898,12 +14013,11 @@ if (document.readyState === 'loading') {
         const iconWrappers = [];
 
         svgList.forEach(svg => {
-            if (svg.closest('#bsBodyVerticalSlideDock') || svg.closest('#settingsDropdown')) return;
+            if (svg.closest('#bsBodyVerticalSlideDock') || svg.closest('#settingsDropdown') || svg.closest('.bs-pct-stepper-wrap')) return;
             if (searchInp && searchInp.parentElement && searchInp.parentElement.contains(svg)) return;
             if (zoomBox && zoomBox.contains(svg)) return;
 
             const rect = svg.getBoundingClientRect();
-            // 🌟 상단 헤더 아이콘의 top은 약 10~35px이고, 본문 줌 컨트롤 박스는 top이 52px 이상이므로 rect.top > 45 조건으로 완벽 분리!
             if (rect.width === 0 || rect.top > 45 || rect.left < minRightToolbarX) return;
 
             let wrapper = svg.closest('button, a, label') || svg.parentElement;
@@ -13973,8 +14087,9 @@ if (document.readyState === 'loading') {
     }
 
     function buildAndSyncBodyVerticalSlideDock() {
-        ensureVerticalDockAndBadgeCSSV41();
+        ensureVerticalDockAndBadgeCSSV43();
         hideMovedSettingsItemsInDropdown();
+        setupBadgeThresholdInputStep10();
         restoreSearchIconToHeaderIfMoved();
 
         let dock = document.getElementById('bsBodyVerticalSlideDock');
@@ -14154,9 +14269,9 @@ if (document.readyState === 'loading') {
     function bindPopupWidthLock(win) {
         if (!win || win === window || win.closed) return;
 
-        if (!win._nativeResizeToV41 && typeof win.resizeTo === 'function') {
-            const nativeResizeTo = win._nativeResizeToV40 || win._nativeResizeToV39 || win._nativeResizeToV38 || win._nativeResizeToV37 || win._nativeResizeToV36 || win._nativeResizeToV35 || win._nativeResizeToV34 || win._nativeResizeToV33 || win.resizeTo.bind(win);
-            win._nativeResizeToV41 = nativeResizeTo;
+        if (!win._nativeResizeToV43 && typeof win.resizeTo === 'function') {
+            const nativeResizeTo = win._nativeResizeToV41 || win._nativeResizeToV40 || win._nativeResizeToV39 || win._nativeResizeToV38 || win._nativeResizeToV37 || win._nativeResizeToV36 || win._nativeResizeToV35 || win._nativeResizeToV34 || win._nativeResizeToV33 || win.resizeTo.bind(win);
+            win._nativeResizeToV43 = nativeResizeTo;
 
             win.resizeTo = function(reqW, reqH) {
                 const lockedW = getSavedUserNavWidth();
@@ -14169,8 +14284,8 @@ if (document.readyState === 'loading') {
             };
         }
 
-        if (!win._widthListenerBoundV41) {
-            win._widthListenerBoundV41 = true;
+        if (!win._widthListenerBoundV43) {
+            win._widthListenerBoundV43 = true;
             let resizeTimer = null;
             win.addEventListener('resize', () => {
                 if (isProgrammaticResizing) return;
@@ -14188,7 +14303,7 @@ if (document.readyState === 'loading') {
     }
 
     const origWindowOpen = window.open;
-    if (typeof origWindowOpen === 'function' && !origWindowOpen._v41Wrapped) {
+    if (typeof origWindowOpen === 'function' && !origWindowOpen._v43Wrapped) {
         const wrappedWindowOpen = function(url, target, features) {
             let modFeatures = String(features || '');
             if ((target && String(target).toLowerCase().includes('nav')) || modFeatures.includes('width=')) {
@@ -14206,7 +14321,7 @@ if (document.readyState === 'loading') {
             }
             return popWin;
         };
-        wrappedWindowOpen._v41Wrapped = true;
+        wrappedWindowOpen._v43Wrapped = true;
         window.open = wrappedWindowOpen;
     }
 
@@ -14259,7 +14374,7 @@ if (document.readyState === 'loading') {
                     ? Math.min(maxScreenH, Math.max(contentTotalH, 760))
                     : Math.min(maxScreenH, Math.max(contentTotalH, 420));
 
-                const nativeResize = win._nativeResizeToV41 || win._nativeResizeToV40 || win._nativeResizeToV39 || win._nativeResizeToV38 || win._nativeResizeToV37 || win._nativeResizeToV36 || win._nativeResizeToV35 || win._nativeResizeToV34 || win._nativeResizeToV33 || win.resizeTo.bind(win);
+                const nativeResize = win._nativeResizeToV43 || win._nativeResizeToV41 || win.resizeTo.bind(win);
                 if (Math.abs((win.outerWidth || 0) - lockedUserWidth) > 5 || Math.abs((win.outerHeight || 0) - targetHeight) > 12) {
                     isProgrammaticResizing = true;
                     try {
@@ -14385,7 +14500,7 @@ if (document.readyState === 'loading') {
     };
 
     const origRenderNav = window.renderBusinessNavigator;
-    if (typeof origRenderNav === 'function' && !origRenderNav._v41Wrapped) {
+    if (typeof origRenderNav === 'function' && !origRenderNav._v43Wrapped) {
         const wrappedRenderNav = async function(targetMemberId, optDoc) {
             isProgrammaticResizing = true;
             const r = await origRenderNav.apply(this, arguments);
@@ -14396,12 +14511,12 @@ if (document.readyState === 'loading') {
             }, 60);
             return r;
         };
-        wrappedRenderNav._v41Wrapped = true;
+        wrappedRenderNav._v43Wrapped = true;
         window.renderBusinessNavigator = wrappedRenderNav;
     }
 
     const origOpenNavPopup = window.openBizNavigatorPopupWindow;
-    if (typeof origOpenNavPopup === 'function' && !origOpenNavPopup._v41Wrapped) {
+    if (typeof origOpenNavPopup === 'function' && !origOpenNavPopup._v43Wrapped) {
         const wrappedOpenPopup = function(targetMemberId) {
             isProgrammaticResizing = true;
             const r = origOpenNavPopup.apply(this, arguments);
@@ -14414,7 +14529,7 @@ if (document.readyState === 'loading') {
             setTimeout(() => { isProgrammaticResizing = false; }, 550);
             return r;
         };
-        wrappedOpenPopup._v41Wrapped = true;
+        wrappedOpenPopup._v43Wrapped = true;
         window.openBizNavigatorPopupWindow = wrappedOpenPopup;
     }
 
@@ -14422,7 +14537,7 @@ if (document.readyState === 'loading') {
     // [5] 카드 배지 표시 & 10% 단위 기준값 연동
     // ------------------------------------------------------------------------
     const origEvalStatus = window.evaluateMemberCardBadgeStatus;
-    if (typeof origEvalStatus === 'function' && !origEvalStatus._v41Wrapped) {
+    if (typeof origEvalStatus === 'function' && !origEvalStatus._v43Wrapped) {
         const wrappedEval = function(memberId, teamMap, preferredOrderKey) {
             const res = origEvalStatus.apply(this, arguments);
             if (!res) return res;
@@ -14453,18 +14568,18 @@ if (document.readyState === 'loading') {
             res.showMaintBadge = (res.maintPct >= thresholdPct);
             return res;
         };
-        wrappedEval._v41Wrapped = true;
+        wrappedEval._v43Wrapped = true;
         window.evaluateMemberCardBadgeStatus = wrappedEval;
     }
 
-    let isSyncingV41 = false;
+    let isSyncingV43 = false;
 
-    window.syncBadgeTitlesToTextV41 = function() {
-        if (isSyncingV41) return;
-        isSyncingV41 = true;
+    window.syncBadgeTitlesToTextV43 = function() {
+        if (isSyncingV43) return;
+        isSyncingV43 = true;
 
         try {
-            ensureVerticalDockAndBadgeCSSV41();
+            ensureVerticalDockAndBadgeCSSV43();
             buildAndSyncBodyVerticalSlideDock();
             const thresholdPct = getUserSettingThresholdPct();
 
@@ -14516,30 +14631,30 @@ if (document.readyState === 'loading') {
                 }
             });
         } finally {
-            isSyncingV41 = false;
+            isSyncingV43 = false;
         }
     };
 
     const origRenderFn = window.renderTreeCardStatusBadges;
-    if (typeof origRenderFn === 'function' && !origRenderFn._v41Wrapped) {
+    if (typeof origRenderFn === 'function' && !origRenderFn._v43Wrapped) {
         const wrappedRender = async function() {
             const r = await origRenderFn.apply(this, arguments);
-            window.syncBadgeTitlesToTextV41();
+            window.syncBadgeTitlesToTextV43();
             return r;
         };
-        wrappedRender._v41Wrapped = true;
+        wrappedRender._v43Wrapped = true;
         window.renderTreeCardStatusBadges = wrappedRender;
     }
 
-    function bootV41() {
-        ensureVerticalDockAndBadgeCSSV41();
+    function bootV43() {
+        ensureVerticalDockAndBadgeCSSV43();
         buildAndSyncBodyVerticalSlideDock();
         setupBadgeThresholdInputStep10();
 
         if (typeof window.renderTreeCardStatusBadges === 'function') {
             window.renderTreeCardStatusBadges();
         } else {
-            window.syncBadgeTitlesToTextV41();
+            window.syncBadgeTitlesToTextV43();
         }
         window.hideMaintSectionInNavigatorIfUnderDirector();
 
@@ -14547,33 +14662,22 @@ if (document.readyState === 'loading') {
             setTimeout(() => {
                 buildAndSyncBodyVerticalSlideDock();
                 setupBadgeThresholdInputStep10();
-                window.syncBadgeTitlesToTextV41();
+                window.syncBadgeTitlesToTextV43();
                 window.hideMaintSectionInNavigatorIfUnderDirector();
             }, d);
         });
 
         const treeWrapper = document.getElementById('tree-wrapper') || document.body;
         const observer = new MutationObserver(() => {
-            if (!isSyncingV41) {
-                window.syncBadgeTitlesToTextV41();
+            if (!isSyncingV43) {
+                window.syncBadgeTitlesToTextV43();
             }
         });
         observer.observe(treeWrapper, { childList: true, subtree: true });
 
-        document.addEventListener('input', (e) => {
-            if (e.target && e.target.type === 'number') {
-                setTimeout(() => {
-                    if (typeof window.renderTreeCardStatusBadges === 'function') {
-                        window.renderTreeCardStatusBadges();
-                    }
-                    window.syncBadgeTitlesToTextV41();
-                }, 30);
-            }
-        }, true);
-
         document.addEventListener('change', () => {
             setTimeout(() => {
-                window.syncBadgeTitlesToTextV41();
+                window.syncBadgeTitlesToTextV43();
                 window.hideMaintSectionInNavigatorIfUnderDirector();
                 updateAllVerticalDockIconsActiveState();
             }, 50);
@@ -14583,7 +14687,7 @@ if (document.readyState === 'loading') {
             setTimeout(() => {
                 buildAndSyncBodyVerticalSlideDock();
                 setupBadgeThresholdInputStep10();
-                window.syncBadgeTitlesToTextV41();
+                window.syncBadgeTitlesToTextV43();
                 window.hideMaintSectionInNavigatorIfUnderDirector();
                 updateAllVerticalDockIconsActiveState();
             }, 80);
@@ -14591,8 +14695,8 @@ if (document.readyState === 'loading') {
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bootV41);
+        document.addEventListener('DOMContentLoaded', bootV43);
     } else {
-        bootV41();
+        bootV43();
     }
 })();
