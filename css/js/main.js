@@ -1,16 +1,17 @@
-// frontend/css/js/main.js
-// cellvia_db.integrated_sales_history DB 연동 및 계보도/매출 시뮬레이션 메인 엔진
-// 🌟 [로컬 개발 & 클라우드 웹 배포 자동 감지 안전망]
+// ============================================================================
+// [00] 환경 감지 및 API 기본 경로 설정 (로컬 개발 3005 포트 강제 고정)
+// ============================================================================
 (function ensureMainJsApiBase() {
     const host = window.location.hostname;
     const isLocal = (host === '127.0.0.1' || host === 'localhost' || host === '' || window.location.protocol === 'file:');
     window.IS_LOCAL_DEV = isLocal;
-    const resolvedBase = isLocal ? 'http://127.0.0.1:3001' : window.location.origin;
-    window.API_BASE = (window.API_BASE || resolvedBase).replace(/\/+$/, '');
+    const resolvedBase = isLocal ? 'http://127.0.0.1:3005' : window.location.origin;
+    // 기존 state.js나 api.js에 남아있는 3001 포트를 무조건 3005로 덮어쓰기
+    window.API_BASE = resolvedBase.replace(/\/+$/, '');
     window.API_BASE_URL = window.API_BASE;
 })();
 // ============================================================================
-// [1] 전역 변수 및 설정 초기화
+// [01] 전역 상태 변수 초기화 및 계보도 정중앙 정렬
 // ============================================================================
 window.currentSelectedId = window.currentSelectedId || null;
 window.recommenderRootId = window.recommenderRootId || null;
@@ -28,7 +29,7 @@ window.cardSettings = window.cardSettings || {
     recName: true, recId: true, firstSales: false, lastSales: false
 };
 
-// [1-1] 계보도 초기 위치 정중앙 정렬 (데이터 로딩 완료 확인 및 안전 좌표 계산)
+// [01-1] 계보도 초기 위치 정중앙 정렬 (데이터 로딩 완료 확인 및 안전 좌표 계산)
 window.centerRootNode = function() {
     const wrapper = document.getElementById('tree-wrapper') || document.querySelector('.tree-wrapper');
     const container = document.getElementById('canvas-container') || (wrapper ? wrapper.parentElement : null);
@@ -62,7 +63,7 @@ window.centerRootNode = function() {
 };
 
 // ============================================================================
-// [2] 좌측 패널 탐색 헬퍼 (매출/구독 내역)
+// [02] 좌측 패널 DOM 탐색 헬퍼 (매출/구독 내역)
 // ============================================================================
 window.getSmartLeftPanel = function() {
     const salesW = document.getElementById('salesWidget');
@@ -91,7 +92,7 @@ window.getSmartLeftPanel = function() {
 };
 
 // ============================================================================
-// [3] 하단 실적 위젯 슬라이드 기본 호환 함수
+// [03] 하단 실적/수당 위젯 슬라이드 접기·펼치기 기본 호환 함수
 // ============================================================================
 window.toggleFoldPerfWidget = function() {
     if (typeof window.setPerfSidebarState === 'function') {
@@ -105,7 +106,7 @@ window.toggleFoldPerfWidget = function() {
 };
 
 // ============================================================================
-// [4] 상단 헤더 톱니바퀴 (표시 설정) 토글 및 카드 표시 항목 제어 기능
+// [04] 상단 헤더 톱니바퀴 (표시 설정) 토글 및 카드 표시 항목 제어 기능
 // ============================================================================
 window.toggleSettingsMenu = function(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
@@ -120,7 +121,7 @@ window.toggleSettingsMenu = function(e) {
     }
 };
 
-// [4-1] 기본 표시 / 상세 표시 체크박스 변경 시 카드 항목 실시간 반영 (updateSetting 완벽 호환)
+// [04-1] 기본 표시 / 상세 표시 체크박스 변경 시 카드 항목 실시간 반영 (updateSetting 완벽 호환)
 window.updateSetting = function(arg1, arg2) {
     window.cardSettings = window.cardSettings || {
         id: true, name: true, rank: true, type: true, code: true, joinDate: true,
@@ -182,22 +183,22 @@ window.updateSetting = function(arg1, arg2) {
     }
 };
 
-// 혹시 다른 이름으로 호출되는 경우를 위한 별칭(Alias) 연결
+// 별칭(Alias) 연결
 window.updateCardSetting = window.updateSetting;
 window.toggleCardSetting = window.updateSetting;
 
 // ============================================================================
-// [5] 우측 위젯 체크박스 연동 및 닫기 제어 (매출 기간 검색 브라우저 팝업 라우팅 완벽 반영)
+// [05] 우측 위젯 체크박스 연동 및 닫기 제어 (매출 기간 검색 브라우저 팝업 라우팅)
 // ============================================================================
 
-// [5-1] 위젯 닫기 버튼 전역 제어
+// [05-1] 위젯 닫기 버튼 전역 제어
 window.closeWidgetGlobal = function(e, widgetId, chkId) {
     if (e) { 
         e.preventDefault(); 
         e.stopPropagation(); 
     }
 
-    // 🌟 매출 기간 검색의 경우 모달 닫기 대신 팝업 토글 닫기로 연결
+    // 매출 기간 검색의 경우 모달 닫기 대신 팝업 토글 닫기로 연결
     if (widgetId === 'filterWidget' || String(chkId).includes('sales-search')) {
         if (typeof window.toggleSalesSearchPopup === 'function') {
             window.toggleSalesSearchPopup(false);
@@ -228,11 +229,7 @@ window.closeWidgetGlobal = function(e, widgetId, chkId) {
     }
 };
 
-// ============================================================================
-// [5-2] 우측 위젯 및 팝업 체크박스 연동 제어 (매출 기간 검색 독립 브라우저 팝업창 완벽 연동)
-// ============================================================================
-
-// 🌟 [안전 패널 숨김] 상단 헤더 아이콘들을 날려버리던 악성 텍스트 검사 로직을 제거한 안전 함수
+// [05-2] 인라인 매출 검색 패널 안전 숨김 헬퍼
 window.hideInlineSalesSearchPanels = function() {
     const inlineIds = ['salesSearchWidget', 'salesSearchModal', 'periodSearchWidget', 'sales-search-panel', 'period-search-panel', 'filterWidget'];
     inlineIds.forEach(id => {
@@ -241,7 +238,7 @@ window.hideInlineSalesSearchPanels = function() {
     });
 };
 
-// 🌟 [매출 데이터 렌더러] 팝업창 내부에 전체 매출 내역 표 데이터를 실시간으로 그려주는 함수
+// [05-3] 매출 기간 검색 팝업창 내부 기본 렌더러
 window.renderSalesSearchPopupContent = function(showAll = false, optDoc = null) {
     const popup = window.salesSearchPopupWindow;
     const pDoc = optDoc || ((popup && !popup.closed) ? popup.document : document);
@@ -306,7 +303,7 @@ window.renderSalesSearchPopupContent = function(showAll = false, optDoc = null) 
     `;
 };
 
-// 🌟 [매출 기간 검색 팝업창 생성기]
+// [05-4] 매출 기간 검색 팝업창 생성기
 window.openSalesSearchPopupWindow = function() {
     window.hideInlineSalesSearchPanels();
 
@@ -389,7 +386,7 @@ window.openSalesSearchPopupWindow = function() {
     return popup;
 };
 
-// 🌟 [매출 기간 검색 토글러]
+// [05-5] 매출 기간 검색 토글러
 window.toggleSalesSearchPopup = function(forceShow) {
     window.hideInlineSalesSearchPanels();
     const isPopupOpen = Boolean(window.salesSearchPopupWindow && !window.salesSearchPopupWindow.closed);
@@ -408,7 +405,7 @@ window.toggleSalesSearchPopup = function(forceShow) {
     if (salesChk && salesChk.checked !== willShow) salesChk.checked = willShow;
 };
 
-// [5-2] 우측 위젯 체크박스 연동 제어 ("매출/구독 패널", "매출 기간 검색" 등 완벽 타겟팅)
+// [05-6] 우측 위젯 체크박스 연동 제어 ("매출/구독 패널", "매출 기간 검색", "실적/수당" 타겟팅)
 window.toggleWidgetGlobal = function(chkId, widgetId) {
     let chk = document.getElementById(chkId);
     if (!chk && window.event && window.event.target && window.event.target.tagName === 'INPUT') {
@@ -420,7 +417,7 @@ window.toggleWidgetGlobal = function(chkId, widgetId) {
     const labelText = chk && chk.parentElement ? chk.parentElement.innerText.trim() : widgetId;
     const lowerWidgetId = String(widgetId).toLowerCase();
 
-    // 🌟 [5-2-1] "매출 기간 검색" 체크 시: 독립 브라우저 팝업창으로 라우팅
+    // [05-6-1] "매출 기간 검색" 체크 시: 독립 브라우저 팝업창으로 라우팅
     if (
         lowerWidgetId.includes('filter') || 
         labelText.includes('매출 기간 검색') || 
@@ -435,7 +432,7 @@ window.toggleWidgetGlobal = function(chkId, widgetId) {
         return;
     }
 
-    // [5-2-2] 좌측 매출 및 구독 내역 패널 (#salesWidget) 제어
+    // [05-6-2] 좌측 매출 및 구독 내역 패널 (#salesWidget) 제어
     if (
         lowerWidgetId.includes('saleswidget') || 
         lowerWidgetId.includes('salespanel') || 
@@ -501,7 +498,7 @@ window.toggleWidgetGlobal = function(chkId, widgetId) {
         return; 
     }
 
-    // [5-2-3] 하단 실적/수당 위젯 (#perfWidget) 제어
+    // [05-6-3] 하단 실적/수당 위젯 (#perfWidget) 제어
     if (lowerWidgetId.includes('perf') || labelText.includes('수당') || labelText.includes('실적')) {
         let perfW = document.getElementById('perfWidget') || document.querySelector('.perf-widget');
         if (perfW) {
@@ -511,7 +508,7 @@ window.toggleWidgetGlobal = function(chkId, widgetId) {
         return; 
     }
 
-    // [5-2-4] 기타 모달 위젯 제어
+    // [05-6-4] 기타 모달 위젯 제어
     let widget = document.getElementById(widgetId) || document.querySelector(`.${widgetId}`);
     if (widget) {
         if (isChecked) {
@@ -525,16 +522,16 @@ window.toggleWidgetGlobal = function(chkId, widgetId) {
 };
 
 // ============================================================================
-// [6] 입력 편의 (MMDD -> YYYY-MM-DD 변환, VK- ID 자동부여, integrated_sales_history 매출일 자동 검색)
+// [06] 입력 포맷 유틸리티 (MMDD -> YYYY-MM-DD 변환, VK- 자동부여, 매출일 자동 검색)
 // ============================================================================
 
-// [6-1] 오늘 날짜를 YYYY-MM-DD 포맷으로 반환
+// [06-1] 오늘 날짜를 YYYY-MM-DD 포맷으로 반환
 window.getTodayString = function() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-// [6-2] MMDD(4자리) 입력 시 YYYY-MM-DD 자동 변환 및 신규 생성 모달 가입일-매출일 동기화
+// [06-2] MMDD(4자리) 입력 시 YYYY-MM-DD 자동 변환 및 신규 생성 모달 가입일-매출일 동기화
 window.formatDateMMDD = function(inputEl, syncSalesDates = false) {
     if (!inputEl || !inputEl.value) return;
     let val = String(inputEl.value).replace(/[^0-9]/g, ''); 
@@ -546,7 +543,6 @@ window.formatDateMMDD = function(inputEl, syncSalesDates = false) {
         inputEl.value = `${val.substring(0, 4)}-${val.substring(4, 6)}-${val.substring(6, 8)}`;
     }
 
-    // 신규 파트너 생성 모달('#m-join-date')에서 가입일 입력 시 최초매출일/최종매출일 동일 날짜 자동 세팅
     if (syncSalesDates || inputEl.id === 'm-join-date') {
         const firstEl = document.getElementById('m-first-date');
         const lastEl = document.getElementById('m-last-date');
@@ -555,7 +551,7 @@ window.formatDateMMDD = function(inputEl, syncSalesDates = false) {
     }
 };
 
-// [6-3] 숫자만 입력 시 VK- 접두사 자동 부여 및 모달 추천인 이름 실시간 매칭 (미검색 시 수동입력 지원)
+// [06-3] 숫자만 입력 시 VK- 접두사 자동 부여 및 모달 추천인 이름 실시간 매칭 (미검색 시 수동입력 지원)
 window.formatVKId = function(inputEl) {
     if (!inputEl) return;
     let val = inputEl.value.replace(/[^0-9]/g, ''); 
@@ -574,7 +570,6 @@ window.formatVKId = function(inputEl) {
                     nameEl.value = node.name;
                     nameEl.dataset.autoFilled = 'true';
                 } else {
-                    // 이전에 자동완성으로 들어갔던 값만 비우고, 사용자가 직접 입력 중인 값은 유지
                     if (nameEl.dataset.autoFilled === 'true') {
                         nameEl.value = '';
                     }
@@ -587,7 +582,7 @@ window.formatVKId = function(inputEl) {
     }
 };
 
-// [6-4] 다양한 날짜 문자열을 YYYY-MM-DD 표준 포맷으로 정제
+// [06-4] 다양한 날짜 문자열을 YYYY-MM-DD 표준 포맷으로 정제
 window.cleanDateStr = function(str) {
     if (!str) return '';
     let s = String(str).trim();
@@ -601,7 +596,7 @@ window.cleanDateStr = function(str) {
     return s.slice(0, 10);
 };
 
-// [6-5] DB integrated_sales_history 테이블에서 회원의 최초매출일 / 최종매출일 자동 검색 (YYYY-MM-DD 반환)
+// [06-5] DB integrated_sales_history 테이블에서 회원의 최초매출일 / 최종매출일 자동 검색 (YYYY-MM-DD 반환)
 window.getSalesDatesFromHistory = function(memberId, fallbackJoinDate = '') {
     if (!memberId) return { first: fallbackJoinDate, last: fallbackJoinDate, hasHistory: false };
     const normTarget = String(memberId).trim().toLowerCase().replace(/^vk-?/, '');
@@ -655,7 +650,7 @@ window.getSalesDatesFromHistory = function(memberId, fallbackJoinDate = '') {
     };
 };
 
-// [6-6] 로컬 메모리에 내역이 없을 경우 백엔드 DB(integrated_sales_history) API 비동기 조회 및 동기화
+// [06-6] 로컬 메모리에 내역이 없을 경우 백엔드 DB(integrated_sales_history) API 비동기 조회 및 동기화
 window.fetchMemberSalesDatesFromAPI = async function(memberId) {
     if (!window.API_BASE || !memberId) return null;
     try {
@@ -675,10 +670,10 @@ window.fetchMemberSalesDatesFromAPI = async function(memberId) {
 };
 
 // ============================================================================
-// [7] 신규 파트너 추가 모달창 및 매출 기간 검색 팝업 위젯 제어
+// [07] 신규 파트너 추가 모달창 및 플로팅 위젯 레이어/기간검색 필터 제어
 // ============================================================================
 
-// [7-1] 신규 파트너 추가 모달창 초기화 (GUEST/MEMBER 추가, 회원구분: 사업자/소비자/복제, 추천인명 수동입력 허용)
+// [07-1] 신규 파트너 추가 모달창 초기화 (GUEST/MEMBER 추가, 회원구분: 사업자/소비자/복제, 추천인명 수동입력 허용)
 window.initPartnerModal = function() {
     if (!document.getElementById('addPartnerModal')) {
         const modalHTML = `
@@ -737,7 +732,7 @@ window.initPartnerModal = function() {
     }
 };
 
-// [7-2] 신규 파트너 생성 시 ID에 해당하는 integrated_sales_history 내역이 있으면 자동 반영, 없으면 가입일과 동일하게 유지
+// [07-2] 신규 파트너 생성 시 ID에 해당하는 integrated_sales_history 내역 자동 반영
 window.syncNewPartnerSalesDatesById = async function(memberId) {
     if (!memberId) return;
     const joinVal = document.getElementById('m-join-date')?.value.trim() || window.getTodayString();
@@ -756,7 +751,7 @@ window.syncNewPartnerSalesDatesById = async function(memberId) {
     }
 };
 
-// [7-3] 신규 파트너 모달 '등록하기' 실행 함수 (DB members 테이블 즉시 저장 연동)
+// [07-3] 신규 파트너 모달 '등록하기' 실행 함수 (DB members 테이블 즉시 저장 연동)
 window.submitAddPartner = async function() {
     const newId = document.getElementById('m-member-id')?.value.trim();
     const newName = document.getElementById('m-name')?.value.trim();
@@ -890,7 +885,7 @@ window.submitAddPartner = async function() {
     else window.renderTree(false);
 };
 
-// [7-4] 하위 및 상위 파트너 추가 모달 오픈 핸들러
+// [07-4] 하위 및 상위 파트너 추가 모달 오픈 핸들러
 window.addTreeChild = function(e, sponsorId, position) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     window.addPartnerState.sponsorId = sponsorId;
@@ -941,11 +936,7 @@ window.addParentPartner = function(e, rootId) {
     }
 };
 
-// ============================================================================
-// [7-5] 플로팅 위젯 & 슬라이드 창 최상단 레이어(z-index) 강제 전환 시스템
-// ============================================================================
-
-// 어떤 인라인 스타일 덮어쓰기나 줌 컨트롤 바에도 가려지지 않도록 최상단 CSS 클래스 규칙 주입
+// [07-5] 플로팅 위젯 & 슬라이드 창 최상단 레이어(z-index) 강제 전환 시스템
 window.ensureFrontLayerStyle = function() {
     if (document.getElementById('widget-front-layer-style')) return;
     const styleEl = document.createElement('style');
@@ -969,7 +960,6 @@ window.ensureFrontLayerStyle = function() {
     document.head.appendChild(styleEl);
 };
 
-// 클릭하거나 선택한 위젯(창)을 무조건 가장 앞으로 올리고, 다른 창은 뒤로 내리는 함수
 window.bringWidgetToFront = function(activeEl) {
     if (!activeEl) return;
     window.ensureFrontLayerStyle();
@@ -977,7 +967,6 @@ window.bringWidgetToFront = function(activeEl) {
     const fw = document.getElementById('filterWidget');
     const pw = document.getElementById('perfWidget');
 
-    // #filterWidget이 다른 컨테이너 안에 갇혀 스태킹 컨텍스트 제한을 받지 않도록 body 맨 끝으로 보장
     if (fw && fw.parentElement !== document.body) {
         document.body.appendChild(fw);
     }
@@ -1008,13 +997,11 @@ window.bringWidgetToFront = function(activeEl) {
         }
     };
 
-    // 즉시 적용 + 다른 드래그 스크립트가 z-index를 덮어쓴 직후(0ms, 30ms)에도 다시 한 번 강제 적용
     applyFront();
     setTimeout(applyFront, 0);
     setTimeout(applyFront, 30);
 };
 
-// 화면 어디에서든 #filterWidget 또는 #perfWidget 내부를 클릭/터치하면 즉시 해당 창을 최상단으로 전환
 window.bindWidgetFrontEvents = function() {
     window.ensureFrontLayerStyle();
     if (window._globalWidgetFocusBound) return;
@@ -1039,7 +1026,7 @@ window.bindWidgetFrontEvents = function() {
     document.addEventListener('touchstart', handlePointerEvent, { passive: true, capture: true });
 };
 
-// [7-6] 선택된 기준 카드(없으면 루트) 대비 해당 회원의 라인('A라인', 'B라인', '본인') 판별 헬퍼
+// [07-6] 선택된 기준 카드(없으면 루트) 대비 해당 회원의 라인('A라인', 'B라인', '본인') 판별 헬퍼
 window.getSalesMemberLine = function(memberId) {
     if (!memberId) return '-';
     const targetNorm = String(memberId).trim().toLowerCase().replace(/^vk-?/, '');
@@ -1069,7 +1056,7 @@ window.getSalesMemberLine = function(memberId) {
     return '-';
 };
 
-// [7-7] 매출 기간 검색 위젯 DOM 동적 생성 (좌측 '선택'란 추가 -> 7컬럼: 선택/일자/회원ID/이름/라인/CV/PV)
+// [07-7] 매출 기간 검색 위젯 DOM 동적 생성 (7컬럼: 선택/일자/회원ID/이름/라인/CV/PV)
 window.initFilterWidget = function() {
     window.bindWidgetFrontEvents();
 
@@ -1077,7 +1064,6 @@ window.initFilterWidget = function() {
         return;
     }
 
-    // 이전 조절 높이 불러오기 (기본값 420px)
     const savedH = parseInt(localStorage.getItem('filterWidgetSavedHeight') || '420', 10);
     const initialHeight = (!isNaN(savedH) && savedH >= 240) ? Math.min(savedH, window.innerHeight - 60) : 420;
 
@@ -1195,14 +1181,10 @@ window.initFilterWidget = function() {
     }
 };
 
-// ============================================================================
-// [7-8] 매출 기간 검색 행별 선택(✓) / 더블클릭 제외(✕) 상태 관리 및 동적 합계 연산
-// ============================================================================
-
+// [07-8] 매출 기간 검색 행별 선택(✓) / 더블클릭 제외(✕) 상태 관리 및 동적 합계 연산
 window.filterCurrentRows = [];
 window.filterRowClickTimer = null;
 
-// 행 선택란(좌측 첫 번째 칸) 클릭 시: 선택(selected) 토글 (만약 제외(✕) 상태였다면 제외 해제)
 window.toggleFilterRowSelect = function(event, idx) {
     if (event) {
         event.preventDefault();
@@ -1221,7 +1203,6 @@ window.toggleFilterRowSelect = function(event, idx) {
     window.renderFilterRowsAndTotals();
 };
 
-// 행 더블클릭 시: 선택란에 '✕' 표시를 넣어 합계에서 제외(excluded) 토글
 window.handleFilterRowDblClick = function(event, idx) {
     if (event) {
         event.preventDefault();
@@ -1238,7 +1219,6 @@ window.handleFilterRowDblClick = function(event, idx) {
     window.renderFilterRowsAndTotals();
 };
 
-// 행 단일 클릭 시: 더블클릭이 아닐 때만 해당 회원 카드로 포커스 이동
 window.handleFilterRowSingleClick = function(event, memberId) {
     if (window.filterRowClickTimer) {
         clearTimeout(window.filterRowClickTimer);
@@ -1253,14 +1233,12 @@ window.handleFilterRowSingleClick = function(event, memberId) {
     }, 220);
 };
 
-// 헤더의 '선택' 클릭 시 모든 선택(✓)/제외(✕) 초기화
 window.resetFilterRowStates = function() {
     if (!Array.isArray(window.filterCurrentRows)) return;
     window.filterCurrentRows.forEach(r => { r.state = 'none'; });
     window.renderFilterRowsAndTotals();
 };
 
-// 현재 행 상태('none' | 'selected' | 'excluded')에 따라 테이블 UI 및 상단 합계 즉시 갱신
 window.renderFilterRowsAndTotals = function() {
     const tbody = document.getElementById('filter-sales-tbody');
     const summaryEl = document.getElementById('filter-summary');
@@ -1277,14 +1255,10 @@ window.renderFilterRowsAndTotals = function() {
         return;
     }
 
-    // 1) 선택(selected)된 행이 하나라도 있는지 확인
     const selectedRows = rows.filter(r => r.state === 'selected');
     const excludedRows = rows.filter(r => r.state === 'excluded');
     const hasSelection = selectedRows.length > 0;
 
-    // 2) 합계 계산:
-    //    - 선택한 행이 있으면 -> 선택한 행만 합산
-    //    - 선택한 행이 없으면 -> 제외(✕)된 행을 뺀 나머지 전체 합산
     const targetSumRows = hasSelection
         ? selectedRows
         : rows.filter(r => r.state !== 'excluded');
@@ -1296,13 +1270,11 @@ window.renderFilterRowsAndTotals = function() {
         sumPv += r.pv;
     });
 
-    // 3) 테이블 행 렌더링
     let rowsHtml = '';
     rows.forEach((r, idx) => {
         const isSelected = r.state === 'selected';
         const isExcluded = r.state === 'excluded';
 
-        // 좌측 선택란 아이콘 (✓ / ✕ / 빈 박스)
         let boxHtml = '';
         if (isSelected) {
             boxHtml = `<div style="width: 16px; height: 16px; margin: 0 auto; border-radius: 3px; background: #3b82f6; border: 1px solid #60a5fa; color: #fff; font-size: 11px; font-weight: bold; line-height: 15px; text-align: center;">✓</div>`;
@@ -1340,7 +1312,6 @@ window.renderFilterRowsAndTotals = function() {
 
     tbody.innerHTML = rowsHtml;
 
-    // 4) 상단 건수 및 합계 라벨 업데이트
     if (summaryEl && summaryEl.firstElementChild) {
         if (hasSelection) {
             summaryEl.firstElementChild.innerHTML = `<span style="color:#60a5fa;">선택 합계: ${selectedRows.length.toLocaleString('ko-KR')}건</span> <span style="color:#9ca3af; font-weight:normal; font-size:10.5px;">(전체 ${rows.length}건)</span>`;
@@ -1358,7 +1329,7 @@ window.renderFilterRowsAndTotals = function() {
     }
 };
 
-// 본문 헤더 영역의 기간검색 값을 기준으로 매출 데이터 필터링 및 상태 배열 생성
+// [07-9] 본문 헤더 영역의 기간검색 값을 기준으로 매출 데이터 필터링 및 상태 배열 생성
 window.searchPeriodSales = function() {
     window.bindWidgetFrontEvents();
 
@@ -1410,7 +1381,6 @@ window.searchPeriodSales = function() {
         return dB.localeCompare(dA);
     });
 
-    // 이전 조회 시점의 선택/제외 상태 보존용 맵 (동일 매출 건이 유지될 때 편의성 제공)
     const prevStateMap = {};
     if (Array.isArray(window.filterCurrentRows)) {
         window.filterCurrentRows.forEach(r => {
@@ -1458,9 +1428,8 @@ window.searchPeriodSales = function() {
 
     window.renderFilterRowsAndTotals();
 };
-
 // ============================================================================
-// [8] 보너스 내역 팝업 모달창 제어
+// [08] 보너스 내역 팝업 모달창 제어
 // - 창 너비/높이 마우스 드래그 조절 및 조절된 크기 자동 기억(localStorage) + 헤더 클릭 시 창 확대 버그 원천 차단
 // - 추천매칭보너스(matchBonus) 세대 직접 편집, 파트너 행 추가(VK- 자동부여 & 자동조회), TiDB 저장 연동
 // - 품위유지수당(dignityBonus), 차량유지비(carBonus), 패스트파워보너스(fastPowerBonus) TiDB 정책 테이블 연동 상세 검증 반영
@@ -1481,12 +1450,11 @@ window.closeBonusDetailModal = function() {
     if (modal) modal.style.display = 'none';
 };
 
-// 🌟 보너스 상세 검증 창 너비/높이 드래그 조절 및 조절된 크기 자동 기억 초기화 (헤더 클릭 시 창 확대 버그 원천 차단)
+// [08-1] 보너스 상세 검증 창 너비/높이 드래그 조절 및 조절된 크기 자동 기억 초기화
 window.initBonusModalResizeAndMemory = function() {
     const modal = document.getElementById('bonusDetailModal');
     if (!modal) return;
 
-    // 핵심 해결: box-sizing을 border-box로 강제 고정하여 외곽 크기와 style.width/height의 기준을 100% 일치시킴
     modal.style.setProperty('box-sizing', 'border-box', 'important');
 
     // 1) 저장된 너비/높이 복원 (가로 스크롤이 생기지 않도록 기본 너비 740px 적용)
@@ -1501,9 +1469,8 @@ window.initBonusModalResizeAndMemory = function() {
     modal.style.minHeight = '320px';
     modal.style.maxWidth = 'none';
     modal.style.maxHeight = 'none';
-    modal.style.resize = 'none'; // 커스텀 핸들로만 제어
+    modal.style.resize = 'none';
 
-    // 테이블 컨테이너 가로 스크롤 방지 및 폭 맞춤
     const scrollBox = modal.querySelector('.table-scroll-container');
     if (scrollBox) {
         scrollBox.style.overflowX = 'hidden';
@@ -1515,7 +1482,6 @@ window.initBonusModalResizeAndMemory = function() {
     let resizeMode = null; // 'w' | 'h' | 'wh'
     let startX = 0, startY = 0, startW = 0, startH = 0;
 
-    // 헤더를 클릭/드래그하여 창을 이동할 때 크기가 절대 변하지 않도록 크기 잠금 보호
     const headerEl = modal.querySelector('.modal-header, .widget-header, header') || modal.firstElementChild;
     if (headerEl) {
         headerEl.addEventListener('mousedown', () => {
@@ -1540,7 +1506,7 @@ window.initBonusModalResizeAndMemory = function() {
         });
     }
 
-    // 2) 우측(너비 조절 - 헤더 영역 40px 제외), 하단(높이 조절), 우측하단 모서리(동시 조절) 드래그 핸들 삽입
+    // 2) 우측, 하단, 우측하단 모서리 드래그 핸들 삽입
     const rightHandle = document.createElement('div');
     rightHandle.title = '좌우로 드래그하여 창 너비 조절 (자동 기억)';
     rightHandle.style.cssText = 'position:absolute; top:40px; right:0; width:8px; height:calc(100% - 40px); cursor:ew-resize; z-index:100;';
@@ -1599,7 +1565,7 @@ window.initBonusModalResizeAndMemory = function() {
     });
 };
 
-// 숫자만 입력해도 VK- 자동 부여하는 포맷터
+// [08-2] 숫자만 입력해도 VK- 자동 부여하는 포맷터
 window.formatMatchingPartnerInputId = function(inputEl) {
     if (!inputEl) return;
     let raw = String(inputEl.value || '').toUpperCase().replace(/[^0-9A-Z-]/g, '');
@@ -1613,7 +1579,7 @@ window.formatMatchingPartnerInputId = function(inputEl) {
     }
 };
 
-// 특정 회원(targetId)의 수동 편집 오버라이드 데이터 조회 (TiDB + localStorage 연동)
+// [08-3] 특정 회원(targetId)의 수동 편집 오버라이드 데이터 조회 (TiDB + localStorage 연동)
 window.loadMatchingOverridesForTarget = async function(targetId) {
     if (!targetId) return {};
     const normTarget = String(targetId).trim().toUpperCase();
@@ -1663,7 +1629,7 @@ window.loadMatchingOverridesForTarget = async function(targetId) {
     return overrideMap;
 };
 
-// 추천매칭 편집 테이블의 개별 행에서 회원번호 입력 시 이름, 당시직급, 지원수당, DB매칭요율 자동 조회
+// [08-4] 추천매칭 편집 테이블의 개별 행에서 회원번호 입력 시 이름, 당시직급, 지원수당, DB매칭요율 자동 조회
 window.lookupPartnerForMatchingRow = function(idx, rawInputId) {
     const st = window.matchingEditState;
     if (!st || !st.rows[idx]) return;
@@ -1688,7 +1654,6 @@ window.lookupPartnerForMatchingRow = function(idx, rawInputId) {
     const mNode = typeof window.findMemberNode === 'function' ? window.findMemberNode(cleanId) : null;
     const normId = digits.toLowerCase();
 
-    // 전역 시뮬레이션 맵(window.lastAllMembersTeamBonusMap)에서 해당 파트너의 해당 기수 당시 직급 & 지원수당 조회
     const teamMap = window.lastAllMembersTeamBonusMap instanceof Map ? window.lastAllMembersTeamBonusMap : null;
     const partnerPeriodMap = teamMap ? teamMap.get(normId) : null;
     const periodInfo = (partnerPeriodMap && st.periodKey) ? partnerPeriodMap[st.periodKey] : null;
@@ -1701,7 +1666,6 @@ window.lookupPartnerForMatchingRow = function(idx, rawInputId) {
         ? periodInfo.teamBonus
         : 0;
 
-    // 현재 선택된 세대(row.gen)에 따른 본인 당시 직급의 DB 매칭요율 적용
     const myMatchRates = typeof window.getMatchingBonusRates === 'function'
         ? window.getMatchingBonusRates(st.memberHistRank)
         : {};
@@ -1712,7 +1676,7 @@ window.lookupPartnerForMatchingRow = function(idx, rawInputId) {
     window.renderMatchingEditorTable();
 };
 
-// 세대 드롭다운 변경 시 DB 매칭요율 재적용 및 금액 재계산
+// [08-5] 세대 드롭다운 변경 시 DB 매칭요율 재적용 및 금액 재계산
 window.changeMatchingRowGen = function(idx, newGenVal) {
     const st = window.matchingEditState;
     if (!st || !st.rows[idx]) return;
@@ -1731,7 +1695,7 @@ window.changeMatchingRowGen = function(idx, newGenVal) {
     window.renderMatchingEditorTable();
 };
 
-// 추천매칭 편집창에 신규 파트너 빈 행 추가
+// [08-6] 추천매칭 편집창에 신규 파트너 빈 행 추가 및 행 삭제
 window.addMatchingEditorRow = function() {
     const st = window.matchingEditState;
     if (!st) return;
@@ -1767,7 +1731,6 @@ window.addMatchingEditorRow = function() {
     }, 30);
 };
 
-// 추천매칭 편집창에서 특정 행 삭제
 window.removeMatchingEditorRow = function(idx) {
     const st = window.matchingEditState;
     if (!st || !Array.isArray(st.rows)) return;
@@ -1775,7 +1738,7 @@ window.removeMatchingEditorRow = function(idx) {
     window.renderMatchingEditorTable();
 };
 
-// 추천매칭 편집 테이블 렌더링 (세대 선택 드롭다운 + VK- 자동완성 입력란 + 삭제 버튼 + 합계)
+// [08-7] 추천매칭 편집 테이블 렌더링
 window.renderMatchingEditorTable = function() {
     const tbodyEl = document.getElementById('b-detail-tbody');
     if (!tbodyEl) return;
@@ -1846,7 +1809,6 @@ window.renderMatchingEditorTable = function() {
         });
     }
 
-    // 합계 및 하단 제어 버튼 행
     const activeCount = (st.rows || []).filter(r => Number(r.gen) > 0 && r.name && r.name !== '-').length;
     rowsHtml += `
         <tr style="background:#111827; font-weight:bold; border-top:2px solid #374151;">
@@ -1881,7 +1843,7 @@ window.renderMatchingEditorTable = function() {
     tbodyEl.innerHTML = rowsHtml;
 };
 
-// 편집한 추천매칭 내역을 TiDB 및 localStorage에 저장하고 하단 시뮬레이터 테이블 즉시 갱신
+// [08-8] 편집한 추천매칭 내역을 TiDB 및 localStorage에 저장하고 하단 시뮬레이터 테이블 즉시 갱신
 window.saveMatchingOverridesToDB = async function() {
     const st = window.matchingEditState;
     if (!st || !st.targetId || !st.periodKey) return;
@@ -1894,7 +1856,6 @@ window.saveMatchingOverridesToDB = async function() {
     const normTarget = String(st.targetId).trim().toUpperCase();
     const localKey = `bs_matching_overrides_${normTarget}`;
 
-    // 1) localStorage 즉시 저장
     let savedMap = {};
     try {
         savedMap = JSON.parse(localStorage.getItem(localKey) || '{}');
@@ -1905,7 +1866,6 @@ window.saveMatchingOverridesToDB = async function() {
     window.cachedMatchingOverrides = window.cachedMatchingOverrides || {};
     window.cachedMatchingOverrides[normTarget] = savedMap;
 
-    // 2) 백엔드 TiDB(/api/matching-overrides) 저장 호출
     let dbSaved = false;
     if (window.API_BASE) {
         try {
@@ -1925,7 +1885,6 @@ window.saveMatchingOverridesToDB = async function() {
         }
     }
 
-    // 3) 하단 시뮬레이터 즉시 재계산
     if (typeof window.calculateLocalPerformance === 'function') {
         await window.calculateLocalPerformance(st.targetId);
     }
@@ -1935,7 +1894,7 @@ window.saveMatchingOverridesToDB = async function() {
         : `✅ [${st.termLabel}] 추천매칭보너스 편집 내역이 저장되어 시뮬레이터에 반영되었습니다.`);
 };
 
-// 수동 편집 내역을 삭제하고 자동 계산 상태로 복원
+// [08-9] 수동 편집 내역을 삭제하고 자동 계산 상태로 복원
 window.resetMatchingOverrideToAuto = async function() {
     const st = window.matchingEditState;
     if (!st || !st.targetId || !st.periodKey) return;
@@ -1966,6 +1925,7 @@ window.resetMatchingOverrideToAuto = async function() {
     window.openBonusDetailModal(st.targetId, st.termLabel, st.startDate, st.endDate, 'matchBonus');
 };
 
+// [08-10] 보너스 산출 상세 검증 모달 오픈 메인 함수
 window.openBonusDetailModal = function(targetId, termLabel, startDate, endDate, bonusType) {
     const modal = document.getElementById('bonusDetailModal');
     const summaryEl = document.getElementById('b-detail-summary');
@@ -1974,7 +1934,6 @@ window.openBonusDetailModal = function(targetId, termLabel, startDate, endDate, 
     const tbodyEl = document.getElementById('b-detail-tbody');
     if (!modal || !summaryEl || !tbodyEl) return;
 
-    // 🌟 창 열릴 때 저장된 너비/높이 즉시 복원 및 드래그 리사이즈 핸들 바인딩
     if (typeof window.initBonusModalResizeAndMemory === 'function') {
         window.initBonusModalResizeAndMemory();
     }
@@ -2337,16 +2296,16 @@ window.openBonusDetailModal = function(targetId, termLabel, startDate, endDate, 
 };
 
 // ============================================================================
-// [9] 계보도 핵심 로직 (트리 렌더링, 동적 코드 산정, 후원/추천 모드 전환)
+// [09] 계보도 핵심 로직 (트리 렌더링, 동적 코드 산정, 후원/추천 모드 전환)
 // ============================================================================
 
-// [9-1] 회원 ID 동일 여부 비교 (대소문자 및 VK- 접두사 무시)
+// [09-1] 회원 ID 동일 여부 비교 (대소문자 및 VK- 접두사 무시)
 window.isSameMemberId = function(id1, id2) {
     if (!id1 || !id2) return false;
     return String(id1).trim().toLowerCase().replace(/^vk-?/, '') === String(id2).trim().toLowerCase().replace(/^vk-?/, '');
 };
 
-// [9-2] 계보도 트리 데이터를 평탄화(Flatten)하여 맵 객체로 반환
+// [09-2] 계보도 트리 데이터를 평탄화(Flatten)하여 맵 객체로 반환
 window.getFlatMembers = function() {
     const map = {};
     const visited = new Set();
@@ -2367,7 +2326,7 @@ window.getFlatMembers = function() {
     return map;
 };
 
-// [9-3] 중복을 제거한 전체 고유 회원 배열 반환
+// [09-3] 중복을 제거한 전체 고유 회원 배열 반환
 window.getUniqueMembers = function() {
     const flatMap = window.getFlatMembers();
     const uniqueMap = new Map();
@@ -2380,7 +2339,7 @@ window.getUniqueMembers = function() {
     return Array.from(uniqueMap.values());
 };
 
-// [9-4] 회원 ID로 특정 노드 객체 탐색
+// [09-4] 회원 ID로 특정 노드 객체 탐색
 window.findMemberNode = function(id) {
     if (!id) return null;
     const flatMap = window.getFlatMembers();
@@ -2391,13 +2350,13 @@ window.findMemberNode = function(id) {
     return Object.values(flatMap).find(m => m && window.isSameMemberId(m.id, id)) || null;
 };
 
-// [9-5] 계보도 최상위 루트 노드 반환
+// [09-5] 계보도 최상위 루트 노드 반환
 window.getAbsoluteTopRoot = function() {
     if (window.treeData && window.treeData.id) return window.findMemberNode(window.treeData.id) || window.treeData;
     return Object.values(window.getFlatMembers())[0] || null;
 };
 
-// [9-6] 동적 회원코드에서 말미 태그(m, a1, b1 등) 추출 헬퍼 함수
+// [09-6] 동적 회원코드에서 말미 태그(m, a1, b1 등) 추출 헬퍼 함수
 function getTagFromCode(codeStr) {
     if (!codeStr || codeStr === 'm') return 'm';
     if (codeStr === 'x') return 'x';
@@ -2405,7 +2364,7 @@ function getTagFromCode(codeStr) {
     return parts[parts.length - 1] || 'm';
 }
 
-// [9-7] 회원별 동적 코드(Dynamic Code) 저장 및 조회
+// [09-7] 회원별 동적 코드(Dynamic Code) 저장 및 조회
 window.setDynamicCode = function(id, code) {
     if (!id) return;
     window.dynamicCodes = window.dynamicCodes || {};
@@ -2427,7 +2386,7 @@ window.getDynamicCode = function(id) {
     return node ? (node.code || '') : '';
 };
 
-// [9-8] 선택된 기준점(Root)에 따른 하선 A/B라인 동적 코드 일괄 산정
+// [09-8] 선택된 기준점(Root)에 따른 하선 A/B라인 동적 코드 일괄 산정
 window.computeDynamicCodes = function(selectedRootId) {
     window.dynamicCodes = {};
     const uniqueMembers = window.getUniqueMembers();
@@ -2485,7 +2444,7 @@ window.computeDynamicCodes = function(selectedRootId) {
     });
 };
 
-// [9-8-1] 선택된 카드(또는 최상위 루트) 기준 A라인 / B라인 카드 수 계산 및 헤더 배지 업데이트
+// [09-8-1] 선택된 카드(또는 최상위 루트) 기준 A라인 / B라인 카드 수 계산 및 헤더 배지 업데이트
 window.updateHeaderLineCount = function(selectedId) {
     const badgeEl = document.getElementById('header-line-count');
     if (!badgeEl) return;
@@ -2564,7 +2523,7 @@ window.updateHeaderLineCount = function(selectedId) {
     `;
 };
 
-// [9-9] 신규 파트너 추가 모달용 회원코드 사전 예측
+// [09-9] 신규 파트너 추가 모달용 회원코드 사전 예측
 window.predictMemberCode = function(recommenderNode, sponsorNode, position) {
     let recTag = 'x';
     if (recommenderNode && recommenderNode._genFromM >= 0) {
@@ -2589,7 +2548,7 @@ window.updateModalCodeByPos = function() {
     }
 };
 
-// [9-10] 계보도 개별 노드 카드 HTML 재귀 생성
+// [09-10] 계보도 개별 노드 카드 HTML 재귀 생성
 window.buildNodeHTML = function(node, visited) {
     if (!visited) visited = new Set();
     if (!node || !node.id) return '';
@@ -2645,7 +2604,7 @@ window.buildNodeHTML = function(node, visited) {
     return html;
 };
 
-// [9-11] 후원계보도 <-> 추천계보도 전환 토글 기능
+// [09-11] 후원계보도 <-> 추천계보도 전환 토글 기능
 window.toggleTreeMode = function() {
     window.treeMode = (window.treeMode === 'recommender') ? 'sponsor' : 'recommender';
     
@@ -2666,7 +2625,7 @@ window.toggleTreeMode = function() {
     window.renderTree(true);
 };
 
-// [9-12] 계보도 트리 전체 렌더링 및 중앙 정렬/하이라이트/라인 인원수/실적 연동
+// [09-12] 계보도 트리 전체 렌더링 및 중앙 정렬/하이라이트/라인 인원수/실적 연동
 window.renderTree = function(recenter = false) {
     const rootEl = document.getElementById('tree-root');
     if (!rootEl) return;
@@ -2713,14 +2672,13 @@ window.renderTree = function(recenter = false) {
 };
 
 // ============================================================================
-// [10] API 데이터 호출, 실적 집계 및 통합 회원/추천인 검색
+// [10] TiDB 보상플랜 동적 로드 및 하단 수당 시뮬레이터 메인 연산 엔진
 // ============================================================================
 
 // [10-1] 백엔드 트리 데이터 및 integrated_sales_history 전체 매출 내역 호출
 window.fetchTreeData = async function(isReRender = false) {
     if (!window.API_BASE) return;
     try {
-        // 1) integrated_sales_history 전체 내역 선행 로드 (최초/최종매출일 및 기간검색 즉시 연동 보장)
         try {
             const salesRes = await fetch(`${window.API_BASE}/api/sales`);
             if (salesRes.ok) {
@@ -2731,7 +2689,6 @@ window.fetchTreeData = async function(isReRender = false) {
             }
         } catch (sErr) {}
 
-        // 2) 계보도 트리 및 회원 데이터 로드
         const res = await fetch(`${window.API_BASE}/api/tree`);
         if (!res.ok) throw new Error(`서버 응답 상태: ${res.status}`);
         const data = await res.json();
@@ -2749,13 +2706,6 @@ window.fetchTreeData = async function(isReRender = false) {
         }
     } catch (error) {}
 };
-
-// ============================================================================
-// [10-2] 하단 실적 집계 및 수당 시뮬레이터 (100% TiDB 동적 연동 완성본)
-// - 직급 서열(rank_level), 승급 조건(period_type, minor_leg_pv, required_partner_rank_id, is_direct_sponsor),
-//   수당 요율, 품위유지비, 차량유지비, 패스트파워보너스(fast_power_bonus_policies) 모두 하드코딩 없이 TiDB에서 동적 로드
-// - 예외 하드코딩: 추천매칭 압축롤업 기준금액(30,000원)만 사용자 요청에 따라 상수 적용
-// ============================================================================
 
 // [10-2-0] 날짜(YYYY-MM-DD)를 받아 기수 정보(예: 09-전, 09-후)로 변환하는 헬퍼
 window.getPeriodInfoFromDate = function(dateStr) {
@@ -2964,7 +2914,7 @@ window.extractMatchingRatesFromPolicyObj = function(policyObj) {
     return Object.keys(genRates).length > 0 ? genRates : null;
 };
 
-// DB 정책 객체(rank_maintenance_bonus_policies)에서 직급별 품위유지수당 금액 및 조건 추출
+// [10-2-2-B] DB 정책 객체(rank_maintenance_bonus_policies)에서 직급별 품위유지수당 금액 및 조건 추출
 window.extractMaintenancePolicyFromObj = function(policyObj) {
     if (!policyObj || typeof policyObj !== 'object') return null;
 
@@ -3031,7 +2981,7 @@ window.extractMaintenancePolicyFromObj = function(policyObj) {
     };
 };
 
-// DB 정책 객체(rank_car_maintenance_bonus_policies)에서 직급별 차량유지비 금액 및 조건 추출
+// [10-2-2-C] DB 정책 객체(rank_car_maintenance_bonus_policies)에서 직급별 차량유지비 금액 및 조건 추출
 window.extractCarMaintenancePolicyFromObj = function(policyObj) {
     if (!policyObj || typeof policyObj !== 'object') return null;
 
@@ -3080,7 +3030,7 @@ window.extractCarMaintenancePolicyFromObj = function(policyObj) {
     };
 };
 
-// 🌟 TiDB 보상플랜 테이블(ranks 및 각 정책 테이블)에서 모든 직급 기준과 요율을 동적으로 로드하여 캐싱
+// [10-2-2-D] TiDB 보상플랜 테이블(ranks 및 각 정책 테이블)에서 모든 직급 기준과 요율을 동적으로 로드하여 캐싱
 window.loadDbCompensationRates = async function(forceReload = false) {
     if (window.dbRankRatesLoaded && !forceReload) return;
     if (!window.API_BASE) return;
@@ -3102,19 +3052,18 @@ window.loadDbCompensationRates = async function(forceReload = false) {
         const policiesByRankName = json.policiesByRankName || compRules.policiesByRankName || {};
 
         window.dbCompRulesRaw = compRules;
-        window.dbRanksSorted = [];          // DB ranks 테이블 정렬 목록
-        window.dbRankByIdMap = {};          // rank_id -> rank 객체
-        window.dbRankByNameMap = {};        // rank_name -> rank 객체
+        window.dbRanksSorted = [];
+        window.dbRankByIdMap = {};
+        window.dbRankByNameMap = {};
         window.dbRankDirectRates = {};
         window.dbRankTeamRates = {};
         window.dbRankTeamCaps = {};
         window.dbRankMatchingRates = {};
         window.dbRankMaintenancePolicies = {};
         window.dbRankCarMaintenancePolicies = {};
-        window.dbFastPowerPolicies = [];    // DB fast_power_bonus_policies 정렬 목록
+        window.dbFastPowerPolicies = [];
         window.dbRankPoliciesMap = {};
 
-        // 1) TiDB ranks 테이블을 rank_level 오름차순으로 정렬 및 인덱싱
         const sortedRanks = [...ranks].sort((a, b) => Number(a.rank_level ?? a.rank_id ?? 0) - Number(b.rank_level ?? b.rank_id ?? 0));
         sortedRanks.forEach(r => {
             const rId = Number(r.rank_id ?? r.id ?? r.rank_level ?? 0);
@@ -3144,7 +3093,6 @@ window.loadDbCompensationRates = async function(forceReload = false) {
             window.dbRankByNameMap[rName] = normalizedRankObj;
         });
 
-        // 2) TiDB fast_power_bonus_policies 테이블을 step_level 오름차순으로 정렬 및 정규화
         window.dbFastPowerPolicies = [...fastpowerPolicies]
             .sort((a, b) => Number(a.step_level || 0) - Number(b.step_level || 0))
             .map(fp => {
@@ -3309,7 +3257,7 @@ window.loadDbCompensationRates = async function(forceReload = false) {
     }
 };
 
-// DB 직급 레벨(rank_level) 조회 헬퍼
+// [10-2-2-E] DB 직급 레벨/ID/정책 조회 헬퍼
 window.getDbRankLevel = function(rankName) {
     if (!rankName) return 0;
     const r = String(rankName).trim().toUpperCase();
@@ -3319,7 +3267,6 @@ window.getDbRankLevel = function(rankName) {
     return 0;
 };
 
-// DB 직급 ID(rank_id) 조회 헬퍼
 window.getDbRankId = function(rankName) {
     if (!rankName) return 0;
     const r = String(rankName).trim().toUpperCase();
@@ -3329,7 +3276,6 @@ window.getDbRankId = function(rankName) {
     return 0;
 };
 
-// DB에서 개인 매출 승급 직급(minor_leg_pv === 0 중 가장 높은 직급, 예: MANIA) 이름 반환
 window.getBaseBusinessRankName = function() {
     if (Array.isArray(window.dbRanksSorted) && window.dbRanksSorted.length > 0) {
         const personalRanks = window.dbRanksSorted.filter(r => Number(r.minor_leg_pv || 0) === 0);
@@ -3453,7 +3399,7 @@ window.getDirectRecommendedPartnersMap = function(targetMember) {
     return recMap;
 };
 
-// [10-2-4] 🌟 100% TiDB ranks 테이블(period_type, minor_leg_pv, required_partner_rank_id, is_direct_sponsor) 기반 동적 직급 판정
+// [10-2-4] 100% TiDB ranks 테이블(period_type, minor_leg_pv, required_partner_rank_id, is_direct_sponsor) 기반 동적 직급 판정
 window.resolveHistoricalRank = function(memberObj, orderKey, rawSk, backendMembersMap, accAPV, accBPV, recent4APV, recent4BPV, legQualifyInfo) {
     const baseRankName = window.getBaseBusinessRankName();
     if (!memberObj) return baseRankName;
@@ -3511,7 +3457,7 @@ window.resolveHistoricalRank = function(memberObj, orderKey, rawSk, backendMembe
     return achievedRank;
 };
 
-// 전체 회원(프론트 트리 + 백엔드 flatMembers 통합) 수집 헬퍼
+// [10-2-4-B] 전체 회원(프론트 트리 + 백엔드 flatMembers 통합) 수집 및 레그별 최고 달성 직급 계산 헬퍼
 window.getAllCombinedMembersList = function(backendMembersMap) {
     const combinedMap = new Map();
     const localList = typeof window.getUniqueMembers === 'function' ? window.getUniqueMembers() : [];
@@ -3544,7 +3490,6 @@ window.getAllCombinedMembersList = function(backendMembersMap) {
     return Array.from(combinedMap.values());
 };
 
-// 특정 회원의 A/B 각 레그별 직추천자 및 산하 파트너 최고 달성 직급(rank_id) 계산 헬퍼
 window.getLegPartnerQualificationInfo = function(treeNode, setA, setB, directRecNormSet, orderKey, teamBonusMap) {
     let maxDirectRankIdA = 0, maxDirectRankIdB = 0;
     let maxSubRankIdA = 0, maxSubRankIdB = 0;
@@ -3581,7 +3526,7 @@ window.getLegPartnerQualificationInfo = function(treeNode, setA, setB, directRec
     return { maxDirectRankIdA, maxDirectRankIdB, maxSubRankIdA, maxSubRankIdB };
 };
 
-// 전체 회원의 기수별 지원수당(Team Bonus) 및 기수별 당시 직급(DB ranks 테이블 규칙 기반) 일괄 시뮬레이션
+// [10-2-4-C] 전체 회원의 기수별 지원수당(Team Bonus) 및 기수별 당시 직급 일괄 시뮬레이션
 window.computeAllMembersTeamBonusByPeriod = function(allSales, backendMembersMap) {
     const allMembers = window.getAllCombinedMembersList(backendMembersMap);
     const salesByMember = new Map();
@@ -3753,7 +3698,7 @@ window.computeAllMembersTeamBonusByPeriod = function(allSales, backendMembersMap
     return teamBonusMap;
 };
 
-// [10-2-5] 추천 계보 정밀 연결 및 추천매칭보너스 산출 (요청하신 압축롤업 기준금액 30,000원만 상수 적용)
+// [10-2-5] 추천 계보 정밀 연결 및 추천매칭보너스 산출 (압축롤업 기준금액 30,000원 상수 적용)
 window.buildRecommenderChildrenMap = function(allMembers, backendMembersMap) {
     const recChildrenMap = new Map();
     const memberByNormId = new Map();
@@ -3874,7 +3819,6 @@ window.calculateMatchingBonusForTarget = function(targetMember, periodMap, allMe
         }
     });
 
-    // 🌟 사용자께서 직접 요청하신 유일한 하드코딩 상수: 압축롤업 기준금액 30,000원
     const ROLLUP_MIN_TEAM_BONUS = 30000;
 
     const allRelevantPeriodKeys = new Set(Object.keys(periodMap));
@@ -4030,11 +3974,7 @@ window.calculateMatchingBonusForTarget = function(targetMember, periodMap, allMe
     });
 };
 
-// [10-2-5-B] 🌟 패스트파워보너스(Fast Power Bonus) 시뮬레이션 (TiDB fast_power_bonus_policies 100% 동적 연동)
-// - Step 1: 당월 전기수(01~15일) 내에 A라인에 매니아(required_partner_rank_id) 직추천 가입 (my_direct_sponsor_count명)
-// - Step 2: Step 1 달성 이후 ~ 당월 말일 이내에 Step 1 달성 A라인 파트너들이 각각 매니아 직추천 가입 (partner_direct_sponsor_count명씩)
-// - Step 3: Step 1 시작 기수 ~ 당월 말일 이내에 B라인에 매니아 직추천 가입 (my_direct_sponsor_count명) + 그 파트너들이 각각 B라인에 매니아 직추천 가입 (partner_direct_sponsor_count명씩)
-// - 매월 리셋되며, 전월에 조건을 충족하면 익월 전기수(다음달-전)에 지급 (Step 1·2·3 모두 달성 시 100%, 일부 달성 시 partial_payout_rate 적용)
+// [10-2-5-B] 패스트파워보너스(Fast Power Bonus) 시뮬레이션 (TiDB fast_power_bonus_policies 100% 동적 연동)
 window.calculateFastPowerBonusForTarget = function(targetMember, periodMap, allSales, backendMembersMap) {
     if (!targetMember || !targetMember.id) return;
     const fpPolicies = Array.isArray(window.dbFastPowerPolicies) ? window.dbFastPowerPolicies : [];
@@ -4050,7 +3990,6 @@ window.calculateFastPowerBonusForTarget = function(targetMember, periodMap, allS
     const rootNorm = String(targetMember.id).trim().toLowerCase().replace(/^vk-?/, '');
     const { setA, setB } = window.getSublinePartnerSets(targetMember);
 
-    // 1) 각 회원이 required_partner_rank_id (예: MANIA) 자격을 달성한 날짜(qualifyDate) 산출
     const salesByMemberAsc = new Map();
     allSales.forEach(s => {
         if (!s) return;
@@ -4098,7 +4037,6 @@ window.calculateFastPowerBonusForTarget = function(targetMember, periodMap, allS
         return null;
     };
 
-    // 2) 본인이 직접 추천한 파트너들(myDirectChildren)의 달성일 수집 및 활동 월(YYYY-MM) 추출
     const myDirectChildren = recChildrenMap.get(rootNorm) || [];
     const candidateMonths = new Set();
 
@@ -4113,7 +4051,6 @@ window.calculateFastPowerBonusForTarget = function(targetMember, periodMap, allS
         if (qDate) candidateMonths.add(qDate.slice(0, 7));
     });
 
-    // 모든 기수의 fastPowerBonus 초기화
     Object.values(periodMap).forEach(r => {
         r.fastPowerBonus = 0;
         r.fastPowerDetails = null;
@@ -4132,9 +4069,6 @@ window.calculateFastPowerBonusForTarget = function(targetMember, periodMap, allS
         const firstHalfEnd = `${ym}-15`;
         const monthEnd = `${ym}-${String(lastDay).padStart(2, '0')}`;
 
-        // --------------------------------------------------------------------
-        // [Step 1 판정] 당월 전기수(01~15일) 내에 A라인에 매니아 직추천 가입 (my_direct_sponsor_count명)
-        // --------------------------------------------------------------------
         const s1ReqCount = Number(step1Pol.my_direct_sponsor_count || 0);
         const s1RankId = step1Pol.required_partner_rank_id;
         const step1QualifiedPartners = [];
@@ -4155,15 +4089,10 @@ window.calculateFastPowerBonusForTarget = function(targetMember, periodMap, allS
         step1QualifiedPartners.sort((a, b) => a.qualifyDate.localeCompare(b.qualifyDate));
         const isStep1Achieved = s1ReqCount > 0 && step1QualifiedPartners.length >= s1ReqCount;
 
-        // Step 1 미달성 시 해당 월은 패스트파워보너스 대상이 아님 (매월 리셋)
         if (!isStep1Achieved) return;
 
         const step1CompletedDate = step1QualifiedPartners[s1ReqCount - 1].qualifyDate;
 
-        // --------------------------------------------------------------------
-        // [Step 2 판정] Step 1 달성 이후부터 당월 말일까지, Step 1에서 가입한 A라인 파트너(s1ReqCount명)가
-        //              각각 또다시 매니아를 partner_direct_sponsor_count명씩 직접추천 가입
-        // --------------------------------------------------------------------
         let isStep2Achieved = false;
         let step2QualifiedPairs = [];
 
@@ -4201,11 +4130,6 @@ window.calculateFastPowerBonusForTarget = function(targetMember, periodMap, allS
             }
         }
 
-        // --------------------------------------------------------------------
-        // [Step 3 판정] 내가 Step 1을 시작한 기수(monthStart)부터 당월 말일(monthEnd) 이내에
-        //              B라인에 매니아를 my_direct_sponsor_count명 직접추천 가입하고,
-        //              그 두 명이 각각 매니아를 B라인에 partner_direct_sponsor_count명씩 직접추천 가입
-        // --------------------------------------------------------------------
         let isStep3Achieved = false;
         let step3QualifiedPairs = [];
 
@@ -4258,9 +4182,6 @@ window.calculateFastPowerBonusForTarget = function(targetMember, periodMap, allS
             }
         }
 
-        // --------------------------------------------------------------------
-        // [보상액 계산 및 익월 전기수(nextMonth-1) 배정]
-        // --------------------------------------------------------------------
         const isFullCycle = isStep1Achieved && isStep2Achieved && isStep3Achieved;
         const stepResults = [];
         let totalFastPowerBonus = 0;
@@ -4294,7 +4215,6 @@ window.calculateFastPowerBonusForTarget = function(targetMember, periodMap, allS
 
         if (totalFastPowerBonus <= 0) return;
 
-        // 익월 전기수(다음달 01~15일) 키 계산
         const nextY = mm === 12 ? (yyyy + 1) : yyyy;
         const nextM = mm === 12 ? 1 : (mm + 1);
         const nextMmStr = String(nextM).padStart(2, '0');
@@ -4369,14 +4289,12 @@ window.calculateLocalPerformance = async function(targetId) {
     const rootNorm = String(actualId).trim().toLowerCase().replace(/^vk-?/, '');
     if (nameEl) nameEl.innerText = `(${targetMember.name || actualId} / ${actualId})`;
 
-    // 1) TiDB에서 직급 테이블(ranks) 및 직급별 보상플랜 정책 로드
     if (typeof window.loadDbCompensationRates === 'function') {
         await window.loadDbCompensationRates();
     }
     const baseRankName = window.getBaseBusinessRankName();
     const baseRankLevel = window.getDbRankLevel(baseRankName);
 
-    // 2) 전체 회원의 매출 내역(integrated_sales_history) 최신 확보
     let allSales = [];
     if (window.API_BASE) {
         try {
@@ -4394,7 +4312,6 @@ window.calculateLocalPerformance = async function(targetId) {
         allSales = typeof window.getAllSalesListFromDB === 'function' ? window.getAllSalesListFromDB() : (window.integrated_sales_history || []);
     }
 
-    // 3) 백엔드 트리/수당 데이터 확보
     let backendFlatMembers = null;
     if (window.API_BASE) {
         try {
@@ -4406,11 +4323,6 @@ window.calculateLocalPerformance = async function(targetId) {
         } catch (err) {}
     }
 
-    // ------------------------------------------------------------------------
-    // 🌟 4) 전체 회원의 기수별 역사적 직급 및 지원수당 시뮬레이션 맵 생성 (10월 기수 동적 포함 보정)
-    // ------------------------------------------------------------------------
-    
-    // (A) 매출 데이터 전체를 스캔하여 10월 등 최신 매출 날짜의 기수 버킷이 누락되지 않도록 사전 등록
     if (Array.isArray(allSales)) {
         allSales.forEach(s => {
             if (!s) return;
@@ -4419,12 +4331,11 @@ window.calculateLocalPerformance = async function(targetId) {
                 : String(s.transaction_date || s.date || s.buy_date || '').trim().substring(0, 10);
             
             if (cleanDt && typeof window.ensurePeriodByDate === 'function') {
-                window.ensurePeriodByDate(cleanDt); // 매출 날짜 기준 기수(예: 10-전) 자동 생성
+                window.ensurePeriodByDate(cleanDt);
             }
         });
     }
 
-    // (B) 기수별 수당 집계 실행
     const allMembersTeamBonusMap = typeof window.computeAllMembersTeamBonusByPeriod === 'function'
         ? window.computeAllMembersTeamBonusByPeriod(allSales, backendFlatMembers)
         : new Map();
@@ -4482,21 +4393,18 @@ window.calculateLocalPerformance = async function(targetId) {
         return periodMap[pInfo.sortOrderKey];
     }
 
-    // 🌟 [핵심 추가] 날짜 문자열 ➔ 기수 정보(pInfo) 변환 및 본인 매출 기수(10-전 등) 사전 생성
     const buildPeriodInfoFromDate = (dateStr) => {
         const clean = typeof window.cleanDateStr === 'function' 
             ? window.cleanDateStr(dateStr) 
             : String(dateStr || '').trim().substring(0, 10);
         if (!clean || clean.length < 10) return null;
 
-        // 기존 기수 변환 함수가 있으면 우선 활용
         const existingFn = window.getPeriodInfoByDate || window.getPeriodInfo || window.parsePeriodInfo || window.getPeriodFromDate;
         if (typeof existingFn === 'function') {
             const info = existingFn(clean);
             if (info && info.sortOrderKey) return info;
         }
 
-        // 자체 기수 정보 생성 (YYYY-MM-DD 기준 1~15일: 전, 16~말일: 후)
         const [yyyy, mm, ddStr] = clean.split('-');
         const dd = parseInt(ddStr, 10);
         if (!yyyy || !mm || isNaN(dd)) return null;
@@ -4515,7 +4423,6 @@ window.calculateLocalPerformance = async function(targetId) {
         };
     };
 
-    // 1) 시뮬레이션 맵(targetPeriodRankMap)에 등록된 모든 기수 버킷 보장
     Object.keys(targetPeriodRankMap).forEach(orderKey => {
         const rankObj = targetPeriodRankMap[orderKey];
         if (rankObj && rankObj.pInfo) {
@@ -4533,7 +4440,6 @@ window.calculateLocalPerformance = async function(targetId) {
         }
     });
 
-    // 2) 본인 매출(sNorm === rootNorm) 또는 하위 매출이 존재하는 모든 기수 버킷 강제 생성
     (allSales || []).forEach(s => {
         if (!s) return;
         const sNorm = String(s.member_id || s.memberId || '').trim().toLowerCase().replace(/^vk-?/, '');
@@ -4544,7 +4450,6 @@ window.calculateLocalPerformance = async function(targetId) {
         }
     });
 
-    // 5) 전체 매출 스캔 -> 산하 A/B라인 CV·PV 집계(본인 제외) & 당시 직급 기준 추천수당 산출
     allSales.forEach(s => {
         if (!s) return;
         const saleMidNorm = String(s.member_id || s.memberId || '').trim().toLowerCase().replace(/^vk-?/, '');
@@ -4598,7 +4503,6 @@ window.calculateLocalPerformance = async function(targetId) {
         }
     });
 
-    // 6) 백엔드 품위유지비/차량유지비 등 기타 수당 병합
     const memberBackend = backendFlatMembers ? (backendFlatMembers[actualId] || backendFlatMembers[actualId.toUpperCase()]) : null;
     if (memberBackend && memberBackend.periods) {
         Object.values(memberBackend.periods).forEach(bRow => {
@@ -4648,10 +4552,8 @@ window.calculateLocalPerformance = async function(targetId) {
         });
     }
 
-    // 🌟 6-B) 패스트파워보너스(TiDB fast_power_bonus_policies 연동: 전월 Step 1·2·3 달성 시 익월 전기수 지급) 산출
     window.calculateFastPowerBonusForTarget(targetMember, periodMap, allSales, backendFlatMembers);
 
-    // 7) 시간순(오름차순) A·B라인 누적 대/소실적 판정 + DB ranks 테이블 기준 당시 직급 판정 + 지원수당 및 품위유지수당 계산
     const chronologicalRows = Object.values(periodMap).sort((a, b) => a.sortOrderKey.localeCompare(b.sortOrderKey));
 
     if (chronologicalRows.length === 0) {
@@ -4755,7 +4657,6 @@ window.calculateLocalPerformance = async function(targetId) {
         row.teamBonus = calcTeamBonus > 0 ? calcTeamBonus : (row.backendTeamBonus || 0);
         row.appliedTeamRate = rowTeamRate;
 
-        // 품위유지수당(Maintenance / Dignity Bonus) 산출 (TiDB rank_maintenance_bonus_policies 연동)
         const maintPolicy = typeof window.getMaintenanceBonusPolicy === 'function'
             ? window.getMaintenanceBonusPolicy(row.historicalRank)
             : null;
@@ -4783,11 +4684,9 @@ window.calculateLocalPerformance = async function(targetId) {
             row.levelBonus = 0;
         }
 
-        // 모든 기수의 차량유지비는 기본적으로 0으로 초기화한 뒤 아래 월간(전+후) 검증에서 후기수에 기재
         row.carBonus = 0;
     });
 
-    // [Step 7-2] 차량유지비(Car Maintenance Bonus) 산출 (TiDB rank_car_maintenance_bonus_policies 연동)
     const rowsByYearMonth = {};
     chronologicalRows.forEach(row => {
         const ym = String(row.sortOrderKey || '').slice(0, 7);
@@ -4850,7 +4749,6 @@ window.calculateLocalPerformance = async function(targetId) {
         }
     });
 
-    // 8) 확정된 기수별 당시 직급(row.historicalRank)을 기준으로 추천매칭보너스 산출 + TiDB 수동 편집(matching_bonus_overrides) 최우선 반영
     window.calculateMatchingBonusForTarget(targetMember, periodMap, allMembersTeamBonusMap, isRollup, backendFlatMembers);
 
     if (typeof window.loadMatchingOverridesForTarget === 'function') {
@@ -4928,13 +4826,12 @@ window.calculateLocalPerformance = async function(targetId) {
     });
 };
 // ============================================================================
-// [10-2-7] 🌟 계보도 카드 우측 상단 [승급] / [품위유지] 배지 자동 렌더링 (통합 정밀 판정 연동)
+// [11] 계보도 카드 우측 상단 [승급] / [품위유지] 배지 자동 렌더링 및 내비게이터/기간검색 팝업 제어
 // ============================================================================
 
-// 전역 배지 달성률 기준 비율 (기본값: 80% = 0.8)
+// [11-1] 전역 배지 달성률 기준 비율 (기본값: 80% = 0.8) 및 기준 기수 키 추출
 window.badgeThresholdRatio = typeof window.badgeThresholdRatio === 'number' ? window.badgeThresholdRatio : 0.8;
 
-// 현재 상단 날짜 입력창(또는 최근 기수)에서 기준 sortOrderKey 추출
 window.getCurrentSelectedPeriodOrderKey = function(teamBonusMap) {
     const dateInputs = document.querySelectorAll('input[type="date"], input[placeholder*="YYYY"]');
     for (const inp of dateInputs) {
@@ -4954,7 +4851,7 @@ window.getCurrentSelectedPeriodOrderKey = function(teamBonusMap) {
     return null;
 };
 
-// 🌟 특정 회원(memberId)의 승급 및 품위유지 배지 표시 여부 계산 (비지네스 내비게이터와 100% 동일 연산)
+// [11-2] 특정 회원(memberId)의 승급 및 품위유지 배지 표시 여부 계산 (기본 엔진)
 window.evaluateMemberCardBadgeStatus = function(memberId, teamBonusMap, preferredOrderKey) {
     const result = {
         showPromoBadge: false,
@@ -4972,7 +4869,6 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamBonusMap, preferre
     if (!memberId) return result;
     const mNorm = String(memberId).trim().toLowerCase().replace(/^vk-?/, '');
 
-    // 1) 회원 노드 탐색 및 산하 A/B 라인의 전체 누적 PV 정밀 집계
     const mNode = typeof window.findMemberNode === 'function' ? window.findMemberNode(memberId) : null;
     if (!mNode) return result;
 
@@ -5013,7 +4909,6 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamBonusMap, preferre
         }
     });
 
-    // 2) 현재 직급 및 다음 승급 목표 직급 정밀 판정
     const baseRankName = typeof window.getBaseBusinessRankName === 'function' ? window.getBaseBusinessRankName() : '';
     let currRankName = mNode.rank || mNode.rank_name || baseRankName;
 
@@ -5029,12 +4924,10 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamBonusMap, preferre
     const dbRanks = Array.isArray(window.dbRanksSorted) ? window.dbRanksSorted : [];
     const nextRankObj = dbRanks.find(r => Number(r.rank_level || 0) > currRankLevel && Number(r.minor_leg_pv || 0) > 0);
 
-    // 동적 비율 적용
     const thresholdRatio = (typeof window.badgeThresholdRatio === 'number' && window.badgeThresholdRatio > 0) 
         ? window.badgeThresholdRatio 
         : 0.8;
 
-    // 3) [승급] 배지 판정: RECENT_4 직급만 4기수 연산, 에메랄드 이상 승급은 전체 누적 PV
     if (nextRankObj) {
         const reqMinorPv = Number(nextRankObj.minor_leg_pv || 0);
         const isRecent4Rule = String(nextRankObj.period_type || 'NONE').trim().toUpperCase() === 'RECENT_4';
@@ -5055,7 +4948,6 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamBonusMap, preferre
         }
     }
 
-    // 4) [품위유지] 배지 판정
     const maintPol = typeof window.getMaintenanceBonusPolicy === 'function'
         ? window.getMaintenanceBonusPolicy(currRankName)
         : null;
@@ -5096,9 +4988,7 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamBonusMap, preferre
     return result;
 };
 
-// ============================================================================
-// 🌟 [배지 상태 평가 헬퍼] 단일 기수 소실적 기준 신규 CV 품위유지 판정
-// ============================================================================
+// [11-3] 배지 상태 평가 헬퍼 (단일 기수 소실적 기준 신규 CV 품위유지 판정)
 window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrderKey) {
     const res = {
         showPromoBadge: false,
@@ -5132,7 +5022,6 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrde
     const mNorm = String(memberId).trim().toLowerCase().replace(/^vk-?/, '');
     const cleanFn = typeof window.cleanDateStr === 'function' ? window.cleanDateStr : (s => String(s || '').trim().substring(0, 10));
 
-    // 선택된 단일 기수의 시작/종료일
     const startDt = window.salesPopupState?.startDate || '';
     const endDt = window.salesPopupState?.endDate || '';
 
@@ -5150,13 +5039,11 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrde
         const isA = setA.has(sNorm);
         const isB = setB.has(sNorm);
 
-        // 누적 PV (승급용)
         if (pv > 0) {
             if (isA) aTotalPV += pv;
             else if (isB) bTotalPV += pv;
         }
 
-        // 해당 기수 단일 범위 신규 CV (품위유지용)
         const isCurrentTerm = (!startDt || sDate >= startDt) && (!endDt || sDate <= endDt);
         if (isCurrentTerm && cv > 0) {
             if (isSelf) selfCV += cv;
@@ -5170,7 +5057,6 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrde
     const currLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(currRank) : 0;
     const dbRanks = Array.isArray(window.dbRanksSorted) ? window.dbRanksSorted : [];
 
-    // [1] 승급 판정
     let nextRank = dbRanks.find(r => Number(r.rank_level || 0) > currLevel && Number(r.minor_leg_pv || 0) > 0);
     if (!nextRank) nextRank = { rank_name: 'NEXT', minor_leg_pv: 0 };
     const reqMinorPV = Number(nextRank.minor_leg_pv || 0);
@@ -5187,7 +5073,6 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrde
         }
     }
 
-    // [2] 해당기수 단일 소실적 신규 CV 기반 품위유지 판정
     const dbMaintList = Array.isArray(window.dbMaintPolicies) ? window.dbMaintPolicies : (window.rank_maintenance_bonus_policies || []);
     const rankInfo = dbRanks.find(r => String(r.rank_name || '').toUpperCase() === currRank);
     const currRankId = rankInfo ? Number(rankInfo.rank_id || rankInfo.id || 0) : 0;
@@ -5196,9 +5081,8 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrde
                         (window.dbMaintPolicyMap ? window.dbMaintPolicyMap[currRank] : null);
 
     const reqMaintCV = Number((maintPolicy && (maintPolicy.required_minor_leg_cv || maintPolicy.req_cv || maintPolicy.required_cv)) || 
-                              (rankInfo && (rankInfo.maintenance_cv || rankInfo.maint_cv)) || 0);
+                             (rankInfo && (rankInfo.maintenance_cv || rankInfo.maint_cv)) || 0);
 
-    // 해당기수 소실적 라인 신규 CV + 본인 신규 CV
     const termMinorCV = selfCV + Math.min(aNewCV, bNewCV);
 
     if (reqMaintCV > 0) {
@@ -5215,16 +5099,11 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrde
 
     return res;
 };
-// ============================================================================
-// [10-2-8] 🌟 표시 설정 메뉴 (초기 감춤 & 여백 제거) 및 팝업 윈도우 완벽 제어
-// ============================================================================
 
+// [11-4] 표시 설정 메뉴 체크박스 탐색 및 인라인 패널 숨김 헬퍼
 window.bizNavPopupWindow = null;
 window.salesSearchPopupWindow = null;
 
-// ----------------------------------------------------------------------------
-// 1. 체크박스 탐색 및 인라인 패널 숨김 헬퍼
-// ----------------------------------------------------------------------------
 window.findBizNavigatorCheckbox = function() {
     const direct = document.querySelector('#chk-navigator, #chk-biz-nav, #chkBizNav, #toggle-navigator, #opt-navigator');
     if (direct && direct.type === 'checkbox') return direct;
@@ -5269,9 +5148,7 @@ window.hideInlineSalesSearchPanels = function() {
     });
 };
 
-// ============================================================================
-// 🧭 비지네스 내비게이터 (해당기수 소실적 신규 CV 산정 바인딩)
-// ============================================================================
+// [11-5] 비지네스 내비게이터 기본 렌더링 함수
 window.renderBusinessNavigator = async function(targetMemberId, optDoc = null) {
     const popup = window.bizNavPopupWindow;
     const pDoc = optDoc || ((popup && !popup.closed) ? popup.document : document);
@@ -5301,15 +5178,14 @@ window.renderBusinessNavigator = async function(targetMemberId, optDoc = null) {
     const nextRank = dbRanks.find(r => Number(r.rank_level || 0) > currLevel && Number(r.minor_leg_pv || 0) > 0) || { rank_name: 'DIAMOND', minor_leg_pv: 0 };
     const reqMinorPV = Number(nextRank.minor_leg_pv || 0);
 
-   // [수정된 DB 완벽 연동 코드]
-const reqPartnerRankId = nextRank.required_partner_rank_id ? Number(nextRank.required_partner_rank_id) : null;
-const reqPartnerRankObj = (reqPartnerRankId && window.dbRankByIdMap && window.dbRankByIdMap[reqPartnerRankId])
-    ? window.dbRankByIdMap[reqPartnerRankId]
-    : dbRanks.find(r => Number(r.rank_id) === reqPartnerRankId);
+    const reqPartnerRankId = nextRank.required_partner_rank_id ? Number(nextRank.required_partner_rank_id) : null;
+    const reqPartnerRankObj = (reqPartnerRankId && window.dbRankByIdMap && window.dbRankByIdMap[reqPartnerRankId])
+        ? window.dbRankByIdMap[reqPartnerRankId]
+        : dbRanks.find(r => Number(r.rank_id) === reqPartnerRankId);
 
-const reqPartnerRank = reqPartnerRankObj ? String(reqPartnerRankObj.rank_name).toUpperCase() : 'MANIA';
-const reqPartnerCountEach = Number(nextRank.required_partner_count || nextRank.req_partner_count || 1);
-const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
+    const reqPartnerRank = reqPartnerRankObj ? String(reqPartnerRankObj.rank_name).toUpperCase() : 'MANIA';
+    const reqPartnerCountEach = Number(nextRank.required_partner_count || nextRank.req_partner_count || 1);
+    const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
 
     const { setA, setB } = (typeof window.getSublinePartnerSets === 'function' && mNode)
         ? window.getSublinePartnerSets(mNode) 
@@ -5351,7 +5227,6 @@ const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
             }
         }
 
-        // 단일 기수 신규 CV
         const isCurrentTerm = (!startDt || sDate >= startDt) && (!endDt || sDate <= endDt);
         if (isCurrentTerm && cv > 0) {
             if (isSelf) selfCV += cv;
@@ -5364,7 +5239,6 @@ const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
     const promoPct = reqMinorPV > 0 ? Math.floor((minorPV / reqMinorPV) * 100) : 0;
     const isTermRestricted = (currRank === 'MANIA' || currRank === 'DIRECTOR' || currLevel < 3);
 
-    // 대표 파트너 노드 탐색
     let reqPartnerLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(reqPartnerRank) : 1;
     let dirCountA = 0, dirCountB = 0;
     let firstNodeA = null, firstNodeB = null;
@@ -5417,7 +5291,6 @@ const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
         count: dirCountB
     };
 
-    // 1. 상단 승급 가이드 카드
     const promoRequirementsCardHtml = `
         <div style="background:#1f2937; border:1px solid #374151; border-radius:8px; padding:14px; margin-bottom:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #374151;">
@@ -5463,7 +5336,6 @@ const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
         </div>
     `;
 
-    // 2. 승급 상세 실적 표
     let mainContentHtml = '';
 
     if (isTermRestricted) {
@@ -5571,7 +5443,6 @@ const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
         `;
     }
 
-    // 3. 품위유지 달성 현황 카드 (한 기수의 소실적 신규 CV 완벽 표출)
     const dbMaintList = Array.isArray(window.dbMaintPolicies) ? window.dbMaintPolicies : (window.rank_maintenance_bonus_policies || []);
     const rankInfo = dbRanks.find(r => String(r.rank_name || '').toUpperCase() === currRank);
     const currRankId = rankInfo ? Number(rankInfo.rank_id || rankInfo.id || 0) : 0;
@@ -5580,9 +5451,8 @@ const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
                         (window.dbMaintPolicyMap ? window.dbMaintPolicyMap[currRank] : null);
 
     const reqMaintCV = Number((maintPolicy && (maintPolicy.required_minor_leg_cv || maintPolicy.req_cv || maintPolicy.required_cv)) || 
-                              (rankInfo && (rankInfo.maintenance_cv || rankInfo.maint_cv)) || 0);
+                             (rankInfo && (rankInfo.maintenance_cv || rankInfo.maint_cv)) || 0);
 
-    // 해당기수 소실적 라인 신규 CV (소실적 신규 CV + 본인 신규 CV)
     const minorSubCV = Math.min(aNewCV, bNewCV);
     const termMinorCV = selfCV + minorSubCV;
     const maintPct = reqMaintCV > 0 ? Math.min(100, Math.floor((termMinorCV / reqMaintCV) * 100)) : 100;
@@ -5596,13 +5466,11 @@ const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
             </div>
             
             <div style="display:grid; grid-template-columns: 1fr 1.6fr 1fr; gap:10px; text-align:center; font-size:12px; background:#111827; padding:12px; border-radius:6px; border:1px solid #374151;">
-                <!-- 1) 직급별 기준 소실적 CV (DB) -->
                 <div style="display:flex; flex-direction:column; justify-content:center;">
                     <div style="color:#9ca3af; margin-bottom:4px; font-size:11px; font-weight:bold;">직급별 기준 소실적 CV (DB)</div>
                     <div style="color:#ffffff; font-weight:bold; font-size:13px;">${reqMaintCV.toLocaleString('ko-KR')} CV</div>
                 </div>
                 
-                <!-- 2) 해당기수 소실적 신규 CV (본인 + 소실적 라인) -->
                 <div style="border-left:1px solid #374151; border-right:1px solid #374151; padding:0 8px;">
                     <div style="color:#9ca3af; margin-bottom:4px; font-size:11px; font-weight:bold;">해당기수 소실적 신규 CV</div>
                     <div style="color:#ffffff; font-weight:bold; font-size:13px; margin-bottom:2px;">
@@ -5615,7 +5483,6 @@ const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
                     </div>
                 </div>
 
-                <!-- 3) 부족분 CV -->
                 <div style="display:flex; flex-direction:column; justify-content:center;">
                     <div style="color:#9ca3af; margin-bottom:4px; font-size:11px; font-weight:bold;">부족분 CV</div>
                     <div style="color:${maintDiffCV === 0 ? '#ffffff' : '#ef4444'}; font-weight:bold; font-size:13px;">
@@ -5636,9 +5503,7 @@ const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
     `;
 };
 
-// ----------------------------------------------------------------------------
-// 3. 🌟 [매출 기간 검색] 독립 브라우저 팝업 엔진 (완전 일체형 & 직접 이벤트 바인딩)
-// ----------------------------------------------------------------------------
+// [11-6] 매출 기간 검색 독립 브라우저 팝업 엔진 (상세 필터링 및 이벤트 바인딩)
 window.salesPopupState = {
     unit: 'term',
     anchorDate: new Date(),
@@ -5649,7 +5514,6 @@ window.salesPopupState = {
     rowClickTimer: null
 };
 
-// [3-1] 기준일 및 단위(기수/월/년)에 따른 시작일~종료일 자동 계산
 window.calculatePopupPeriodDates = function(anchor, unit) {
     let dt = (anchor instanceof Date && !isNaN(anchor.getTime())) ? new Date(anchor.getTime()) : new Date();
     const y = dt.getFullYear();
@@ -5673,7 +5537,6 @@ window.calculatePopupPeriodDates = function(anchor, unit) {
     return { start: `${y}-${pad(m + 1)}-01`, end: `${y}-${pad(m + 1)}-15` };
 };
 
-// [3-2] ◀ 이전 / 다음 ▶ 버튼 클릭 시 날짜 이동 및 즉시 렌더링
 window.navPopupPeriod = function(direction) {
     const st = window.salesPopupState;
     if (!(st.anchorDate instanceof Date) || isNaN(st.anchorDate.getTime())) {
@@ -5717,7 +5580,6 @@ window.navPopupPeriod = function(direction) {
     window.renderSalesSearchPopupContent(false, true);
 };
 
-// [3-3] DB 매출 데이터 필터링 및 가공
 window.renderSalesSearchPopupContent = function(resetToAnchor = false, skipInputRead = false) {
     const popup = window.salesSearchPopupWindow;
     if (!popup || popup.closed || !popup.document) return;
@@ -5842,7 +5704,6 @@ window.renderSalesSearchPopupContent = function(resetToAnchor = false, skipInput
     window.renderSalesPopupRowsAndTotals();
 };
 
-// [3-4] 테이블 HTML 그리기 및 선택/제외 합산 렌더링
 window.renderSalesPopupRowsAndTotals = function() {
     const popup = window.salesSearchPopupWindow;
     if (!popup || popup.closed || !popup.document) return;
@@ -5925,7 +5786,6 @@ window.renderSalesPopupRowsAndTotals = function() {
     if (totalPvEl) totalPvEl.innerText = `총 ${sumPv.toLocaleString('ko-KR')} PV`;
 };
 
-// [3-5] 브라우저 팝업창 생성 및 DOM addEventListener 직접 연결
 window.openSalesSearchPopupWindow = function() {
     if (typeof window.hideInlineSalesSearchPanels === 'function') {
         window.hideInlineSalesSearchPanels();
@@ -6180,7 +6040,6 @@ window.openSalesSearchPopupWindow = function() {
     return popup;
 };
 
-// [3-6] 팝업 토글 함수
 window.toggleSalesSearchPopup = function(forceShow) {
     if (typeof window.hideInlineSalesSearchPanels === 'function') {
         window.hideInlineSalesSearchPanels();
@@ -6201,11 +6060,7 @@ window.toggleSalesSearchPopup = function(forceShow) {
     if (salesChk && salesChk.checked !== willShow) salesChk.checked = willShow;
 };
 
-// ----------------------------------------------------------------------------
-// 4. 🌟 표시 설정 메뉴 (초기 감춤 상태 유지, 여백 제거, 첨부화면 레이아웃)
-// ============================================================================
-// 🌟 [표시 설정 메뉴] 여백 정렬 & 배지 표시 기준(%) 유지 보정
-// ============================================================================
+// [11-7] 표시 설정 메뉴 여백 정렬 & 배지 표시 기준(%) 유지 보정
 window.reorganizePopupSettingsCategory = function(keepHidden = false) {
     const navChk = typeof window.findBizNavigatorCheckbox === 'function' ? window.findBizNavigatorCheckbox() : null;
     const salesChk = typeof window.findSalesSearchCheckbox === 'function' ? window.findSalesSearchCheckbox() : null;
@@ -6285,7 +6140,6 @@ window.reorganizePopupSettingsCategory = function(keepHidden = false) {
     salesRow.style.cssText = 'display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; color:#e5e7eb; padding:2px 0; width:fit-content;';
     popupCol.appendChild(salesRow);
 
-    // 4단: 배지 표시 기준 (% 저장값 유지)
     let badgeThresholdRow = document.getElementById('bs-badge-threshold-row');
     if (!badgeThresholdRow) {
         badgeThresholdRow = document.createElement('div');
@@ -6327,9 +6181,7 @@ window.reorganizePopupSettingsCategory = function(keepHidden = false) {
     }
 };
 
-// ============================================================================
-// 🌟 [배지 상태 평가 헬퍼] 승급 & 품위유지 달성률 연산 통합 판정
-// ============================================================================
+// [11-8] 배지 상태 평가 헬퍼 (승급 & 품위유지 달성률 연산 통합 판정)
 window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrderKey) {
     const res = {
         showPromoBadge: false,
@@ -6375,7 +6227,6 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrde
     const currLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(currRank) : 0;
     const dbRanks = Array.isArray(window.dbRanksSorted) ? window.dbRanksSorted : [];
 
-    // [1] 승급 (Promotion) 판정
     let nextRank = dbRanks.find(r => Number(r.rank_level || 0) > currLevel && Number(r.minor_leg_pv || 0) > 0);
     if (!nextRank) {
         nextRank = { rank_name: 'DIAMOND', minor_leg_pv: 10000000 };
@@ -6393,7 +6244,6 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrde
         res.showPromoBadge = true;
     }
 
-    // [2] 품위유지 (Maintenance) 판정
     const rankInfo = dbRanks.find(r => String(r.rank_name || '').toUpperCase() === currRank);
     let reqMaintVal = Number((rankInfo && (rankInfo.maintenance_pv || rankInfo.maint_pv || rankInfo.maint_val)) || 0);
     if (reqMaintVal <= 0) reqMaintVal = reqMinorPV;
@@ -6422,9 +6272,7 @@ window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrde
     return res;
 };
 
-// ============================================================================
-// 🌟 계보도 카드 배지 렌더링
-// ============================================================================
+// [11-9] 계보도 카드 배지 DOM 렌더링 및 자동 감지 바인딩
 window.renderTreeCardStatusBadges = async function() {
     if (typeof window.loadDbCompensationRates === 'function') {
         await window.loadDbCompensationRates();
@@ -6547,9 +6395,6 @@ window.renderTreeCardStatusBadges = async function() {
     });
 };
 
-// ============================================================================
-// 🌟 이벤트 자동 연결 (맨 끝 구문 정상 마감)
-// ============================================================================
 (function bindAutoTreeCardBadges() {
     const origCalc = window.calculateLocalPerformance;
     if (typeof origCalc === 'function' && !origCalc._badgeWrapped) {
@@ -6585,13 +6430,13 @@ window.renderTreeCardStatusBadges = async function() {
 })();
 
 // ============================================================================
-// [10-3-1] 좌측 '매출 및 구독 내역' 패널 CRUD (하단 행 추가/수기 쉼표 입력/삭제 & 상단 저장 아이콘 TiDB 반영)
+// [12] 좌측 '매출 및 구독 내역' 패널 CRUD (행 추가/수기 쉼표 입력/삭제 & TiDB 저장)
 // ============================================================================
 
 window.deletedSaleDbIds = window.deletedSaleDbIds || new Set();
 window.hasUnsavedSalesChanges = false;
 
-// [헬퍼 1] 쉼표(,)가 포함된 문자열을 순수 숫자(Number)로 안전하게 변환
+// [12-1] 쉼표(,) 파싱 및 천 단위 포맷팅 헬퍼
 window.parseCommaNumber = function(val) {
     if (val === undefined || val === null || val === '') return 0;
     const cleaned = String(val).replace(/[^0-9.-]/g, '');
@@ -6599,7 +6444,6 @@ window.parseCommaNumber = function(val) {
     return isNaN(num) ? 0 : num;
 };
 
-// [헬퍼 2] 숫자를 천 단위 쉼표(,) 문자열로 변환 (빈 값은 빈 문자열 유지)
 window.formatCommaString = function(val) {
     if (val === undefined || val === null || val === '') return '';
     const cleaned = String(val).replace(/[^0-9-]/g, '');
@@ -6608,7 +6452,6 @@ window.formatCommaString = function(val) {
     return isNaN(num) ? '' : num.toLocaleString('ko-KR');
 };
 
-// [헬퍼 3] CV / PV 수기 입력 시 실시간 쉼표 포맷팅 및 합계/변경상태 업데이트
 window.onSaleNumberInput = function(inputEl) {
     if (!inputEl) return;
     const rawDigits = inputEl.value.replace(/[^0-9]/g, '');
@@ -6616,7 +6459,7 @@ window.onSaleNumberInput = function(inputEl) {
     window.onSaleRowFieldChange(inputEl);
 };
 
-// 1) 미저장 변경사항 발생 시 우측 상단 저장 아이콘(💾) 강조 및 상태 표시 헬퍼
+// [12-2] 미저장 변경사항 발생 시 우측 상단 저장 아이콘(💾) 강조 및 상태 표시 헬퍼
 window.markSalesUnsaved = function(isDirty) {
     window.hasUnsavedSalesChanges = isDirty;
     const salesW = document.getElementById('salesWidget') || window.getSmartLeftPanel();
@@ -6645,12 +6488,11 @@ window.markSalesUnsaved = function(isDirty) {
     }
 };
 
-// 2) 좌측 패널 내부에 매출 목록 테이블 및 하단 '+ 행 추가' 버튼 구축 (CV/PV 숫자가 모두 보이도록 폭 최적화 + 초기 접힘 기본 설정)
+// [12-3] 좌측 패널 내부에 매출 목록 테이블 및 하단 '+ 행 추가' 버튼 구축
 window.ensureSalesPanelCRUDLayout = function() {
     const salesW = document.getElementById('salesWidget') || window.getSmartLeftPanel();
     if (!salesW) return null;
 
-    // 🌟 페이지 새로고침 초기 로드 시 기본 접힌 상태(closed) 및 좌표 위치 강제 적용
     if (!salesW.dataset.initCollapsed) {
         salesW.dataset.initCollapsed = 'true';
         salesW.classList.add('closed');
@@ -6662,7 +6504,6 @@ window.ensureSalesPanelCRUDLayout = function() {
         }
     }
 
-    // 창 우측 상단 저장 아이콘(💾) 클릭 시 전체 변경사항(추가/편집/삭제) TiDB 일괄 저장 연결
     const headerSaveBtn = salesW.querySelector('.widget-header button, #salesWidgetHeader button');
     if (headerSaveBtn) {
         headerSaveBtn.dataset.crudBound = 'true';
@@ -6695,7 +6536,7 @@ window.ensureSalesPanelCRUDLayout = function() {
             <span id="sales-sync-status" style="font-size: 10px; color: #10b981;">● 연동 대기</span>
         </div>
 
-        <!-- 매출 목록 및 하단 행 추가 스크롤 영역 (CV, PV 숫자가 완전히 보이도록 열 너비 배분) -->
+        <!-- 매출 목록 및 하단 행 추가 스크롤 영역 -->
         <div id="sales-table-scroll-box" style="flex: 1; overflow-y: auto; overflow-x: hidden; border: 1px solid #374151; border-radius: 6px; background: #111827; display: flex; flex-direction: column;">
             <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed;">
                 <colgroup>
@@ -6755,7 +6596,7 @@ window.ensureSalesPanelCRUDLayout = function() {
     return crudWrapper;
 };
 
-// 3) 날짜 정렬 순서(오름차순/내림차순) 토글
+// [12-4] 날짜 정렬 토글 및 개별 행 HTML 생성 헬퍼
 window.toggleSalesSortOrder = function() {
     window.salesSortOrder = (window.salesSortOrder === 'asc') ? 'desc' : 'asc';
     const arrowEl = document.getElementById('sales-sort-arrow');
@@ -6763,7 +6604,6 @@ window.toggleSalesSortOrder = function() {
     if (window.currentSelectedId) window.renderMemberSalesList(window.currentSelectedId);
 };
 
-// 4) 개별 행 HTML 생성 헬퍼 (CV, PV 수기 입력 + 쉼표 표시 + 전체 숫자 가시성 확보)
 window.buildSaleRowHTML = function(rowObj, isNewRow = false) {
     const dbId = rowObj._dbId || rowObj.id || ('new_' + Date.now() + '_' + Math.floor(Math.random() * 1000));
     const cat = (rowObj.category === '구독' || rowObj.is_subscription == 1) ? '구독' : '매출';
@@ -6799,7 +6639,7 @@ window.buildSaleRowHTML = function(rowObj, isNewRow = false) {
     `;
 };
 
-// 5) 행 내부 필드 수정 시 합계 실시간 재계산 및 상단 저장 아이콘 활성화
+// [12-5] 행 수정 감지, 합계 재계산 및 빈 행 추가
 window.onSaleRowFieldChange = function(inputEl) {
     const tr = inputEl ? inputEl.closest('tr.sale-edit-row') : null;
     if (tr) {
@@ -6811,7 +6651,6 @@ window.onSaleRowFieldChange = function(inputEl) {
     window.recalcSalesPanelSummary();
 };
 
-// 6) 현재 테이블 행 기준 건수 및 CV/PV 합계 실시간 업데이트 (쉼표 파싱 적용)
 window.recalcSalesPanelSummary = function() {
     const rows = document.querySelectorAll('#sales-crud-tbody tr.sale-edit-row');
     let totalCv = 0;
@@ -6828,7 +6667,6 @@ window.recalcSalesPanelSummary = function() {
     if (sumPvEl) sumPvEl.innerText = totalPv.toLocaleString('ko-KR');
 };
 
-// 7) 하단 '+ 매출 / 구독 행 추가' 클릭 시 테이블 맨 아래에 신규 행 추가 후 '날짜' 칸에 즉시 커서 포커스
 window.appendBlankSaleRow = function() {
     const memberId = window.currentSelectedId;
     if (!memberId) {
@@ -6859,7 +6697,6 @@ window.appendBlankSaleRow = function() {
     const scrollBox = document.getElementById('sales-table-scroll-box');
     if (scrollBox) scrollBox.scrollTop = scrollBox.scrollHeight;
 
-    // 새로 추가된 행의 '날짜(.edit-sale-date)' 입력칸으로 커서를 이동하고 바로 MMDD를 타이핑할 수 있도록 블록 선택
     const lastRow = tbody.lastElementChild;
     const dateInput = lastRow ? lastRow.querySelector('.edit-sale-date') : null;
     if (dateInput) {
@@ -6868,7 +6705,7 @@ window.appendBlankSaleRow = function() {
     }
 };
 
-// 8) 선택된 회원의 매출/구독 내역을 TiDB(API)에서 조회 및 렌더링
+// [12-6] 선택된 회원의 매출/구독 내역 TiDB 조회 및 렌더링
 window.loadMemberSales = async function(memberId, showToast = false) {
     window.ensureSalesPanelCRUDLayout();
     window.deletedSaleDbIds.clear();
@@ -6926,7 +6763,6 @@ window.renderSalesWidget = function() {
     if (window.currentSelectedId) window.renderMemberSalesList(window.currentSelectedId);
 };
 
-// 9) 좌측 패널 테이블에 편집 가능한 매출/구독 행 렌더링
 window.renderMemberSalesList = function(memberId) {
     window.ensureSalesPanelCRUDLayout();
     const tbody = document.getElementById('sales-crud-tbody');
@@ -6969,7 +6805,7 @@ window.renderMemberSalesList = function(memberId) {
     window.recalcSalesPanelSummary();
 };
 
-// 10) 매출 생성/편집/삭제 후 회원의 최초·최종매출일 DB 동기화 및 수당/위젯 일괄 갱신 헬퍼
+// [12-7] 매출 생성/편집/삭제 후 회원의 최초·최종매출일 DB 동기화 및 일괄 저장/삭제
 window.refreshAfterSalesMutation = async function(memberId) {
     if (!memberId) return;
     const node = window.findMemberNode(memberId);
@@ -7009,7 +6845,6 @@ window.refreshAfterSalesMutation = async function(memberId) {
     }
 };
 
-// 11) [일괄 저장] 창 우측 상단 저장 아이콘(💾) 클릭 시 쉼표 제거 후 순수 숫자로 TiDB integrated_sales_history에 반영
 window.saveAllMemberSalesToTiDB = async function() {
     const memberId = window.currentSelectedId;
     if (!memberId) {
@@ -7046,7 +6881,6 @@ window.saveAllMemberSalesToTiDB = async function() {
 
             const category = catEl ? catEl.value : '매출';
             const transaction_date = (dateEl && dateEl.value.trim()) ? window.cleanDateStr(dateEl.value.trim()) : window.getTodayString();
-            // 쉼표가 포함된 문자열에서 순수 숫자만 추출하여 DB에 전송
             const cv = window.parseCommaNumber(cvEl?.value);
             const pv = window.parseCommaNumber(pvEl?.value);
 
@@ -7092,7 +6926,6 @@ window.saveAllMemberSalesToTiDB = async function() {
 window.createNewSaleRecord = window.appendBlankSaleRow;
 window.updateSaleRecordInline = function() { window.markSalesUnsaved(true); };
 
-// 12) [삭제] 행 우측 '✕' 버튼 클릭 시: 신규 빈 행은 즉시 제거, 기존 DB 행은 TiDB integrated_sales_history에서 즉시 DELETE
 window.deleteSaleRecord = async function(saleId, btnEl) {
     const memberId = window.currentSelectedId;
     const tr = btnEl ? btnEl.closest('tr.sale-edit-row') : document.querySelector(`#sales-crud-tbody tr[data-sale-id="${saleId}"]`);
@@ -7141,18 +6974,18 @@ window.deleteSaleRecord = async function(saleId, btnEl) {
 };
 
 // ============================================================================
-// [10-4] 통합 회원/추천인 검색 및 복수 카드 선택(하이라이트) 유지 로직
+// [13] 통합 회원/추천인 검색 및 복수 카드 선택(하이라이트) 유지 로직
 // ============================================================================
 
 window.searchedHighlightIds = new Set();
 
-// [10-5] 검색어 정규화 헬퍼 (VK- 접두사 제거 및 소문자 변환하여 숫자만으로도 매칭 보장)
+// [13-1] 검색어 정규화 헬퍼 (VK- 접두사 제거 및 소문자 변환)
 window.normalizeSearchTerm = function(str) {
     if (!str) return '';
     return String(str).trim().toLowerCase().replace(/^vk-?/, '');
 };
 
-// [10-6] 검색된 대상 카드로 캔버스 화면 중심 부드럽게 이동
+// [13-2] 검색된 대상 카드로 캔버스 화면 중심 부드럽게 이동
 window.panToMemberCard = function(memberId) {
     const wrapper = document.getElementById('tree-wrapper');
     const container = document.getElementById('canvas-container') || document.body;
@@ -7198,7 +7031,7 @@ window.panToMemberCard = function(memberId) {
     }, 360);
 };
 
-// [10-7] 복수 검색 하이라이트 및 단일 선택 카드 테두리 일괄 적용
+// [13-3] 복수 검색 하이라이트 및 단일 선택 카드 테두리 일괄 적용
 window.applyCardHighlights = function() {
     document.querySelectorAll('.node-card').forEach(el => {
         const cardId = el.id.replace(/^card_/, '');
@@ -7225,7 +7058,7 @@ window.applyCardHighlights = function() {
     });
 };
 
-// [10-8] 헤더 및 패널 통합 검색 실행 (회원번호 숫자만 / 회원명 / 추천인번호 / 추천인명)
+// [13-4] 헤더 및 패널 통합 검색 실행 (회원번호 숫자만 / 회원명 / 추천인번호 / 추천인명)
 window.searchMember = function(customKeyword) {
     const inputEl = document.getElementById('searchInput');
     const rawKeyword = (typeof customKeyword === 'string' ? customKeyword : (inputEl ? inputEl.value : '')).trim();
@@ -7285,10 +7118,10 @@ window.clickSearchPanel = function() {
 };
 
 // ============================================================================
-// [11] 줌/드래그 및 캔버스 상호작용 (하단 최소화 및 원위치 복원 통합)
+// [14] 줌/드래그 및 캔버스 상호작용 (하단 최소화 및 원위치 복원 통합)
 // ============================================================================
 
-// [11-1] +, - 버튼 및 마우스 휠 줌 조절 기능
+// [14-1] +, - 버튼 및 마우스 휠 줌 조절 기능
 window.changeZoom = function(delta, mouseX = null, mouseY = null) {
     const wrapper = document.getElementById('tree-wrapper');
     const container = document.getElementById('canvas-container') || document.body;
@@ -7313,10 +7146,10 @@ window.changeZoom = function(delta, mouseX = null, mouseY = null) {
     wrapper.style.setProperty('transform', `translate(${window.panX}px, ${window.panY}px) scale(${window.scale})`, 'important');
 };
 
-// [11-2] 계보도 정중앙 고정 기능
+// [14-2] 계보도 정중앙 고정 기능
 window.resetZoomAndPan = window.centerRootNode;
 
-// [11-3] 캔버스 드래그, 마우스 휠 및 빈 공간 클릭 이벤트
+// [14-3] 캔버스 드래그, 마우스 휠 및 빈 공간 클릭 이벤트
 let isDraggingCanvas = false;
 let canvasDragStartX = 0, canvasDragStartY = 0;
 
@@ -7371,7 +7204,7 @@ function initCanvasDrag() {
     }, { passive: false }); 
 }
 
-// [11-4] 전체화면 토글 기능
+// [14-4] 전체화면 토글 기능
 window.toggleFullScreen = function() {
     if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(err => {
@@ -7384,7 +7217,7 @@ window.toggleFullScreen = function() {
     }
 };
 
-// [11-5] 빈 공간 클릭 시 모든 위젯 화면 아래단으로 최소화 및 수당 시뮬레이터 슬라이드 접기
+// [14-5] 빈 공간 클릭 시 모든 위젯 화면 아래단으로 최소화 및 수당 시뮬레이터 슬라이드 접기
 window.closeAllWidgetsAndModals = function() {
     const settingsMenu = document.getElementById('settingsDropdown') || document.getElementById('settingsMenu') || document.querySelector('.settings-menu');
     if (settingsMenu) settingsMenu.style.display = 'none';
@@ -7414,7 +7247,7 @@ window.closeAllWidgetsAndModals = function() {
     });
 };
 
-// [11-5-1] 하단 수당 시뮬레이터(#perfWidget) 전용 슬라이드 접기/펼치기 완벽 제어
+// [14-5-1] 하단 수당 시뮬레이터(#perfWidget) 전용 슬라이드 접기/펼치기 완벽 제어
 window.setPerfSidebarState = function(shouldClose) {
     const perfW = document.getElementById('perfWidget');
     if (!perfW) return;
@@ -7463,7 +7296,7 @@ window.togglePerfSidebar = function(e) {
     window.setPerfSidebarState(!isClosed);
 };
 
-// [11-6] 개별 플로팅 위젯을 화면 아래단으로 내려놓기 (기존 좌표 및 크기 저장)
+// [14-6] 개별 플로팅 위젯 하단 최소화 및 원위치 복원
 window.minimizeSingleWidget = function(w, index = 0) {
     const rect = w.getBoundingClientRect();
 
@@ -7500,7 +7333,6 @@ window.minimizeSingleWidget = function(w, index = 0) {
     }
 };
 
-// [11-7] 최소화된 위젯의 헤더를 클릭하면 기존 자리와 크기로 다시 떠오르기
 window.restoreSingleWidget = function(w) {
     if (!w || w.getAttribute('data-minimized') !== 'true') return;
 
@@ -7555,7 +7387,7 @@ window.restoreSingleWidget = function(w) {
     }, 320);
 };
 
-// [11-8] 좌측 매출 패널(#salesWidget) 슬라이드 무한 동작 보장 및 높이 축소 방지
+// [14-7] 좌측 매출 패널(#salesWidget) 슬라이드 토글 및 헤더 보호
 window.toggleSalesSidebar = function(e) {
     if (e) {
         e.preventDefault();
@@ -7640,10 +7472,10 @@ window.toggleSalesSidebar = function(e) {
 })();
 
 // ============================================================================
-// [12] 노드 클릭/더블클릭 통합 제어 및 회원정보 편집·삭제 모달 로직
+// [15] 노드 클릭/더블클릭 통합 제어 및 회원정보 편집·삭제 모달 로직
 // ============================================================================
 
-// [12-1] 단일 클릭 실행 (복수 검색 하이라이트 해제 + 동적코드 갱신 + A/B라인 인원수 갱신 + 매출/수당 연동)
+// [15-1] 단일 클릭 실행 (복수 검색 하이라이트 해제 + 동적코드 갱신 + A/B라인 인원수 갱신 + 매출/수당 연동)
 window.executeNodeSingleClick = async function(id) {
     const modal = document.getElementById('addPartnerModal');
     if (modal && window.getComputedStyle(modal).display !== 'none') {
@@ -7709,11 +7541,7 @@ window.handleNodeClickLogic = function(id) {
     }, 220);
 };
 
-// ============================================================================
-// [12-2] 카드 더블클릭 시 회원정보 편집 및 삭제 전용 모달 제어 로직 (DB 전체 컬럼 & 매출일 자동 연동)
-// ============================================================================
-
-// [12-2-1] 회원 편집 모달 DOM 생성 (직급 최상단 GUEST/MEMBER 추가 & 회원구분: 사업자/소비자/복제)
+// [15-2] 카드 더블클릭 시 회원정보 편집 및 삭제 전용 모달 제어 로직
 window.initMemberEditModal = function() {
     if (document.getElementById('memberEditModal')) return;
 
@@ -7802,7 +7630,7 @@ window.initMemberEditModal = function() {
                     </div>
                 </div>
 
-                <!-- 3. 가입 및 매출 일자 컬럼 (integrated_sales_history 자동검색 & MMDD 입력 지원) -->
+                <!-- 3. 가입 및 매출 일자 컬럼 -->
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 4px; margin-top: 4px;">
                     <span style="font-size: 11px; font-weight: bold; color: #60a5fa;">가입 및 매출 일자 정보 (MMDD 입력 가능)</span>
                     <span id="edit-m-sales-source-badge" style="font-size: 10px; color: #10b981;">DB 매출내역 자동연동</span>
@@ -7822,7 +7650,7 @@ window.initMemberEditModal = function() {
                     </div>
                 </div>
 
-                <!-- 4. DB에서 추가로 넘어오는 기타 모든 컬럼 동적 렌더링 영역 -->
+                <!-- 4. 추가 DB 컬럼 영역 -->
                 <div id="edit-m-extra-section" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px;">
                     <div style="font-size: 11px; font-weight: bold; color: #10b981; border-bottom: 1px solid #374151; padding-bottom: 4px;">추가 DB 컬럼 정보</div>
                     <div id="edit-m-extra-fields" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;"></div>
@@ -7842,7 +7670,6 @@ window.initMemberEditModal = function() {
     document.body.insertAdjacentHTML('beforeend', modalHTML);
 };
 
-// [12-2-2] 편집 모달에서 가입일(MMDD) 수정 시: YYYY-MM-DD 변환 및 매출이력이 없는 회원인 경우 최초/최종매출일 자동 동기화
 window.handleEditJoinDateBlur = function(inputEl) {
     if (!inputEl) return;
     if (typeof window.formatDateMMDD === 'function') {
@@ -7877,7 +7704,7 @@ window.autoFillRecommenderName = function(val) {
 
 window.autoFillSponsorName = function(val) {};
 
-// [12-2-3] 특정 회원의 트리 상 부모(후원인) 노드 및 좌/우 배치 위치 역추적 헬퍼
+// [15-3] 특정 회원의 트리 상 부모(후원인) 노드 및 좌/우 배치 위치 역추적 헬퍼
 window.findParentAndPosition = function(targetId) {
     let result = { parentNode: null, position: 'root' };
     if (!targetId || !window.treeData) return result;
@@ -7910,7 +7737,7 @@ window.findParentAndPosition = function(targetId) {
     return result;
 };
 
-// [12-2-4] 더블클릭 시 회원 편집 모달 오픈 및 integrated_sales_history 테이블 검색 기반 매출일 자동 표시
+// [15-4] 더블클릭 시 회원 편집 모달 오픈 및 매출일 자동 표시
 window.openEditMemberModal = async function(memberId) {
     window.initMemberEditModal();
     const node = typeof window.findMemberNode === 'function' ? window.findMemberNode(memberId) : null;
@@ -7961,7 +7788,6 @@ window.openEditMemberModal = async function(memberId) {
     document.getElementById('edit-m-recid').value = recId;
     document.getElementById('edit-m-recname').value = recName;
 
-    // 가입일 및 DB integrated_sales_history 테이블 검색을 통한 최초/최종매출일 자동 표시 (YYYY-MM-DD)
     const rawJoin = node.joinDate || node.join_date || node.regDate || node.reg_date || node.date1 || '';
     const joinDate = (rawJoin && rawJoin !== '-') ? window.cleanDateStr(rawJoin) : '';
 
@@ -8055,7 +7881,7 @@ window.closeMemberEditModal = function() {
 
 window.closeEditMemberModal = window.closeMemberEditModal;
 
-// [12-2-5] 현재 캔버스 위치(panX, panY, scale)를 유지하며 트리만 갱신하는 헬퍼
+// [15-5] 현재 캔버스 위치(panX, panY, scale)를 유지하며 트리만 갱신하는 헬퍼
 window.reRenderTreeKeepViewport = function() {
     const savedPanX = window.panX;
     const savedPanY = window.panY;
@@ -8079,7 +7905,7 @@ window.reRenderTreeKeepViewport = function() {
     }, 180);
 };
 
-// [12-2-6] 회원 DB 전체 컬럼 수정 저장 (server.js PUT /api/member/:id 완벽 연동)
+// [15-6] 회원 DB 전체 컬럼 수정 저장 및 영구 삭제 처리
 window.saveMemberEditFromModal = async function() {
     const id = document.getElementById('edit-m-id')?.value.trim();
     const name = document.getElementById('edit-m-name')?.value.trim();
@@ -8207,7 +8033,6 @@ window.saveMemberEditFromModal = async function() {
         }
     });
 
-    // 백엔드 DB 저장 API 호출 (/api/member/:id 단수형으로 호출하여 server.js 기본 라우트와도 100% 호환)
     if (window.API_BASE && !window.isSimMode) {
         try {
             await fetch(`${window.API_BASE}/api/member/${encodeURIComponent(id)}`, {
@@ -8244,7 +8069,6 @@ window.saveMemberEditFromModal = async function() {
     }
 };
 
-// [12-2-7] 회원 DB 영구 삭제 처리 (server.js DELETE /api/member/:id 및 bridge 루트 승계 완벽 호환)
 window.deleteMemberFromModal = async function() {
     const id = document.getElementById('edit-m-id')?.value.trim();
     if (!id) return;
@@ -8305,7 +8129,6 @@ window.deleteMemberFromModal = async function() {
         });
     }
 
-    // 백엔드 DB 삭제 API 호출 (/api/member/:id 단수형 경로 및 최상위 루트 삭제 시 bridge 승계 쿼리 전달)
     if (window.API_BASE && !window.isSimMode) {
         try {
             const queryStr = promotedChildId ? `?mode=bridge&promotedId=${encodeURIComponent(promotedChildId)}` : '';
@@ -8332,7 +8155,7 @@ window.deleteMemberFromModal = async function() {
     window.reRenderTreeKeepViewport();
 };
 
-// [12-3] 전역 클릭 및 ESC 키보드 방어 이벤트
+// [15-7] 전역 클릭 및 ESC 키보드 방어 이벤트 & 사이드바 관찰자
 document.addEventListener('click', function(e) {
     const target = e.target;
     const text = target.innerText ? target.innerText.trim() : '';
@@ -8379,14 +8202,12 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// 🌟 좌측 패널 관찰자: closed 또는 data-init-collapsed 상태 시 display: flex 재주입 차단
 function initSidebarDefender() {
     const sidebar = window.getSmartLeftPanel();
     if (!sidebar) return;
     const observer = new MutationObserver((mutations) => {
         if (window.sidebarForceHiddenBySettings || sidebar.hasAttribute('data-settings-hidden')) return; 
         
-        // closed 클래스 또는 초기 접힘 플래그가 있으면 flex 재주입 방지
         if (sidebar.classList.contains('closed') || sidebar.getAttribute('data-init-collapsed') === 'true') return;
 
         mutations.forEach(m => {
@@ -8399,16 +8220,14 @@ function initSidebarDefender() {
 }
 
 // ============================================================================
-// [13] 앱 로딩 및 초기화 (새로고침 시 좌측/하단 패널 & 표시설정 창 강제 접힘 세팅)
+// [16] 앱 초기 부팅 및 새로고침 시 좌측/하단 패널 & 표시설정 창 강제 접힘 세팅
 // ============================================================================
 function initApp() {
-    // 1) 새로고침 시 상단 표시 설정 창(톱니바퀴) 기본 닫힘 보장
     const settingsMenu = document.getElementById('settingsDropdown') || document.getElementById('settingsMenu') || document.querySelector('.settings-menu');
     if (settingsMenu) {
         settingsMenu.style.setProperty('display', 'none', 'important');
     }
 
-    // 2) 새로고침 초기 로드용 접힘 스타일 규칙 주입
     if (!document.getElementById('panels-collapse-fix-css')) {
         const fixStyle = document.createElement('style');
         fixStyle.id = 'panels-collapse-fix-css';
@@ -8428,7 +8247,6 @@ function initApp() {
     if (typeof window.initMemberEditModal === 'function') window.initMemberEditModal();
     if (typeof window.ensureSalesPanelCRUDLayout === 'function') window.ensureSalesPanelCRUDLayout();
 
-    // 3) 🌟 좌측 패널(매출/구독) 초기 접힘 상태 강제 확정 및 상단 타이틀 리네이밍
     const salesW = document.getElementById('salesWidget') || window.getSmartLeftPanel();
     if (salesW) {
         salesW.classList.add('closed');
@@ -8439,7 +8257,6 @@ function initApp() {
         if (salesHeaderTitle) salesHeaderTitle.innerText = '매출/구독';
     }
 
-    // 4) 🌟 하단 패널(수당 시뮬레이터) 초기 접힘 상태 강제 확정 및 상단 타이틀 리네이밍
     if (typeof window.setPerfSidebarState === 'function') {
         window.setPerfSidebarState(true);
     }
@@ -8451,12 +8268,10 @@ function initApp() {
         if (perfHeaderTitle) perfHeaderTitle.innerText = '실적/수당';
     }
 
-    // 5) 표시 설정 메뉴 레이아웃 및 타이틀 동기화
     if (typeof window.reorganizePopupSettingsCategory === 'function') {
         window.reorganizePopupSettingsCategory();
     }
 
-    // 하단 수당 시뮬레이터 테이블 첫 번째 컬럼 헤더('기(주차)')를 초기 로딩 시 즉시 '기수'로 변경
     document.querySelectorAll('#perfWidget thead th').forEach(th => {
         if (th.innerText && th.innerText.includes('기(주차)')) {
             th.innerHTML = th.innerHTML.replace('기(주차)', '기수');
@@ -8476,10 +8291,11 @@ if (document.readyState === 'loading') {
     initApp();
 }
 // ============================================================================
-// 🛡️ [안전 애드온 패치] 기존 코드 수정 없이 내비게이터 실행 & 배지(승급/품위유지) & % 유지 복구
+// [17] 시뮬레이터 본체 데이터 가로채기(Hook) 및 내비게이터/배지 정밀 연동 패치
 // ============================================================================
+
+// [17-1] 안전 애드온 패치: 내비게이터 실행 & 배지(승급/품위유지) & % 유지 복구
 (function applySafeNavigatorAndBadgePatch() {
-    // 1. 저장된 배지 기준(%) 불러오기 (기본값 80%)
     const getSavedThresholdRatio = () => {
         let pct = parseInt(localStorage.getItem('bs_badge_threshold_pct') || '80', 10);
         if (isNaN(pct) || pct < 1) pct = 80;
@@ -8489,7 +8305,6 @@ if (document.readyState === 'loading') {
     };
     getSavedThresholdRatio();
 
-    // 2. [승급] 및 [품위유지] 배지 판정 함수 보정 (두 배지 모두 정상 작동)
     window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrderKey) {
         const res = {
             showPromoBadge: false,
@@ -8531,7 +8346,6 @@ if (document.readyState === 'loading') {
         const currLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(currRank) : 0;
         const dbRanks = Array.isArray(window.dbRanksSorted) ? window.dbRanksSorted : [];
 
-        // (1) [승급] 달성률 판정
         const nextRank = dbRanks.find(r => Number(r.rank_level || 0) > currLevel && Number(r.minor_leg_pv || 0) > 0) || { rank_name: 'DIAMOND', minor_leg_pv: 100000000 };
         const reqMinorPV = Number(nextRank.minor_leg_pv || 100000000);
         const promoRatio = reqMinorPV > 0 ? (minorPV / reqMinorPV) : 0;
@@ -8545,7 +8359,6 @@ if (document.readyState === 'loading') {
             res.showPromoBadge = true;
         }
 
-        // (2) [품위유지] 달성률 판정 (현재 선택한 기수의 소실적 PV 또는 수당 기준)
         const maintPolicy = window.dbMaintPolicyMap ? window.dbMaintPolicyMap[currRank] : null;
         const rankRow = dbRanks.find(r => String(r.rank_name || '').toUpperCase() === currRank);
         
@@ -8554,14 +8367,12 @@ if (document.readyState === 'loading') {
             (rankRow && (rankRow.maintenance_pv || rankRow.maint_pv || rankRow.minor_leg_pv)) || 0
         );
 
-        // DIRECTOR 이상 직급인데 DB에 별도 수치가 없으면 기본 품위유지 기준(예: 200만 PV) 적용
         if (reqMaintVal <= 0 && currLevel >= (typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel('DIRECTOR') : 3)) {
             reqMaintVal = 2000000;
         }
 
         if (reqMaintVal > 0) {
             let currMaintVal = 0;
-            // 현재 기수 데이터(teamMap)에서 소실적 PV 조회
             if (teamMap instanceof Map) {
                 const mNorm = String(memberId).trim().toLowerCase().replace(/^vk-?/, '');
                 const mData = teamMap.get(memberId) || teamMap.get(mNorm) || teamMap.get('VK-' + mNorm);
@@ -8574,7 +8385,6 @@ if (document.readyState === 'loading') {
                     }
                 }
             }
-            // 기수 데이터가 없을 경우 누적 소실적 PV로 백업 비교
             if (currMaintVal <= 0) currMaintVal = minorPV;
 
             const maintRatio = currMaintVal / reqMaintVal;
@@ -8591,7 +8401,6 @@ if (document.readyState === 'loading') {
         return res;
     };
 
-    // 3. 비지네스 내비게이터 팝업 강제 오픈 함수 (어떤 에러에도 죽지 않는 안전 버전)
     window.forceOpenBizNavPopup = function() {
         if (window.bizNavPopupWindow && !window.bizNavPopupWindow.closed) {
             window.bizNavPopupWindow.focus();
@@ -8658,7 +8467,6 @@ if (document.readyState === 'loading') {
         }, 120);
     };
 
-    // 기존 함수들도 안전 버전으로 연결
     window.openBizNavigatorPopupWindow = window.forceOpenBizNavPopup;
     window.toggleBizNavigator = function(forceShow) {
         const isOpen = Boolean(window.bizNavPopupWindow && !window.bizNavPopupWindow.closed);
@@ -8671,12 +8479,10 @@ if (document.readyState === 'loading') {
         }
     };
 
-    // 4. 표시 설정 내 '비지네스 내비게이터' 체크박스 및 '% 입력창' 실시간 감지
     document.addEventListener('change', (e) => {
         const el = e.target;
         if (!el) return;
 
-        // (A) 배지 표시 기준 % 입력창 변경 시 즉시 저장 및 배지 갱신
         if (el.id === 'inp-badge-threshold' || (el.type === 'number' && el.closest('#bs-badge-threshold-row'))) {
             let val = parseInt(el.value, 10);
             if (isNaN(val) || val < 1) val = 1;
@@ -8690,7 +8496,6 @@ if (document.readyState === 'loading') {
             return;
         }
 
-        // (B) 비지네스 내비게이터 체크박스 클릭 시 즉시 실행
         if (el.type === 'checkbox') {
             const labelText = String((el.closest('label, div, li') || {}).innerText || '');
             if (el.id === 'chk-navigator' || /네비게이터|내비게이터/i.test(labelText)) {
@@ -8699,7 +8504,6 @@ if (document.readyState === 'loading') {
         }
     }, true);
 
-    // 5. 설정창을 열거나 화면이 로드될 때 저장된 % 값 자동 복원
     const syncSavedPctToInput = () => {
         const inp = document.getElementById('inp-badge-threshold');
         const saved = localStorage.getItem('bs_badge_threshold_pct');
@@ -8717,25 +8521,18 @@ if (document.readyState === 'loading') {
         }, 500);
     });
 })();
-// ============================================================================
-// 🌟 [빈 기수 숨김 보정] 본인 매출이 존재하면 하위 실적이 0이어도 기수 행 강제 표시
-// ============================================================================
+
+// [17-2] 빈 기수 숨김 보정: 본인 매출이 존재하면 하위 실적이 0이어도 기수 행 강제 표시
 (function fixEmptyPeriodRowDisplay() {
-    const origCalcTable = window.calculateBonusEngineByPeriods || window.renderPerformanceAndBonusTable;
-    
-    // 기수별 행 유효성 검사 함수 보정
     window.shouldDisplayPeriodRow = function(periodData, memberId) {
         if (!periodData) return false;
         
-        // 1. 하위 A라인/B라인 신규 실적이 있는 경우 ➔ 표시
         const hasSublineSales = (periodData.a_cv > 0 || periodData.b_cv > 0 || periodData.a_pv > 0 || periodData.b_pv > 0);
         if (hasSublineSales) return true;
 
-        // 2. 수당 발생 내역이 있는 경우 ➔ 표시
         const hasBonus = (periodData.directBonus > 0 || periodData.teamBonus > 0 || periodData.matchingBonus > 0 || periodData.levelBonus > 0);
         if (hasBonus) return true;
 
-        // 3. 🌟 [핵심] 본인 매출(구독/일반)이 해당 기수에 존재하는 경우 ➔ 강제 표시!
         const allSales = window.allSalesData || window.integrated_sales_history || [];
         const mNorm = String(memberId || window.currentSelectedId || '').trim().toLowerCase().replace(/^vk-?/, '');
         const cleanFn = typeof window.cleanDateStr === 'function' ? window.cleanDateStr : (s => String(s || '').trim().substring(0, 10));
@@ -8753,28 +8550,20 @@ if (document.readyState === 'loading') {
 
         if (hasSelfSalesInPeriod) return true;
 
-        // 4. 최신 기수(10-전 등)인 경우 기본 표시
         if (periodData.sortOrderKey === '10-전' || periodData.periodLabel === '10-전') return true;
 
         return false;
     };
 
-    // 새로고침 시 자동 재연산
     setTimeout(() => {
         if (typeof window.calculateLocalPerformance === 'function') {
             window.calculateLocalPerformance(window.currentSelectedId || 'VK-1199472');
         }
     }, 300);
 })();
-// ============================================================================
-// 🚀 [최종 통합 패치 V2] 시뮬레이터 본체 엔진 데이터 가로채기(Hook) & 470,000 CV 완벽 연동
-// ============================================================================
-(function applyFinalNavigatorOverride() {
 
-    // ------------------------------------------------------------------------
-    // 0. 시뮬레이터 본체 엔진(computeAllMembersTeamBonusByPeriod) 가로채기 (Hook)
-    //    -> 지역 변수였던 allSales와 backendFlatMembers, 기수별 계산 결과를 전역에 확보!
-    // ------------------------------------------------------------------------
+// [17-3] 시뮬레이터 본체 엔진 데이터 가로채기(Hook) & 최신 기수 소실적 CV 연동
+(function applyFinalNavigatorOverride() {
     const origCompute = window.computeAllMembersTeamBonusByPeriod;
     if (typeof origCompute === 'function' && !origCompute._isHooked) {
         const hookedFn = function(salesArg, membersArg) {
@@ -8800,7 +8589,6 @@ if (document.readyState === 'loading') {
         return String(s).trim().toLowerCase().replace(/^vk-?/, '');
     }
 
-    // 전체 매출 배열을 모든 가능한 경로(가로챈 배열, 전역 변수, 회원 노드 내부 매출)에서 수집
     function getFullSalesArray() {
         const candidates = [
             window._capturedAllSales,
@@ -8818,7 +8606,6 @@ if (document.readyState === 'loading') {
             return candidates[0];
         }
 
-        // 만약 전역 배열이 없다면 트리/평면 회원 노드 내부의 sales 배열을 전수 수집
         const collected = [];
         const seen = new Set();
         const visitNode = (n) => {
@@ -8850,13 +8637,11 @@ if (document.readyState === 'loading') {
         return collected;
     }
 
-    // 좌/우 하위 라인 파트너의 정규화 ID 세트를 다중 방식으로 완벽 구축
     function getRobustSublineSets(mNode) {
         const setA = new Set();
         const setB = new Set();
         if (!mNode) return { setA, setB };
 
-        // 1) 기존 getSublinePartnerSets 결과 흡수
         if (typeof window.getSublinePartnerSets === 'function') {
             try {
                 const raw = window.getSublinePartnerSets(mNode);
@@ -8865,7 +8650,6 @@ if (document.readyState === 'loading') {
             } catch (e) {}
         }
 
-        // 2) 트리 구조(children / left / right) 직접 재귀 탐색하여 누락된 하위 회원 보충
         const collectAll = (node, targetSet) => {
             if (!node || typeof node !== 'object') return;
             const k = normalizeId(node.id || node.member_id || node.memberId);
@@ -8889,7 +8673,6 @@ if (document.readyState === 'loading') {
         return { setA, setB };
     }
 
-    // 1. DB 매출에서 가장 최근 기수(예: 10월 1기) 자동 추출
     window.getLatestPeriodRangeFromSales = function(allSales) {
         const cleanFn = typeof window.cleanDateStr === 'function' ? window.cleanDateStr : (s => String(s || '').trim().substring(0, 10));
         let maxDate = '';
@@ -8932,14 +8715,18 @@ if (document.readyState === 'loading') {
         };
     };
 
-    // 2. DB 품위유지 기준 CV(required_minor_leg_cv) 동적 탐색
     window.getDbRequiredMaintCV = function(rankName) {
         const rUpper = String(rankName || '').trim().toUpperCase();
         if (!rUpper) return 0;
 
+        if (window.dbRankMaintenancePolicies && window.dbRankMaintenancePolicies[rUpper] && window.dbRankMaintenancePolicies[rUpper].reqSmallCv > 0) {
+            return Number(window.dbRankMaintenancePolicies[rUpper].reqSmallCv);
+        }
+
         const extractCV = (entry) => {
             if (typeof entry === 'number') return entry;
             if (entry && typeof entry === 'object') {
+                if (entry.reqSmallCv !== undefined && Number(entry.reqSmallCv) > 0) return Number(entry.reqSmallCv);
                 if (entry.required_minor_leg_cv !== undefined) return Number(entry.required_minor_leg_cv);
                 if (entry.requiredMinorLegCv !== undefined) return Number(entry.requiredMinorLegCv);
                 if (entry.min_minor_cv !== undefined) return Number(entry.min_minor_cv);
@@ -8966,7 +8753,7 @@ if (document.readyState === 'loading') {
                     }
                 } else if (val.DIRECTOR && val.EMERALD && val[rUpper]) {
                     const target = val[rUpper];
-                    if (typeof target === 'object' && ('required_minor_leg_cv' in target || 'maintenance_bonus_amount' in target || /maint/i.test(key))) {
+                    if (typeof target === 'object' && ('required_minor_leg_cv' in target || 'maintenance_bonus_amount' in target || 'reqSmallCv' in target || /maint/i.test(key))) {
                         const cv = extractCV(target);
                         if (cv > 0) return cv;
                     }
@@ -8983,7 +8770,6 @@ if (document.readyState === 'loading') {
         return 0;
     };
 
-    // 2-1. 현재 소실적 하위 CV로 달성한 품위유지 직급 계산
     window.evaluateMaintAchievedRank = function(currRank, minorSubCV) {
         const currUpper = String(currRank || 'MANIA').trim().toUpperCase();
         const currLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(currUpper) : 0;
@@ -9029,16 +8815,10 @@ if (document.readyState === 'loading') {
         };
     };
 
-    // ------------------------------------------------------------------------
-    // 🌟 2-2. [핵심 엔진] 특정 회원의 최신 기수 소실적 CV (470,000 CV) 정밀 산출
-    //    1순위: 시뮬레이터 엔진(lastAllMembersTeamBonusMap)의 최신 기수 계산값
-    //    2순위: 전체 매출에서 기수별 A/B 신규 및 이월/롤업 반영 소실적 CV 직접 계산
-    // ------------------------------------------------------------------------
     function computeAccurateLatestMinorCV(memberId, setA, setB, allSales, latestPeriod) {
         const mNorm = normalizeId(memberId);
         const cleanFn = typeof window.cleanDateStr === 'function' ? window.cleanDateStr : (s => String(s || '').trim().substring(0, 10));
 
-        // (A) 전체 매출에서 기수별 A라인 / B라인 CV 집계
         const periodCV_A = new Map();
         const periodCV_B = new Map();
         let directTermA = 0, directTermB = 0;
@@ -9070,7 +8850,6 @@ if (document.readyState === 'loading') {
             }
         });
 
-        // (B) 시뮬레이터 맵(lastAllMembersTeamBonusMap)에 캐싱된 해당 회원의 기수 데이터 확인
         let cachedMinorCV = 0;
         const bonusMap = window.lastAllMembersTeamBonusMap;
         if (bonusMap) {
@@ -9086,7 +8865,6 @@ if (document.readyState === 'loading') {
             }
 
             if (memberPeriodObj && typeof memberPeriodObj === 'object') {
-                // 최신 기수 키('2026-10-1', '10-전' 등) 또는 정렬상 가장 마지막 기수 찾기
                 let pEntry = memberPeriodObj[latestPeriod.sortKey] || memberPeriodObj[latestPeriod.shortKey] || memberPeriodObj[latestPeriod.label];
                 if (!pEntry) {
                     const keys = Object.keys(memberPeriodObj).filter(k => /^20\d{2}-\d{2}-[12]$/.test(k)).sort();
@@ -9109,11 +8887,9 @@ if (document.readyState === 'loading') {
             }
         }
 
-        // (C) 당기 A/B 신규 CV가 둘 다 있으면 Math.min(directTermA, directTermB)
         const minDirect = Math.min(directTermA, directTermB);
         if (minDirect > 0) return minDirect;
 
-        // (D) 한쪽 라인은 전 기수 이월(누적)이 남아있고 다른 쪽 라인(소실적 라인)에서 당기 신규(예: 470,000 CV)가 발생한 경우!
         const allPKeys = Array.from(new Set([...periodCV_A.keys(), ...periodCV_B.keys(), latestPeriod.sortKey])).sort();
         let carryA = 0, carryB = 0;
         let latestMatchedOrMinorNew = 0;
@@ -9126,11 +8902,9 @@ if (document.readyState === 'loading') {
             const matched = Math.min(cumA, cumB);
 
             if (pKey === latestPeriod.sortKey) {
-                // 당기 누적 기준 소실적 매칭 CV (예: A이월 4,195,000 vs B신규 470,000 -> 470,000 CV!)
                 if (matched > 0) {
                     latestMatchedOrMinorNew = matched;
                 } else {
-                    // 이월을 포함해 더 작은 쪽 라인에서 발생한 당기 신규 CV
                     latestMatchedOrMinorNew = (cumA <= cumB) ? newA : newB;
                 }
             }
@@ -9146,7 +8920,6 @@ if (document.readyState === 'loading') {
         return 0;
     }
 
-    // 3. 카드 배지 판정 함수 덮어쓰기
     window.evaluateMemberCardBadgeStatus = function(memberId) {
         const res = {
             showPromoBadge: false, showMaintBadge: false,
@@ -9227,1859 +9000,9 @@ if (document.readyState === 'loading') {
         }
         return res;
     };
-
-    // 4. 비지네스 내비게이터 렌더링 함수 덮어쓰기
-    window.renderBusinessNavigator = async function(targetMemberId, optDoc = null) {
-        const popup = window.bizNavPopupWindow;
-        const pDoc = optDoc || ((popup && !popup.closed) ? popup.document : document);
-        if (!pDoc) return;
-
-        const bodyEl = pDoc.getElementById('bizNavBody');
-        const badgeEl = pDoc.getElementById('bizNavTargetBadge');
-        if (!bodyEl) return;
-
-        if (typeof window.loadDbCompensationRates === 'function') {
-            try { await window.loadDbCompensationRates(); } catch (e) {}
-        }
-
-        let targetId = targetMemberId || window.currentSelectedId || 'VK-1199464';
-        const mNode = typeof window.findMemberNode === 'function' ? window.findMemberNode(targetId) : null;
-        if (!mNode) {
-            bodyEl.innerHTML = `<div style="padding:30px; text-align:center; color:#9ca3af;">회원 정보를 찾을 수 없습니다. (${targetId})</div>`;
-            return;
-        }
-
-        if (badgeEl) badgeEl.innerHTML = `[${mNode.name || mNode.id} (<b style="font-weight:bold; color:#ffffff;">${mNode.id}</b>)]`;
-
-        const currRank = String(mNode.rank || mNode.rank_name || 'MANIA').toUpperCase();
-        const currLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(currRank) : 0;
-        const dbRanks = Array.isArray(window.dbRanksSorted) ? window.dbRanksSorted : [];
-
-        const nextRank = dbRanks.find(r => Number(r.rank_level || 0) > currLevel && Number(r.minor_leg_pv || 0) > 0) || { rank_name: 'DIAMOND', minor_leg_pv: 0 };
-        const reqMinorPV = Number(nextRank.minor_leg_pv || 0);
-        const reqPartnerRank = (nextRank.req_partner_rank || nextRank.partner_rank) ? String(nextRank.req_partner_rank || nextRank.partner_rank).toUpperCase() : ((currLevel < 2) ? 'MEMBER' : 'DIRECTOR');
-        const reqPartnerCountEach = Number(nextRank.req_partner_count || 1);
-
-        // 🌟 하위 파트너 Set 구축 및 전체 매출 확보
-        const { setA, setB } = getRobustSublineSets(mNode);
-        const allSales = getFullSalesArray();
-        const latestPeriod = window.getLatestPeriodRangeFromSales(allSales);
-        const cleanFn = typeof window.cleanDateStr === 'function' ? window.cleanDateStr : (s => String(s || '').trim().substring(0, 10));
-        const mNorm = normalizeId(targetId);
-
-        let selfTotalPV = 0, selfTotalCV = 0;
-        let selfLastSalesDate = '';
-        let aTotalPV = 0, bTotalPV = 0, selfTermCV = 0;
-
-        const termSalesMapA = new Map(), termSalesMapB = new Map();
-        const termLabelMap = new Map();
-        termLabelMap.set(latestPeriod.sortKey, latestPeriod.label);
-
-        (allSales || []).forEach(s => {
-            if (!s) return;
-            const sNorm = normalizeId(s.member_id || s.memberId || s.id);
-            if (!sNorm) return;
-
-            const pv = typeof window.parseCommaNumber === 'function' ? window.parseCommaNumber(s.pv ?? s.sales_pv ?? 0) : Number(s.pv ?? s.sales_pv ?? 0);
-            const cv = typeof window.parseCommaNumber === 'function' ? window.parseCommaNumber(s.cv ?? s.sales_cv ?? 0) : Number(s.cv ?? s.sales_cv ?? 0);
-            const sDate = cleanFn(s.transaction_date || s.date || s.sales_date || s.buy_date || '');
-
-            const isSelf = (sNorm === mNorm);
-            const isA = !isSelf && setA.has(sNorm);
-            const isB = !isSelf && setB.has(sNorm);
-
-            if (isSelf && (!sDate || sDate <= latestPeriod.endDate)) {
-                selfTotalPV += pv;
-                selfTotalCV += cv;
-                if (sDate && (!selfLastSalesDate || sDate > selfLastSalesDate)) {
-                    selfLastSalesDate = sDate;
-                }
-                if (sDate >= latestPeriod.startDate && sDate <= latestPeriod.endDate && cv > 0) {
-                    selfTermCV += cv;
-                }
-            }
-
-            if (pv > 0 && (!sDate || sDate <= latestPeriod.endDate)) {
-                if (isA) aTotalPV += pv;
-                else if (isB) bTotalPV += pv;
-                const pObj = window.getPeriodObjFromDateStr(sDate);
-                if (pObj) {
-                    termLabelMap.set(pObj.sortKey, pObj.label);
-                    if (isA) termSalesMapA.set(pObj.sortKey, (termSalesMapA.get(pObj.sortKey) || 0) + pv);
-                    if (isB) termSalesMapB.set(pObj.sortKey, (termSalesMapB.get(pObj.sortKey) || 0) + pv);
-                }
-            }
-        });
-
-        const displaySelfPV = selfTotalPV > 0 ? selfTotalPV : Number(mNode.my_sales_pv || mNode.pv || 0);
-        const displayLastSalesDate = selfLastSalesDate || cleanFn(mNode.last_sales_date || mNode.achieve_date || mNode.join_date || '') || '-';
-
-        const isTermRestricted = (currRank === 'MANIA' || currRank === 'DIRECTOR' || currLevel < 3);
-
-        const allTermKeys = Array.from(new Set([latestPeriod.sortKey, ...termSalesMapA.keys(), ...termSalesMapB.keys()])).sort().reverse().slice(0, 4);
-        let sumLeftPV = 0, sumRightPV = 0;
-        const recentTerms = allTermKeys.map(k => {
-            const leftPV = termSalesMapA.get(k) || 0;
-            const rightPV = termSalesMapB.get(k) || 0;
-            sumLeftPV += leftPV;
-            sumRightPV += rightPV;
-            return { label: termLabelMap.get(k) || k, leftPV, rightPV };
-        });
-
-        const evalLeftPV = isTermRestricted ? sumLeftPV : aTotalPV;
-        const evalRightPV = isTermRestricted ? sumRightPV : bTotalPV;
-        const minorPV = Math.min(evalLeftPV, evalRightPV);
-        const promoPct = reqMinorPV > 0 ? Math.floor((minorPV / reqMinorPV) * 100) : 0;
-
-        let reqPartnerLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(reqPartnerRank) : 1;
-        let dirCountA = 0, dirCountB = 0, firstNodeA = null, firstNodeB = null;
-
-        setA.forEach(norm => {
-            const n = typeof window.findMemberNode === 'function' ? (window.findMemberNode(norm) || window.findMemberNode('VK-' + norm)) : null;
-            if (n) {
-                if (!firstNodeA) firstNodeA = n;
-                if (typeof window.getDbRankLevel === 'function' && window.getDbRankLevel(n.rank) >= reqPartnerLevel) {
-                    dirCountA++;
-                    if (!firstNodeA || window.getDbRankLevel(n.rank) > window.getDbRankLevel(firstNodeA.rank)) firstNodeA = n;
-                }
-            }
-        });
-
-        setB.forEach(norm => {
-            const n = typeof window.findMemberNode === 'function' ? (window.findMemberNode(norm) || window.findMemberNode('VK-' + norm)) : null;
-            if (n) {
-                if (!firstNodeB) firstNodeB = n;
-                if (typeof window.getDbRankLevel === 'function' && window.getDbRankLevel(n.rank) >= reqPartnerLevel) {
-                    dirCountB++;
-                    if (!firstNodeB || window.getDbRankLevel(n.rank) > window.getDbRankLevel(firstNodeB.rank)) firstNodeB = n;
-                }
-            }
-        });
-
-        if (mNode.children && Array.isArray(mNode.children)) {
-            const childA = mNode.children.find(c => String(c.position || '').toUpperCase() === 'A' || String(c.position || '').toUpperCase() === 'LEFT') || mNode.children[0];
-            const childB = mNode.children.find(c => String(c.position || '').toUpperCase() === 'B' || String(c.position || '').toUpperCase() === 'RIGHT') || mNode.children[1];
-            if (childA) firstNodeA = childA;
-            if (childB) firstNodeB = childB;
-        }
-
-        const isPartnerSatisfied = (dirCountA >= reqPartnerCountEach && dirCountB >= reqPartnerCountEach);
-        const leftPartner = { id: firstNodeA ? (firstNodeA.id || '-') : '-', name: firstNodeA ? (firstNodeA.name || '-') : '-', rank: firstNodeA ? (firstNodeA.rank || firstNodeA.rank_name || '-') : '-', count: dirCountA };
-        const rightPartner = { id: firstNodeB ? (firstNodeB.id || '-') : '-', name: firstNodeB ? (firstNodeB.name || '-') : '-', rank: firstNodeB ? (firstNodeB.rank || firstNodeB.rank_name || '-') : '-', count: dirCountB };
-
-        // 1. 상단 승급 조건 카드
-        const promoRequirementsCardHtml = `
-            <div style="background:#1f2937; border:1px solid #374151; border-radius:8px; padding:14px; margin-bottom:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #374151;">
-                    <div>
-                        <div style="font-size:13px; font-weight:bold; color:#ffffff; margin-bottom:4px;">기준기수 : ${latestPeriod.label}</div>
-                        <div style="font-size:15px; font-weight:bold; color:#ffffff;">승급 : ${currRank} &gt; ${nextRank.rank_name}</div>
-                    </div>
-                    <div>
-                        <span style="background:#374151; color:#ffffff; font-size:11px; font-weight:bold; padding:4px 8px; border-radius:4px;">달성률: ${promoPct}%</span>
-                    </div>
-                </div>
-                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; text-align:center; font-size:12px;">
-                    <div style="background:#111827; border:1px solid #374151; border-radius:6px; padding:10px;">
-                        <div style="color:#9ca3af; font-size:11px; margin-bottom:4px;">① 소실적 목표 PV</div>
-                        <div style="color:#ffffff; font-weight:bold; font-size:13px;">${reqMinorPV.toLocaleString('ko-KR')} PV</div>
-                        <div style="color:${minorPV >= reqMinorPV ? '#ffffff' : '#ef4444'}; font-size:11px; margin-top:4px; font-weight:bold;">
-                            ${minorPV >= reqMinorPV ? '✓ 달성 완료' : `부족: -${(reqMinorPV - minorPV).toLocaleString('ko-KR')} PV`}
-                        </div>
-                    </div>
-                    <div style="background:#111827; border:1px solid #374151; border-radius:6px; padding:10px;">
-                        <div style="color:#9ca3af; font-size:11px; margin-bottom:4px;">② 추천 파트너 조건</div>
-                        <div style="color:#ffffff; font-weight:bold; font-size:12px;">좌/우 각 ${reqPartnerRank} ${reqPartnerCountEach}명</div>
-                        <div style="color:${isPartnerSatisfied ? '#ffffff' : '#ef4444'}; font-size:11px; margin-top:4px; font-weight:bold;">
-                            ${isPartnerSatisfied ? '✓ 충족 완료' : `현재 (좌:${dirCountA} / 우:${dirCountB})`}
-                        </div>
-                    </div>
-                    <div style="background:#111827; border:1px solid #374151; border-radius:6px; padding:10px;">
-                        <div style="color:#9ca3af; font-size:11px; margin-bottom:4px;">③ 적용 기준 규정</div>
-                        <div style="color:#ffffff; font-weight:bold; font-size:12.5px;">${isTermRestricted ? '기수제한 적용' : '전체 누적 인정'}</div>
-                        <div style="color:#9ca3af; font-size:10.5px; margin-top:4px;">${isTermRestricted ? '최근 4개 기수 합산' : '기간 제한 없음'}</div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // 2. 상세 실적 표
-        let mainContentHtml = '';
-        if (isTermRestricted) {
-            mainContentHtml = `
-                <div style="border:1px solid #374151; border-radius:8px; overflow:hidden; margin-bottom:12px; background:#1f2937;">
-                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">본인내역</div>
-                    <div style="display:flex; font-size:12px;">
-                        <div style="width:130px; padding:10px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">본인누적매출</div>
-                        <div style="flex:1; padding:10px 12px; color:#ffffff; font-weight:bold; text-align:left; border-right:1px solid #374151;">${displaySelfPV.toLocaleString('ko-KR')} PV</div>
-                        <div style="width:130px; padding:10px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">최근매출일자</div>
-                        <div style="flex:1; padding:10px 12px; color:#ffffff; font-weight:bold; text-align:left;">${displayLastSalesDate}</div>
-                    </div>
-                </div>
-
-                <div style="border:1px solid #374151; border-radius:8px; overflow:hidden; margin-bottom:12px; background:#1f2937;">
-                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">하위내역 (기수제한 실적)</div>
-                    <div style="display:flex; background:#111827; border-bottom:1px solid #374151; font-weight:bold; font-size:12px;">
-                        <div style="width:130px; padding:10px 12px; color:#ffffff; border-right:1px solid #374151;">합계 (좌측 총합)</div>
-                        <div style="flex:1; padding:10px 12px; color:#ffffff; text-align:left; border-right:1px solid #374151;">${sumLeftPV.toLocaleString('ko-KR')} PV</div>
-                        <div style="width:130px; padding:10px 12px; color:#ffffff; border-right:1px solid #374151;">합계 (우측 총합)</div>
-                        <div style="flex:1; padding:10px 12px; color:#ffffff; text-align:left;">${sumRightPV.toLocaleString('ko-KR')} PV</div>
-                    </div>
-                    <div style="display:flex; border-bottom:1px solid #374151; font-size:12px;">
-                        <div style="width:130px; padding:8px 12px; background:#111827; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">직추천(후원라인 좌)</div>
-                        <div style="flex:1; padding:8px 12px; color:#ffffff; font-weight:bold; text-align:left; border-right:1px solid #374151;">${leftPartner.name} (<b style="font-weight:bold; color:#ffffff;">${leftPartner.id}</b>)</div>
-                        <div style="width:130px; padding:8px 12px; background:#111827; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">직추천(후원라인 우)</div>
-                        <div style="flex:1; padding:8px 12px; color:#ffffff; font-weight:bold; text-align:left;">${rightPartner.name} (<b style="font-weight:bold; color:#ffffff;">${rightPartner.id}</b>)</div>
-                    </div>
-                    ${recentTerms.map(t => `
-                        <div style="display:flex; border-bottom:1px solid #374151; font-size:12px;">
-                            <div style="width:130px; padding:8px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">${t.label}(좌)</div>
-                            <div style="flex:1; padding:8px 12px; color:#ffffff; text-align:left; font-weight:bold; border-right:1px solid #374151;">${t.leftPV.toLocaleString('ko-KR')} PV</div>
-                            <div style="width:130px; padding:8px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">${t.label}(우)</div>
-                            <div style="flex:1; padding:8px 12px; color:#ffffff; text-align:left; font-weight:bold;">${t.rightPV.toLocaleString('ko-KR')} PV</div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        } else {
-            const remainLeftPV = Math.max(0, reqMinorPV - aTotalPV);
-            const remainRightPV = Math.max(0, reqMinorPV - bTotalPV);
-            mainContentHtml = `
-                <div style="border:1px solid #374151; border-radius:8px; overflow:hidden; margin-bottom:12px; background:#1f2937;">
-                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">추천계보라인</div>
-                    <div style="display:flex; align-items:center; text-align:center; font-size:12px;">
-                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">좌</div>
-                        <div style="flex:1; display:flex; align-items:center; justify-content:space-around; padding:10px; border-right:1px solid #374151;">
-                            <span style="color:#ffffff; font-family:monospace; font-weight:bold;">${leftPartner.id}</span>
-                            <span style="color:#ffffff; font-weight:bold;">${leftPartner.name}</span>
-                            <span style="color:#ffffff; font-weight:bold; font-size:11px; background:#374151; padding:2px 6px; border-radius:4px;">${leftPartner.rank}</span>
-                            <span style="color:#ffffff; font-weight:bold;">${leftPartner.count}명</span>
-                        </div>
-                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">우</div>
-                        <div style="flex:1; display:flex; align-items:center; justify-content:space-around; padding:10px;">
-                            <span style="color:#ffffff; font-family:monospace; font-weight:bold;">${rightPartner.id}</span>
-                            <span style="color:#ffffff; font-weight:bold;">${rightPartner.name}</span>
-                            <span style="color:#ffffff; font-weight:bold; font-size:11px; background:#374151; padding:2px 6px; border-radius:4px;">${rightPartner.rank}</span>
-                            <span style="color:#ffffff; font-weight:bold;">${rightPartner.count}명</span>
-                        </div>
-                    </div>
-                </div>
-                <div style="border:1px solid #374151; border-radius:8px; overflow:hidden; margin-bottom:12px; background:#1f2937; font-size:12px;">
-                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">전체누적 PV</div>
-                    <div style="display:flex; align-items:center; text-align:center; border-bottom:1px solid #374151;">
-                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">좌</div>
-                        <div style="flex:1; padding:10px; color:#ffffff; font-weight:bold; font-size:13px; border-right:1px solid #374151;">${aTotalPV.toLocaleString('ko-KR')}</div>
-                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">우</div>
-                        <div style="flex:1; padding:10px; color:#ffffff; font-weight:bold; font-size:13px;">${bTotalPV.toLocaleString('ko-KR')}</div>
-                    </div>
-                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">${nextRank.rank_name} PV (목표)</div>
-                    <div style="display:flex; align-items:center; text-align:center; border-bottom:1px solid #374151;">
-                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">좌</div>
-                        <div style="flex:1; padding:10px; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">${reqMinorPV.toLocaleString('ko-KR')}</div>
-                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">우</div>
-                        <div style="flex:1; padding:10px; color:#ffffff; font-weight:bold;">${reqMinorPV.toLocaleString('ko-KR')}</div>
-                    </div>
-                    <div style="background:#111827; padding:8px; text-align:center; font-weight:bold; color:#ffffff; border-bottom:1px solid #374151;">${nextRank.rank_name} 승급까지 부족 PV</div>
-                    <div style="display:flex; align-items:center; text-align:center;">
-                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">좌</div>
-                        <div style="flex:1; padding:10px; color:${remainLeftPV === 0 ? '#ffffff' : '#ef4444'}; font-weight:bold; font-size:13px; border-right:1px solid #374151;">${remainLeftPV === 0 ? '충족 완료' : remainLeftPV.toLocaleString('ko-KR')}</div>
-                        <div style="width:80px; padding:10px; background:#111827; color:#ffffff; font-weight:bold; border-right:1px solid #374151;">우</div>
-                        <div style="flex:1; padding:10px; color:${remainRightPV === 0 ? '#ffffff' : '#ef4444'}; font-weight:bold; font-size:13px;">${remainRightPV === 0 ? '충족 완료' : remainRightPV.toLocaleString('ko-KR')}</div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // 3. 품위유지 달성 현황 (시뮬레이터 연동 이월/신규 반영 소실적 CV 산출)
-        const reqMaintCV = window.getDbRequiredMaintCV(currRank);
-        const minorSubTermCV = computeAccurateLatestMinorCV(targetId, setA, setB, allSales, latestPeriod);
-        const maintPct = reqMaintCV > 0 ? Math.min(100, Math.floor((minorSubTermCV / reqMaintCV) * 100)) : 100;
-        const maintDiffCV = Math.max(0, reqMaintCV - minorSubTermCV);
-
-        const maintEval = window.evaluateMaintAchievedRank(currRank, minorSubTermCV);
-        const maintStatusText = maintEval.isAchieved
-            ? `달성직급: ${maintEval.achievedRank} (달성)`
-            : `달성직급: 없음 (미달성)`;
-        const maintStatusColor = maintEval.isAchieved ? '#ffffff' : '#ef4444';
-
-        const maintHtml = `
-            <div style="border:1px solid #374151; border-radius:8px; overflow:hidden; background:#1f2937; padding:14px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #374151;">
-                    <span style="font-size:13px; font-weight:bold; color:#ffffff;">품위유지 달성 현황</span>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="font-size:11px; font-weight:bold; color:${maintStatusColor};">${maintStatusText}</span>
-                        <span style="background:#374151; color:#ffffff; font-size:11px; font-weight:bold; padding:4px 8px; border-radius:4px;">달성률: ${maintPct}%</span>
-                    </div>
-                </div>
-                <div style="border:1px solid #374151; border-radius:6px; overflow:hidden; margin-bottom:10px; background:#111827;">
-                    <div style="background:#111827; padding:6px 8px; text-align:center; font-weight:bold; font-size:11.5px; color:#ffffff; border-bottom:1px solid #374151;">본인내역</div>
-                    <div style="display:flex; font-size:12px;">
-                        <div style="width:130px; padding:9px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">당기CV</div>
-                        <div style="flex:1; padding:9px 12px; color:#ffffff; font-weight:bold; text-align:left; border-right:1px solid #374151;">
-                            ${selfTermCV.toLocaleString('ko-KR')} CV
-                        </div>
-                        <div style="width:130px; padding:9px 12px; background:#1f2937; color:#9ca3af; font-weight:bold; border-right:1px solid #374151;">최근매출일자</div>
-                        <div style="flex:1; padding:9px 12px; color:#ffffff; font-weight:bold; text-align:left;">${displayLastSalesDate}</div>
-                    </div>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1.6fr 1fr; gap:10px; text-align:center; font-size:12px; background:#111827; padding:12px; border-radius:6px; border:1px solid #374151;">
-                    <div style="display:flex; flex-direction:column; justify-content:center;">
-                        <div style="color:#9ca3af; margin-bottom:4px; font-size:11px; font-weight:bold;">직급별 기준 소실적 CV (DB)</div>
-                        <div style="color:#ffffff; font-weight:bold; font-size:13px;">${reqMaintCV.toLocaleString('ko-KR')} CV</div>
-                    </div>
-                    <div style="border-left:1px solid #374151; border-right:1px solid #374151; padding:0 8px; display:flex; flex-direction:column; justify-content:center;">
-                        <div style="color:#9ca3af; margin-bottom:4px; font-size:11px; font-weight:bold;">해당기수 소실적 신규 CV</div>
-                        <div style="color:#ffffff; font-weight:bold; font-size:13px; margin-bottom:2px;">${minorSubTermCV.toLocaleString('ko-KR')} CV</div>
-                        <div style="color:#9ca3af; font-size:10.5px; display:flex; justify-content:center; gap:6px;">
-                            <span>소실적라인(하위): <b style="color:#ffffff;">${minorSubTermCV.toLocaleString('ko-KR')}</b></span>
-                        </div>
-                    </div>
-                    <div style="display:flex; flex-direction:column; justify-content:center;">
-                        <div style="color:#9ca3af; margin-bottom:4px; font-size:11px; font-weight:bold;">부족분 CV</div>
-                        <div style="color:${maintDiffCV === 0 ? '#ffffff' : '#ef4444'}; font-weight:bold; font-size:13px;">
-                            ${maintDiffCV === 0 ? '유지 달성' : `-${maintDiffCV.toLocaleString('ko-KR')} CV`}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        bodyEl.innerHTML = `${promoRequirementsCardHtml}${mainContentHtml}${maintHtml}`;
-    };
 })();
-// ============================================================================
-// 🚀 [헤더 우측 버튼 통합 패치 - 배포 겸용 완성본]
-// - AI 어드바이저 아이콘 (로컬 + 웹 모두 표시, left/right 이진트리 파트너 완벽 수집)
-// - GitHub 원클릭 업로드 아이콘 (로컬 개발 시에만 표시, 외부 웹 공개 시 자동 숨김 보호)
-// ============================================================================
-(function initHeaderAIAndGitHubButtons() {
 
-    if (window._headerCustomBtnsInitialized) return;
-    window._headerCustomBtnsInitialized = true;
-
-    const isLocalEnv = (
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '' ||
-        window.location.protocol === 'file:'
-    );
-
-    function setupHeaderButtons() {
-        let aiBtn = document.getElementById('customAiAdvisorBtn');
-
-        if (!aiBtn) {
-            const allBtns = Array.from(document.querySelectorAll('header button, .header button, .top-bar button, button, a'));
-            let refreshBtn = null;
-
-            // 1순위: 새로고침 속성이나 아이콘을 가진 버튼 찾기
-            for (let i = allBtns.length - 1; i >= 0; i--) {
-                const el = allBtns[i];
-                const r = el.getBoundingClientRect();
-                if (r.top >= 0 && r.top <= 80 && r.right > window.innerWidth * 0.5) {
-                    const html = (el.innerHTML || '').toLowerCase();
-                    const title = (el.getAttribute('title') || '').toLowerCase();
-                    const onclick = (el.getAttribute('onclick') || '').toLowerCase();
-                    if (
-                        title.includes('새로고침') || title.includes('초기화') || title.includes('refresh') || title.includes('reload') ||
-                        onclick.includes('reload') || onclick.includes('refresh') ||
-                        html.includes('↻') || html.includes('⟳') || html.includes('fa-redo') || html.includes('fa-sync') || html.includes('fa-rotate')
-                    ) {
-                        refreshBtn = el;
-                        break;
-                    }
-                }
-            }
-
-            // 2순위: 못 찾았을 경우에만 가장 우측 끝 버튼 1개 선택
-            if (!refreshBtn) {
-                const topRightBtns = allBtns.filter(el => {
-                    const r = el.getBoundingClientRect();
-                    return r.top >= 0 && r.top <= 80 && r.width >= 16 && r.width <= 90 && r.right > window.innerWidth * 0.5;
-                });
-                if (topRightBtns.length > 0) {
-                    topRightBtns.sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right);
-                    refreshBtn = topRightBtns[0];
-                }
-            }
-
-            if (!refreshBtn) return;
-
-            aiBtn = document.createElement('button');
-            aiBtn.id = 'customAiAdvisorBtn';
-            aiBtn.type = 'button';
-            aiBtn.setAttribute('title', 'AI 어드바이저');
-            aiBtn.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 32px;
-                height: 32px;
-                padding: 0;
-                margin-left: 4px;
-                background: transparent;
-                color: #9ca3af;
-                border: 1px solid transparent;
-                border-radius: 6px;
-                cursor: pointer;
-                transition: all 0.15s ease;
-            `;
-            aiBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
-                <path d="M20 3v4"/><path d="M22 5h-4"/>
-            </svg>`;
-
-            aiBtn.addEventListener('mouseenter', () => {
-                aiBtn.style.color = '#ffffff';
-                aiBtn.style.background = '#1f2937';
-                aiBtn.style.borderColor = '#374151';
-            });
-            aiBtn.addEventListener('mouseleave', () => {
-                aiBtn.style.color = '#9ca3af';
-                aiBtn.style.background = 'transparent';
-                aiBtn.style.borderColor = 'transparent';
-            });
-            aiBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.openAIAdvisorPopupWindow();
-            });
-
-            if (refreshBtn.parentNode) {
-                refreshBtn.parentNode.replaceChild(aiBtn, refreshBtn);
-            }
-        }
-
-        // 2. [☁️↑ GitHub 원클릭 업로드] 버튼은 로컬 개발 환경(isLocalEnv)에서만 표시 (웹 공개 시 일반 사용자에게 노출 차단)
-        if (isLocalEnv && aiBtn && aiBtn.parentNode && !document.getElementById('oneClickGithubBtn')) {
-            const ghBtn = document.createElement('button');
-            ghBtn.id = 'oneClickGithubBtn';
-            ghBtn.type = 'button';
-            ghBtn.setAttribute('title', 'GitHub 원클릭 업로드 (백엔드 + 프론트엔드 동시 저장 - 로컬 전용)');
-            ghBtn.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 32px;
-                height: 32px;
-                padding: 0;
-                margin-left: 4px;
-                background: transparent;
-                color: #9ca3af;
-                border: 1px solid transparent;
-                border-radius: 6px;
-                cursor: pointer;
-                transition: all 0.15s ease;
-            `;
-
-            const ghIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
-                <path d="M12 12v9"/>
-                <path d="m16 16-4-4-4 4"/>
-            </svg>`;
-            ghBtn.innerHTML = ghIconSvg;
-
-            ghBtn.addEventListener('mouseenter', () => {
-                ghBtn.style.color = '#ffffff';
-                ghBtn.style.background = '#1f2937';
-                ghBtn.style.borderColor = '#374151';
-            });
-            ghBtn.addEventListener('mouseleave', () => {
-                ghBtn.style.color = '#9ca3af';
-                ghBtn.style.background = 'transparent';
-                ghBtn.style.borderColor = 'transparent';
-            });
-
-            ghBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-
-                const memo = prompt('GitHub에 업로드할 작업 메모를 입력하세요:', '시뮬레이터 내비게이터 및 AI 어드바이저 업데이트');
-                if (memo === null) return;
-
-                ghBtn.disabled = true;
-                ghBtn.innerHTML = `<span style="font-size:10px; color:#ffffff; font-weight:bold;">UP</span>`;
-
-                try {
-                    const baseUrl = (window.API_BASE || window.API_BASE_URL || 'http://127.0.0.1:3001').replace(/\/api\/?$/, '');
-                    const response = await fetch(`${baseUrl}/api/git-push`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: memo.trim() || undefined })
-                    });
-                    const result = await response.json();
-                    if (!response.ok || !result.success) {
-                        throw new Error(result.message || '업로드 실패');
-                    }
-                    alert(`✅ [GitHub 통합 업로드 완료]\n\n${result.message}`);
-                } catch (err) {
-                    alert(`❌ [GitHub 업로드 오류]\n${err.message}\n\n* 백엔드(server.js)가 실행 중인지 확인해 주세요.`);
-                } finally {
-                    ghBtn.disabled = false;
-                    ghBtn.innerHTML = ghIconSvg;
-                }
-            });
-
-            aiBtn.parentNode.appendChild(ghBtn);
-        }
-    }
-
-    // 3. 계보도 데이터 수집 헬퍼 (node.left / node.right 이진 트리 및 node.children 완벽 호환)
-    window.collectNetworkContextForAI = function(rootMemberId) {
-        const targetId = rootMemberId || window.currentSelectedId || 'VK-1199464';
-        const rootNode = typeof window.findMemberNode === 'function' ? window.findMemberNode(targetId) : null;
-        if (!rootNode) return null;
-
-        const allSales = window._capturedAllSales || window.allSalesData || window.integrated_sales_history || [];
-        const latestPeriod = typeof window.getLatestPeriodRangeFromSales === 'function'
-            ? window.getLatestPeriodRangeFromSales(allSales)
-            : { label: '최신기수', startDate: '2026-10-01', endDate: '2026-10-15' };
-
-        const summaryList = [];
-        const visited = new Set();
-
-        function traverse(node, depth, parentInfo, lineDirection) {
-            if (!node || depth > 4) return;
-            const obj = (typeof node === 'object') ? node : (typeof window.findMemberNode === 'function' ? window.findMemberNode(node) : null);
-            if (!obj) return;
-
-            const nid = obj.id || obj.member_id || '';
-            if (!nid || visited.has(nid)) return;
-            visited.add(nid);
-
-            const currRank = String(obj.rank || obj.rank_name || 'MANIA').toUpperCase();
-            const badge = typeof window.evaluateMemberCardBadgeStatus === 'function'
-                ? window.evaluateMemberCardBadgeStatus(nid)
-                : {};
-
-            const reqMaintCV = typeof window.getDbRequiredMaintCV === 'function'
-                ? window.getDbRequiredMaintCV(currRank)
-                : (badge.maintReqVal || 0);
-
-            summaryList.push({
-                '회원번호': nid,
-                '성명': obj.name || '-',
-                '단계_Depth': depth,
-                '상위스폰서': parentInfo || '최상위(기준)',
-                '소속라인': lineDirection || '기준본인',
-                '현재직급': currRank,
-                '목표승급직급': badge.promoTargetRank || '-',
-                '승급소실적달성률': (badge.promoPct || 0) + '%',
-                '현재소실적PV': badge.promoCurrPV || 0,
-                '승급목표PV': badge.promoReqPV || 0,
-                '승급부족PV': Math.max(0, (badge.promoReqPV || 0) - (badge.promoCurrPV || 0)),
-                '품위유지기준CV': reqMaintCV,
-                '당기소실적CV': badge.maintCurrVal || 0,
-                '품위유지부족CV': Math.max(0, reqMaintCV - (badge.maintCurrVal || 0))
-            });
-
-            // 1) node.left / node.right 이진 트리 탐색
-            if (obj.left) {
-                traverse(obj.left, depth + 1, `${obj.name}(${nid})`, depth === 0 ? '좌측(A라인)' : lineDirection);
-            }
-            if (obj.right) {
-                traverse(obj.right, depth + 1, `${obj.name}(${nid})`, depth === 0 ? '우측(B라인)' : lineDirection);
-            }
-
-            // 2) node.children 배열이 있는 경우도 함께 탐색
-            if (Array.isArray(obj.children)) {
-                obj.children.forEach((child, idx) => {
-                    const pos = String(child.position || (idx === 0 ? '좌(A라인)' : '우(B라인)')).toUpperCase();
-                    const dirLabel = (pos.includes('A') || pos.includes('LEFT') || pos.includes('좌')) ? '좌측(A라인)' : '우측(B라인)';
-                    traverse(child, depth + 1, `${obj.name}(${nid})`, depth === 0 ? dirLabel : lineDirection);
-                });
-            }
-        }
-
-        traverse(rootNode, 0, null, null);
-
-        return {
-            '기준회원': `${rootNode.name} (${rootNode.id})`,
-            '기준기수': `${latestPeriod.label} (${latestPeriod.startDate} ~ ${latestPeriod.endDate})`,
-            '하위네트워크파트너현황': summaryList
-        };
-    };
-
-    // 4. AI 전략 어드바이저 팝업창 열기 (503 자동 재시도 & 모델 우회 포함)
-    window.openAIAdvisorPopupWindow = function(targetMemberId) {
-        const w = 780, h = 840;
-        const l = Math.max(0, Math.floor((window.screen.width - w) / 2));
-        const t = Math.max(0, Math.floor((window.screen.height - h) / 2));
-
-        let popup = window.aiAdvisorPopupWindow;
-        if (!popup || popup.closed) {
-            popup = window.open('', 'AIAdvisorPopup', `width=${w},height=${h},left=${l},top=${t},resizable=yes,scrollbars=yes`);
-            window.aiAdvisorPopupWindow = popup;
-        } else {
-            popup.focus();
-        }
-        if (!popup) return alert('팝업 차단을 해제해 주세요.');
-
-        const rootId = targetMemberId || window.currentSelectedId || 'VK-1199464';
-        const rootNode = typeof window.findMemberNode === 'function' ? window.findMemberNode(rootId) : { id: rootId, name: '선택회원' };
-        const savedApiKey = localStorage.getItem('BS_GEMINI_API_KEY') || '';
-
-        popup.document.open();
-        popup.document.write(`
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<title>AI 전략 어드바이저 - 비지네스 시뮬레이터</title>
-<style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #111827; color: #ffffff; font-family: 'Pretendard', sans-serif; padding: 16px; line-height: 1.55; }
-    .header-bar { display: flex; justify-content: space-between; align-items: center; background: #1f2937; border: 1px solid #374151; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; }
-    .header-title { font-size: 15px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
-    .close-btn { background: #374151; color: #ffffff; border: 1px solid #4b5563; padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; }
-    .card { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
-    .label { font-size: 11.5px; color: #9ca3af; font-weight: bold; margin-bottom: 6px; display: block; }
-    .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-    input, textarea, select { width: 100%; background: #111827; border: 1px solid #374151; color: #ffffff; padding: 9px 12px; border-radius: 6px; font-size: 13px; font-weight: bold; outline: none; }
-    .run-btn { width: 100%; background: #2563eb; color: #ffffff; border: 1px solid #3b82f6; padding: 11px; border-radius: 6px; font-size: 13.5px; font-weight: bold; cursor: pointer; margin-top: 4px; }
-    .run-btn:disabled { background: #374151; border-color: #4b5563; cursor: not-allowed; }
-    .result-box { background: #111827; border: 1px solid #374151; border-radius: 6px; padding: 16px; min-height: 360px; max-height: 450px; overflow-y: auto; font-size: 13px; white-space: pre-wrap; }
-    .api-row { display: flex; gap: 8px; align-items: center; }
-    .save-key-btn { background: #374151; color: #ffffff; border: 1px solid #4b5563; padding: 9px 14px; border-radius: 6px; font-size: 12px; font-weight: bold; white-space: nowrap; cursor: pointer; }
-    .badge { background: #374151; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-</style>
-</head>
-<body>
-    <div class="header-bar">
-        <div class="header-title">
-            <span>AI 전략 어드바이저 (최적 매출 배치 & 승급 시뮬레이션)</span>
-            <span class="badge">[${(rootNode && rootNode.name) || rootId} (${rootId})]</span>
-        </div>
-        <button class="close-btn" onclick="window.close()">창 닫기 ✕</button>
-    </div>
-    <div class="card">
-        <label class="label">🔑 Google AI Studio API Key & 모델 선택 (혼잡 시 자동 우회 지원)</label>
-        <div class="api-row">
-            <input type="password" id="geminiApiKeyInput" placeholder="API Key 입력" value="${savedApiKey}">
-            <select id="geminiModelSelect" style="width: 230px;">
-                <option value="gemini-3.8-flash" selected>gemini-3.8-flash (최신 표준)</option>
-                <option value="gemini-3.8-pro">gemini-3.8-pro (정밀 분석)</option>
-                <option value="gemini-3.8-flash-lite">gemini-3.8-flash-lite (초고속)</option>
-            </select>
-            <button class="save-key-btn" id="saveKeyBtn">키 저장</button>
-        </div>
-    </div>
-    <div class="card">
-        <div class="input-row">
-            <div><label class="label">💰 신규 발생 예정 CV</label><input type="text" id="simInputCV" value="700,000"></div>
-            <div><label class="label">📈 신규 발생 예정 PV</label><input type="text" id="simInputPV" value="900,000"></div>
-        </div>
-        <div style="margin-bottom: 10px;">
-            <label class="label">💬 중점 분석 요청사항</label>
-            <textarea id="simCustomPrompt" rows="2">현재 후원계보도에서 위 신규 매출이 일어날 때, 어느 라인 누구 밑에 배치하면 수당(지원수당·추천매칭·품위유지)과 승급 달성에 가장 전체적인 효과가 좋을지 1순위, 2순위로 구체적인 수치와 함께 추천해줘.</textarea>
-        </div>
-        <button class="run-btn" id="runAiAnalysisBtn">Google AI 최적 배치 전략 분석 실행</button>
-    </div>
-    <div class="card" style="margin-bottom:0;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <span class="label" style="margin-bottom:0;">📊 AI 어드바이저 분석 리포트</span>
-            <span id="aiStatusText" style="font-size:11.5px; color:#9ca3af; font-weight:bold;">대기 중</span>
-        </div>
-        <div class="result-box" id="aiResultBox">상단의 [Google AI 최적 배치 전략 분석 실행] 버튼을 눌러주세요.</div>
-    </div>
-</body>
-</html>`);
-        popup.document.close();
-
-        const pDoc = popup.document;
-        const keyInput = pDoc.getElementById('geminiApiKeyInput');
-        const saveKeyBtn = pDoc.getElementById('saveKeyBtn');
-        const cvInput = pDoc.getElementById('simInputCV');
-        const pvInput = pDoc.getElementById('simInputPV');
-        const modelSelect = pDoc.getElementById('geminiModelSelect');
-        const customPromptEl = pDoc.getElementById('simCustomPrompt');
-        const runBtn = pDoc.getElementById('runAiAnalysisBtn');
-        const resultBox = pDoc.getElementById('aiResultBox');
-        const statusText = pDoc.getElementById('aiStatusText');
-
-        [cvInput, pvInput].forEach(inp => {
-            inp.addEventListener('input', () => {
-                const num = Number(String(inp.value).replace(/[^\d]/g, '')) || 0;
-                inp.value = num.toLocaleString('ko-KR');
-            });
-        });
-
-        saveKeyBtn.addEventListener('click', () => {
-            localStorage.setItem('BS_GEMINI_API_KEY', keyInput.value.trim());
-            statusText.innerText = '✓ API Key 저장 완료';
-            statusText.style.color = '#ffffff';
-        });
-
-        async function fetchWithFallback(apiKey, preferredModel, promptText) {
-            const models = Array.from(new Set([preferredModel, 'gemini-3.8-flash', 'gemini-3.8-pro', 'gemini-3.8-flash-lite']));
-            let lastErr = '';
-            for (const m of models) {
-                for (let attempt = 1; attempt <= 2; attempt++) {
-                    statusText.innerText = `${m} 요청 중... ${attempt > 1 ? `(재시도)` : ''}`;
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
-                    });
-                    const data = await res.json();
-                    if (res.ok && !data.error) {
-                        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-                        if (text) return { text, usedModel: m };
-                    }
-                    lastErr = data?.error?.message || `HTTP ${res.status}`;
-                    if (res.status === 503 || res.status === 429 || /high demand|overloaded|unavailable/i.test(lastErr)) {
-                        await new Promise(r => setTimeout(r, 1500));
-                    } else {
-                        break;
-                    }
-                }
-            }
-            throw new Error(lastErr);
-        }
-
-        runBtn.addEventListener('click', async () => {
-            const apiKey = keyInput.value.trim();
-            if (!apiKey) return alert('API Key를 입력해 주세요.');
-            localStorage.setItem('BS_GEMINI_API_KEY', apiKey);
-
-            const simCV = Number(String(cvInput.value).replace(/[^\d]/g, '')) || 0;
-            const simPV = Number(String(pvInput.value).replace(/[^\d]/g, '')) || 0;
-
-            runBtn.disabled = true;
-            runBtn.innerText = '⏳ AI 전략 분석 중...';
-            resultBox.innerText = '실시간 계보도 데이터를 분석하고 있습니다. 잠시만 기다려 주세요...';
-
-            try {
-                const netContext = window.collectNetworkContextForAI(rootId);
-                const fullPrompt = `당신은 네트워크 마케팅 보상플랜 및 바이너리 계보도 최적 배치 전문 AI 어드바이저입니다.\n\n[계보도 데이터]\n${JSON.stringify(netContext, null, 2)}\n\n[시뮬레이션 조건]\n- 신규 매출: ${simCV.toLocaleString('ko-KR')} CV / ${simPV.toLocaleString('ko-KR')} PV\n- 요청사항: ${customPromptEl.value.trim()}\n\n핵심 결론(🏆 최적 배치 1순위, 🥈 대안 2순위)과 각 파트너별 기대 수당/승급/품위유지 달성률 변화를 구체적인 수치로 브리핑해 주세요.`;
-
-                const { text, usedModel } = await fetchWithFallback(apiKey, modelSelect.value, fullPrompt);
-                resultBox.innerText = text;
-                statusText.innerText = `✓ 분석 완료 (${usedModel})`;
-                statusText.style.color = '#ffffff';
-            } catch (err) {
-                resultBox.innerText = `[오류 안내]\n${err.message}`;
-                statusText.innerText = '오류 발생';
-                statusText.style.color = '#ef4444';
-            } finally {
-                runBtn.disabled = false;
-                runBtn.innerText = 'Google AI 최적 배치 전략 분석 실행';
-            }
-        });
-    };
-
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        setTimeout(setupHeaderButtons, 250);
-    } else {
-        window.addEventListener('DOMContentLoaded', () => setTimeout(setupHeaderButtons, 250));
-    }
-})();
-// ============================================================================
-// 🔒 [강제 실행 로그인 보안 게이트] (admin / 즉시 작동 보장)
-// ============================================================================
-(function forceInitLoginSecurityGate() {
-    if (window._bsLoginGateMounted) return;
-    window._bsLoginGateMounted = true;
-
-    const TOKEN_KEY = 'BS_AUTH_TOKEN_V3';
-    const EXPECTED_ID = 'admin';
-    const EXPECTED_PW = 'tourism9**';
-    const LOCAL_VALID_TOKEN = 'verified_admin_tourism9_token';
-
-    // 1) 모든 API 요청에 토큰 헤더 자동 추가
-    const origFetch = window.fetch;
-    window.fetch = async function(input, init = {}) {
-        const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
-        const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
-        if (urlStr.includes('/api/') || (window.API_BASE && urlStr.startsWith(window.API_BASE))) {
-            init.headers = Object.assign({}, init.headers || {}, { 'x-auth-token': token });
-        }
-        return origFetch.call(this, input, init);
-    };
-
-    // 2) 로그아웃 함수
-    window.logoutSimulator = function() {
-        if (!confirm('시뮬레이터에서 로그아웃하시겠습니까?')) return;
-        sessionStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(TOKEN_KEY);
-        window.location.reload();
-    };
-
-    // 3) 상단 헤더에 [로그아웃] 버튼 추가
-    function mountLogoutBtn() {
-        if (document.getElementById('bsLogoutBtn')) return;
-        const aiBtn = document.getElementById('customAiAdvisorBtn');
-        const headerContainer = (aiBtn && aiBtn.parentNode) || document.querySelector('header, .header, .top-bar');
-        if (!headerContainer) return;
-
-        const btn = document.createElement('button');
-        btn.id = 'bsLogoutBtn';
-        btn.type = 'button';
-        btn.title = '로그아웃';
-        btn.style.cssText = 'display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; margin-left:4px; background:transparent; color:#f87171; border:1px solid transparent; border-radius:6px; cursor:pointer;';
-        btn.innerHTML = '🔒';
-        btn.onclick = window.logoutSimulator;
-        headerContainer.appendChild(btn);
-    }
-
-    // 4) 로그인 전체화면 모달 즉시 생성
-    function mountLoginScreen() {
-        setTimeout(mountLogoutBtn, 600);
-
-        // 현재 브라우저 탭(sessionStorage)에 로그인 기록이 있으면 통과
-        const currentToken = sessionStorage.getItem(TOKEN_KEY);
-        if (currentToken) return;
-
-        let overlay = document.getElementById('bs-auth-login-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'bs-auth-login-overlay';
-            overlay.style.cssText = `
-                position: fixed !important;
-                top: 0 !important; left: 0 !important;
-                width: 100vw !important; height: 100vh !important;
-                background: #0b0f19 !important;
-                z-index: 2147483647 !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                font-family: 'Pretendard', -apple-system, sans-serif !important;
-            `;
-
-            overlay.innerHTML = `
-                <div style="background:#1f2937; border:1px solid #374151; border-radius:12px; width:360px; padding:30px 24px; box-shadow:0 25px 50px rgba(0,0,0,0.85); color:#fff; text-align:center;">
-                    <div style="width:52px; height:52px; margin:0 auto 14px; border-radius:12px; background:rgba(59,130,246,0.15); border:1px solid #3b82f6; display:flex; align-items:center; justify-content:center; font-size:24px;">🔒</div>
-                    <h2 style="margin:0 0 6px; font-size:18px; font-weight:800; color:#fff;">비지네스 시뮬레이터 V3.0</h2>
-                    <p style="margin:0 0 22px; font-size:12px; color:#9ca3af;">승인된 관리자 계정으로 로그인해 주세요.</p>
-                    <form id="bs-login-form" style="display:flex; flex-direction:column; gap:12px; text-align:left;">
-                        <div>
-                            <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">관리자 아이디 (ID)</label>
-                            <input type="text" id="bs-login-id" placeholder="admin" required
-                                   style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">비밀번호 (Password)</label>
-                            <input type="password" id="bs-login-pw" placeholder="비밀번호 입력" required
-                                   style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
-                        </div>
-                        <div id="bs-login-error" style="display:none; color:#ef4444; font-size:12px; font-weight:bold; text-align:center; padding:4px 0;"></div>
-                        <button type="submit" id="bs-login-submit"
-                                style="margin-top:6px; width:100%; padding:11px; background:#2563eb; border:1px solid #3b82f6; border-radius:6px; color:#fff; font-size:13.5px; font-weight:bold; cursor:pointer;">
-                            로그인
-                        </button>
-                    </form>
-                </div>
-            `;
-            document.documentElement.appendChild(overlay);
-        }
-
-        const form = document.getElementById('bs-login-form');
-        const idInp = document.getElementById('bs-login-id');
-        const pwInp = document.getElementById('bs-login-pw');
-        const errEl = document.getElementById('bs-login-error');
-
-        setTimeout(() => { if (idInp) idInp.focus(); }, 100);
-
-        if (form && !form.dataset.bound) {
-            form.dataset.bound = 'true';
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                errEl.style.display = 'none';
-                const uid = idInp.value.trim();
-                const upw = pwInp.value;
-
-                // 1차: 백엔드 /api/login 호출 시도
-                let tokenToSave = null;
-                try {
-                    const res = await fetch(`${window.API_BASE || ''}/api/login`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: uid, password: upw })
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data && data.success && data.token) {
-                            tokenToSave = data.token;
-                        }
-                    }
-                } catch (err) {}
-
-                // 2차: 아이디/비밀번호(admin / tourism9**) 직접 검증
-                if (!tokenToSave && uid === EXPECTED_ID && upw === EXPECTED_PW) {
-                    tokenToSave = LOCAL_VALID_TOKEN;
-                }
-
-                if (tokenToSave) {
-                    sessionStorage.setItem(TOKEN_KEY, tokenToSave);
-                    localStorage.setItem(TOKEN_KEY, tokenToSave);
-                    overlay.remove();
-                    if (typeof window.fetchTreeData === 'function') {
-                        window.fetchTreeData(true);
-                    }
-                } else {
-                    errEl.innerText = '아이디 또는 비밀번호가 일치하지 않습니다.';
-                    errEl.style.display = 'block';
-                    pwInp.value = '';
-                    pwInp.focus();
-                }
-            });
-        }
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', mountLoginScreen);
-    } else {
-        mountLoginScreen();
-    }
-})();
-// Force Git Sync: 10/15/2026 08:57:22
-// ============================================================================
-// 📱 [모바일 & 태블릿 반응형 UI/UX 및 심플 헤더 & 햄버거 메뉴 패치 V11]
-// 1. 태블릿 세로(768x1024) 및 아이폰 가로(641px~1250px): 햄버거 대신 1단 우측에 아이콘 전체 표시 + 2단 우측에 검색창 표시!
-// 2. 시작일 ~ 종료일 간격 벌어짐 원천 차단 (언제나 촘촘하게 밀착 정렬)
-// 3. 순수 스마트폰 세로 화면(640px 이하)에서만 햄버거 메뉴(☰) 작동 (내부 화이트 볼드 적용)
-// 4. 우측 줌 컨트롤 바(.zoom-controls)를 헤더 하단에서 14px 여유 있게 띄움
-// ============================================================================
-(function initResponsiveMobileTabletSupportV11() {
-    if (window._bsResponsivePatchMountedV11) return;
-    window._bsResponsivePatchMountedV11 = true;
-
-    // ------------------------------------------------------------------------
-    // [1] Viewport 메타 태그 보장 및 화면 크기 판별 (스마트폰 세로 기준: 640px 이하)
-    // ------------------------------------------------------------------------
-    function ensureViewportMeta() {
-        let meta = document.querySelector('meta[name="viewport"]');
-        if (!meta) {
-            meta = document.createElement('meta');
-            meta.name = 'viewport';
-            document.head.appendChild(meta);
-        }
-        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
-    }
-
-    window.isTabletOrMobileViewport = function() {
-        return window.innerWidth <= 1024 || window.innerHeight <= 500;
-    };
-    // 🌟 순수 스마트폰 세로 화면만 640px 이하로 판별 (768px 태블릿 세로 화면은 아이콘 모드로 동작!)
-    window.isMobileViewport = function() {
-        return window.innerWidth <= 640;
-    };
-    // 태블릿 세로(768px), 태블릿 가로(1024px), 아이폰 가로(852px) 등 중형 화면 판별
-    window.isLandscapePhoneOrCompactTablet = function() {
-        return window.innerWidth > 640 && (window.innerWidth <= 1250 || window.innerHeight <= 500);
-    };
-
-    // ------------------------------------------------------------------------
-    // [1-1] 상단 헤더 하단 끝선(bottom) 측정 -> 좌측 패널 밀착 & 우측 줌 컨트롤 바 14px 여백 부여
-    // ------------------------------------------------------------------------
-    window.syncSalesPanelBelowHeader = function() {
-        const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
-        const salesW = document.getElementById('salesWidget') || (typeof window.getSmartLeftPanel === 'function' ? window.getSmartLeftPanel() : null);
-        const zoomCtrl = document.querySelector('.zoom-controls');
-
-        let headerBottom = 60;
-        if (headerEl) {
-            const rect = headerEl.getBoundingClientRect();
-            if (rect.height > 0) {
-                headerBottom = Math.round(rect.bottom);
-            }
-        }
-
-        document.documentElement.style.setProperty('--bs-header-bottom', `${headerBottom}px`);
-
-        // 1) 좌측 슬라이드 패널은 헤더 바로 아래에 밀착
-        if (salesW) {
-            salesW.style.setProperty('top', `${headerBottom}px`, 'important');
-            salesW.style.setProperty('height', `calc(100dvh - ${headerBottom}px)`, 'important');
-        }
-
-        // 2) 우측 줌/정렬/전체화면 컨트롤 바(.zoom-controls)는 헤더 하단에서 14px 띄워서 배치
-        if (zoomCtrl) {
-            if (window.isMobileViewport()) {
-                zoomCtrl.style.setProperty('top', 'auto', 'important');
-                zoomCtrl.style.setProperty('bottom', '56px', 'important');
-                zoomCtrl.style.setProperty('right', '8px', 'important');
-            } else {
-                const parentEl = zoomCtrl.offsetParent || document.body;
-                const isInsideCanvas = (parentEl.id === 'canvas-container' || parentEl.classList.contains('canvas-container') || parentEl.tagName === 'MAIN');
-                const targetTop = isInsideCanvas ? 14 : (headerBottom + 14);
-
-                zoomCtrl.style.setProperty('bottom', 'auto', 'important');
-                zoomCtrl.style.setProperty('top', `${targetTop}px`, 'important');
-                zoomCtrl.style.setProperty('right', '14px', 'important');
-            }
-        }
-    };
-
-    // ------------------------------------------------------------------------
-    // [2] 인원수 배지 포맷: "박성혜 A:41 / B:34 (Total 75)"
-    // ------------------------------------------------------------------------
-    window.updateHeaderLineCount = function(selectedId) {
-        const badgeEl = document.getElementById('header-line-count');
-        if (!badgeEl) return;
-
-        const targetId = selectedId || window.currentSelectedId;
-        let baseNode = targetId && typeof window.findMemberNode === 'function' ? window.findMemberNode(targetId) : (typeof window.getAbsoluteTopRoot === 'function' ? window.getAbsoluteTopRoot() : null);
-        if (!baseNode && typeof window.getAbsoluteTopRoot === 'function') baseNode = window.getAbsoluteTopRoot();
-
-        if (!baseNode) {
-            badgeEl.innerHTML = `<span style="color:#9ca3af;">데이터 없음</span>`;
-            return;
-        }
-
-        const baseName = baseNode.name || baseNode.id;
-
-        if (window.treeMode === 'recommender') {
-            const uniqueMembers = typeof window.getUniqueMembers === 'function' ? window.getUniqueMembers() : [];
-            let directRecCount = 0;
-            let totalRecSubCount = 0;
-            const visited = new Set();
-
-            function countRecSubtree(currNode, depth) {
-                if (!currNode || !currNode.id) return;
-                let norm = String(currNode.id).trim().toLowerCase().replace(/^vk-?/, '');
-                if (visited.has(norm)) return;
-                visited.add(norm);
-
-                if (depth > 0) totalRecSubCount++;
-                if (depth === 1) directRecCount++;
-
-                uniqueMembers.filter(m => m && !window.isSameMemberId(m.id, currNode.id) && window.isSameMemberId(m.recId || m.rec_id || m.recommenderId, currNode.id))
-                    .forEach(child => countRecSubtree(child, depth + 1));
-            }
-
-            countRecSubtree(baseNode, 0);
-            badgeEl.innerHTML = `
-                <b style="color:#fff;">${baseName}</b>
-                <span style="color:#10b981; font-weight:bold; margin-left:4px;">직추천:${directRecCount}</span>
-                <span style="color:#9ca3af; font-size:11px; margin-left:2px;">(Total ${totalRecSubCount})</span>
-            `;
-            return;
-        }
-
-        const visitedA = new Set();
-        const visitedB = new Set();
-
-        function countBranchNodes(node, visitedSet) {
-            if (!node || !node.id) return 0;
-            let norm = String(node.id).trim().toLowerCase().replace(/^vk-?/, '');
-            if (visitedSet.has(norm)) return 0;
-            visitedSet.add(norm);
-
-            let count = 1;
-            let leftChild = node.left ? (typeof node.left === 'object' ? node.left : window.findMemberNode(node.left)) : null;
-            let rightChild = node.right ? (typeof node.right === 'object' ? node.right : window.findMemberNode(node.right)) : null;
-
-            if (leftChild) count += countBranchNodes(leftChild, visitedSet);
-            if (rightChild) count += countBranchNodes(rightChild, visitedSet);
-            return count;
-        }
-
-        let leftRoot = baseNode.left ? (typeof baseNode.left === 'object' ? baseNode.left : window.findMemberNode(baseNode.left)) : null;
-        let rightRoot = baseNode.right ? (typeof baseNode.right === 'object' ? baseNode.right : window.findMemberNode(baseNode.right)) : null;
-
-        const aCount = leftRoot ? countBranchNodes(leftRoot, visitedA) : 0;
-        const bCount = rightRoot ? countBranchNodes(rightRoot, visitedB) : 0;
-        const totalSub = aCount + bCount;
-
-        badgeEl.innerHTML = `
-            <b style="color:#fff;">${baseName}</b>
-            <span style="color:#60a5fa; font-weight:bold; margin-left:5px;">A:${aCount.toLocaleString()}</span>
-            <span style="color:#6b7280; margin:0 3px;">/</span>
-            <span style="color:#f59e0b; font-weight:bold;">B:${bCount.toLocaleString()}</span>
-            <span style="color:#9ca3af; font-size:11px; margin-left:3px;">(Total ${totalSub.toLocaleString()})</span>
-        `;
-    };
-
-    // ------------------------------------------------------------------------
-    // [3] < 이전 / 다음 > 버튼 텍스트 제거 후 아이콘(◀ / ▶) 전용 변환
-    // ------------------------------------------------------------------------
-    function simplifyPrevNextButtons(rootDoc = document) {
-        if (!rootDoc) return;
-        const buttons = rootDoc.querySelectorAll('button, .nav-btn, [onclick*="Period"], [onclick*="period"]');
-        buttons.forEach(btn => {
-            const txt = (btn.innerText || '').trim();
-            if (txt.includes('이전') && (txt.includes('◀') || txt.includes('<') || txt === '이전')) {
-                btn.innerHTML = '◀';
-                btn.title = '이전 기수';
-                btn.classList.add('bs-period-nav-btn');
-            } else if (txt.includes('다음') && (txt.includes('▶') || txt.includes('>') || txt === '다음')) {
-                btn.innerHTML = '▶';
-                btn.title = '다음 기수';
-                btn.classList.add('bs-period-nav-btn');
-            }
-        });
-    }
-
-    const origOpenSalesPopup = window.openSalesSearchPopupWindow;
-    if (typeof origOpenSalesPopup === 'function' && !origOpenSalesPopup._iconPatchedV11) {
-        const wrappedOpenSales = function() {
-            const pop = origOpenSalesPopup.apply(this, arguments);
-            if (pop && pop.document) {
-                setTimeout(() => simplifyPrevNextButtons(pop.document), 50);
-            }
-            return pop;
-        };
-        wrappedOpenSales._iconPatchedV11 = true;
-        window.openSalesSearchPopupWindow = wrappedOpenSales;
-    }
-
-    // ------------------------------------------------------------------------
-    // [4] 🌟 태블릿 세로(768px) & 아이폰 가로(852px): 1단 우측 아이콘 + 2단 날짜바(밀착) & 검색창 표시!
-    // ------------------------------------------------------------------------
-    function syncHeaderButtonsAndLayoutByViewport() {
-        const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
-        if (!headerEl) return;
-
-        const isMobPortrait = window.isMobileViewport(); // 640px 이하 (스마트폰 세로)
-        const isLandscapeCompact = window.isLandscapePhoneOrCompactTablet(); // 641px~1250px (태블릿 세로 768px, 아이폰 가로 852px 등)
-
-        // 1) 스마트폰 세로용 햄버거 버튼 생성
-        let hamBtn = document.getElementById('bs-mobile-hamburger-btn');
-        if (!hamBtn) {
-            hamBtn = document.createElement('button');
-            hamBtn.id = 'bs-mobile-hamburger-btn';
-            hamBtn.type = 'button';
-            hamBtn.title = '메뉴 열기';
-            hamBtn.innerHTML = `
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-            `;
-            hamBtn.onclick = function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                window.toggleMobileHamburgerDrawer();
-            };
-        }
-        if (hamBtn.parentElement !== headerEl) {
-            headerEl.appendChild(hamBtn);
-        }
-
-        // 2) 우측 액션 아이콘 전용 홀더(#bs-top-row-icons-holder)를 headerEl 직계 자식으로 유지
-        let topIconsHolder = document.getElementById('bs-top-row-icons-holder');
-        if (!topIconsHolder) {
-            topIconsHolder = document.createElement('div');
-            topIconsHolder.id = 'bs-top-row-icons-holder';
-            headerEl.appendChild(topIconsHolder);
-        } else if (topIconsHolder.parentElement !== headerEl) {
-            headerEl.appendChild(topIconsHolder);
-        }
-
-        // 3) 톱니바퀴(⚙️), 계보전환(🌳), AI(✨), GitHub(☁️), 로그아웃(🔒)을 홀더에 수집
-        const gearBtn = headerEl.querySelector('[onclick*="toggleSettingsMenu"]');
-        let gearItem = gearBtn;
-        if (gearBtn && gearBtn.parentElement && gearBtn.parentElement !== headerEl && gearBtn.parentElement !== topIconsHolder) {
-            const p = gearBtn.parentElement;
-            if (!p.querySelector('#searchInput') && !p.querySelector('input[type="date"]') && !p.querySelector('#header-line-count')) {
-                gearItem = p;
-            }
-        }
-
-        const treeBtn = document.getElementById('toggleTreeBtn') || headerEl.querySelector('[onclick*="toggleTreeMode"]');
-        const aiBtn = document.getElementById('customAiAdvisorBtn');
-        const ghBtn = document.getElementById('oneClickGithubBtn');
-        const logoutBtn = document.getElementById('bsLogoutBtn');
-
-        const orderedItems = [gearItem, treeBtn, aiBtn, ghBtn, logoutBtn].filter(Boolean);
-        orderedItems.forEach(item => {
-            if (item.parentElement !== topIconsHolder) {
-                topIconsHolder.appendChild(item);
-            }
-            item.style.margin = '0';
-        });
-
-        // 4) 화면 모드별 표시 및 위치 제어
-        const searchInp = document.getElementById('searchInput');
-        const searchBox = (searchInp && searchInp.parentElement !== headerEl && !searchInp.parentElement.querySelector('input[type="date"]'))
-            ? searchInp.parentElement
-            : searchInp;
-
-        if (isMobPortrait) {
-            // [스마트폰 세로 화면 (640px 이하)]: 아이콘 홀더와 검색창을 숨기고, 우측 상단 햄버거 버튼(☰)만 표시
-            topIconsHolder.style.setProperty('display', 'none', 'important');
-            if (searchInp) searchInp.style.setProperty('display', 'none', 'important');
-            if (searchBox) searchBox.style.setProperty('display', 'none', 'important');
-            hamBtn.style.setProperty('display', 'inline-flex', 'important');
-        } else if (isLandscapeCompact) {
-            // 🌟 [태블릿 세로(768px) & 아이폰 가로(852px)]: 햄버거 숨기고 1단 우측 끝에 아이콘 전체 표시 + 2단 우측에 검색창 표시!
-            hamBtn.style.setProperty('display', 'none', 'important');
-            topIconsHolder.style.cssText = `
-                position: absolute !important;
-                top: 6px !important;
-                right: 10px !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                gap: 4px !important;
-                z-index: 120 !important;
-            `;
-            orderedItems.forEach(el => {
-                el.style.setProperty('display', 'inline-flex', 'important');
-            });
-            if (searchInp) searchInp.style.setProperty('display', 'inline-block', 'important');
-            if (searchBox && searchBox !== searchInp) {
-                searchBox.style.setProperty('display', 'flex', 'important');
-                searchBox.style.setProperty('margin-left', 'auto', 'important');
-            }
-        } else {
-            // [일반 데스크톱 모니터 (1251px 이상)]: 기본 플렉스 우측 정렬 유지
-            hamBtn.style.setProperty('display', 'none', 'important');
-            topIconsHolder.style.cssText = `
-                position: static !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                gap: 4px !important;
-                margin-left: 6px !important;
-            `;
-            orderedItems.forEach(el => {
-                el.style.setProperty('display', 'inline-flex', 'important');
-            });
-            if (searchInp) searchInp.style.setProperty('display', 'inline-block', 'important');
-            if (searchBox && searchBox !== searchInp) {
-                searchBox.style.setProperty('display', 'flex', 'important');
-                searchBox.style.removeProperty('margin-left');
-            }
-        }
-
-        // 5) 🌟 2단 날짜 입력창 폭 및 내부 간격 정리 (시작일 ~ 종료일 사이가 절대 벌어지지 않도록 밀착 고정!)
-        const dateInputs = headerEl.querySelectorAll('input[type="date"], #header-start-date, #header-end-date');
-        dateInputs.forEach(dInp => {
-            dInp.classList.add('bs-header-date-input');
-            dInp.style.setProperty('display', 'inline-block', 'important');
-            if (isMobPortrait) {
-                dInp.style.setProperty('width', '84px', 'important');
-                dInp.style.setProperty('min-width', '0px', 'important');
-                dInp.style.setProperty('max-width', '88px', 'important');
-                dInp.style.setProperty('padding', '2px 2px', 'important');
-                dInp.style.setProperty('font-size', '10.5px', 'important');
-            } else if (isLandscapeCompact) {
-                dInp.style.setProperty('width', '106px', 'important');
-                dInp.style.setProperty('min-width', '0px', 'important');
-                dInp.style.setProperty('max-width', '114px', 'important');
-                dInp.style.setProperty('padding', '2px 6px', 'important');
-                dInp.style.setProperty('font-size', '11.5px', 'important');
-            } else {
-                dInp.style.removeProperty('width');
-                dInp.style.removeProperty('min-width');
-                dInp.style.removeProperty('max-width');
-            }
-
-            let curr = dInp.parentElement;
-            while (curr && curr !== headerEl && curr !== document.body) {
-                curr.classList.remove('bs-desktop-only-tool');
-                curr.style.setProperty('display', 'flex', 'important');
-                curr.style.setProperty('visibility', 'visible', 'important');
-                curr.style.setProperty('opacity', '1', 'important');
-
-                if (curr.parentElement === headerEl) {
-                    // 2단 전체 바(날짜 그룹 + 우측 검색창)
-                    curr.classList.add('bs-mobile-second-row-bar');
-                    curr.classList.remove('bs-mobile-period-flex');
-                } else {
-                    // 날짜 입력창들을 직접 감싸는 내부 그룹 -> 절대 양끝으로 벌어지지 않도록 flex-start & width:auto 적용!
-                    curr.classList.add('bs-mobile-period-flex');
-                }
-                curr = curr.parentElement;
-            }
-        });
-
-        window.syncSalesPanelBelowHeader();
-    }
-
-    const origToggleSales = window.toggleSalesSidebar;
-    if (typeof origToggleSales === 'function' && !origToggleSales._patchedBelowHeaderV11) {
-        const wrappedToggleSales = function(e) {
-            origToggleSales.apply(this, arguments);
-            window.syncSalesPanelBelowHeader();
-            setTimeout(window.syncSalesPanelBelowHeader, 50);
-            if (window.isTabletOrMobileViewport()) {
-                const perfW = document.getElementById('perfWidget');
-                if (perfW) perfW.style.setProperty('left', '0px', 'important');
-            }
-        };
-        wrappedToggleSales._patchedBelowHeaderV11 = true;
-        window.toggleSalesSidebar = wrappedToggleSales;
-    }
-
-    // ------------------------------------------------------------------------
-    // [5] 햄버거 클릭 시 열리는 모바일 통합 드로어 패널 생성 (주요 기능 화이트 볼드)
-    // ------------------------------------------------------------------------
-    function ensureMobileDrawerDOM() {
-        const existingOverlay = document.getElementById('bs-mobile-drawer-overlay');
-        if (existingOverlay) existingOverlay.remove();
-
-        const overlay = document.createElement('div');
-        overlay.id = 'bs-mobile-drawer-overlay';
-        overlay.style.cssText = `
-            display: none;
-            position: fixed !important;
-            top: 0 !important; left: 0 !important;
-            width: 100vw !important; height: 100dvh !important;
-            background: rgba(0, 0, 0, 0.65) !important;
-            z-index: 2147483642 !important;
-            justify-content: flex-end !important;
-        `;
-
-        overlay.innerHTML = `
-            <div id="bs-mobile-drawer-panel" onclick="event.stopPropagation()" style="width: min(280px, 82vw); height: 100%; background: #1f2937; border-left: 1px solid #374151; padding: 16px 14px; display: flex; flex-direction: column; gap: 14px; color: #fff; box-shadow: -8px 0 25px rgba(0,0,0,0.85); overflow-y: auto; box-sizing: border-box;">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 10px;">
-                    <strong style="font-size: 14px; color: #60a5fa;">☰ 시뮬레이터 메뉴</strong>
-                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false)" style="background: #374151; border: 1px solid #4b5563; color: #e5e7eb; border-radius: 4px; padding: 3px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">닫기 ✕</button>
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 11px; color: #9ca3af; margin-bottom: 5px; font-weight: bold;">🔍 계보도 회원/추천인 검색</label>
-                    <div style="display: flex; gap: 6px;">
-                        <input type="text" id="bs-mobile-search-inp" placeholder="이름 또는 번호 입력" onkeydown="if(event.key==='Enter'){ window.runMobileDrawerSearch(); }" style="flex: 1; min-width: 0; background: #111827; border: 1px solid #4b5563; color: #fff; border-radius: 6px; padding: 7px 10px; font-size: 12px; outline: none;">
-                        <button type="button" onclick="window.runMobileDrawerSearch()" style="background: #2563eb; border: 1px solid #3b82f6; color: #fff; border-radius: 6px; padding: 0 12px; font-size: 12px; font-weight: bold; cursor: pointer;">검색</button>
-                    </div>
-                </div>
-
-                <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #374151; padding-top: 12px;">
-                    <span style="font-size: 11px; color: #9ca3af; font-weight: bold;">🛠️ 주요 기능 및 도구</span>
-
-                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); window.toggleTreeMode();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>🌳</span> <span id="bs-mob-tree-mode-label" style="color: #ffffff; font-weight: bold;">계보도 전환</span>
-                    </button>
-
-                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); setTimeout(() => window.toggleSettingsMenu(event), 60);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>⚙️</span> <span style="color: #ffffff; font-weight: bold;">카드 표시 항목 & 배지 설정</span>
-                    </button>
-
-                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleBizNavigator==='function') window.toggleBizNavigator(true);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>🧭</span> <span style="color: #ffffff; font-weight: bold;">내비게이터</span>
-                    </button>
-
-                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleSalesSearchPopup==='function') window.toggleSalesSearchPopup(true);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>📅</span> <span style="color: #ffffff; font-weight: bold;">매출 기간 검색</span>
-                    </button>
-
-                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.openAIAdvisorPopupWindow==='function') window.openAIAdvisorPopupWindow();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>✨</span> <span style="color: #ffffff; font-weight: bold;">AI 어드바이저</span>
-                    </button>
-
-                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleSalesSidebar==='function') window.toggleSalesSidebar();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>💳</span> <span style="color: #ffffff; font-weight: bold;">매출/구독</span>
-                    </button>
-
-                    <button type="button" id="bs-mob-github-btn" onclick="window.toggleMobileHamburgerDrawer(false); const g=document.getElementById('oneClickGithubBtn'); if(g) g.click();" style="display: ${window.IS_LOCAL_DEV ? 'flex' : 'none'}; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #93c5fd; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
-                        <span>☁️</span> <span>GitHub 원클릭 업로드</span>
-                    </button>
-                </div>
-
-                <div style="margin-top: auto; border-top: 1px solid #374151; padding-top: 12px;">
-                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.logoutSimulator==='function') window.logoutSimulator();" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 6px; color: #f87171; font-size: 12.5px; font-weight: bold; cursor: pointer;">
-                        <span>🔒</span> <span>로그아웃</span>
-                    </button>
-                </div>
-            </div>
-        `;
-
-        overlay.addEventListener('click', () => window.toggleMobileHamburgerDrawer(false));
-        document.body.appendChild(overlay);
-    }
-
-    window.toggleMobileHamburgerDrawer = function(forceShow) {
-        const overlay = document.getElementById('bs-mobile-drawer-overlay');
-        if (!overlay) return;
-        const isShown = overlay.style.display === 'flex';
-        const nextState = (typeof forceShow === 'boolean') ? forceShow : !isShown;
-        overlay.style.display = nextState ? 'flex' : 'none';
-
-        if (nextState) {
-            const modeLbl = document.getElementById('bs-mob-tree-mode-label');
-            if (modeLbl) {
-                modeLbl.innerText = (window.treeMode === 'recommender')
-                    ? '후원계보도'
-                    : '추천계보도';
-            }
-        }
-    };
-
-    window.runMobileDrawerSearch = function() {
-        const inp = document.getElementById('bs-mobile-search-inp');
-        const kw = inp ? inp.value.trim() : '';
-        window.toggleMobileHamburgerDrawer(false);
-        const mainInp = document.getElementById('searchInput');
-        if (mainInp) mainInp.value = kw;
-        if (typeof window.searchMember === 'function') {
-            window.searchMember(kw);
-        }
-    };
-
-    // ------------------------------------------------------------------------
-    // [6] 반응형 CSS 미디어 쿼리 주입 (태블릿 768px 아이콘 표시 & 시작~종료일 간격 밀착)
-    // ------------------------------------------------------------------------
-    function injectResponsiveStyles() {
-        let style = document.getElementById('bs-responsive-master-css');
-        if (!style) {
-            style = document.createElement('style');
-            style.id = 'bs-responsive-master-css';
-            document.head.appendChild(style);
-        }
-
-        style.innerHTML = `
-            :root {
-                --bs-header-bottom: 76px;
-            }
-
-            #canvas-container, .canvas-container, main {
-                touch-action: none !important;
-                -webkit-user-select: none !important;
-                user-select: none !important;
-            }
-            .table-scroll-container, #perfWidget .widget-body, #sales-table-scroll-box {
-                -webkit-overflow-scrolling: touch !important;
-                overscroll-behavior: contain !important;
-            }
-
-            #bs-mobile-hamburger-btn {
-                display: none;
-            }
-
-            header *, .header *, .top-bar *, .top-header-bar * {
-                white-space: nowrap !important;
-            }
-
-            /* 🌟 모든 해상도 공통: 날짜 선택 내부 그룹(.bs-mobile-period-flex)은 절대 양끝으로 벌어지지 않고 좌측으로 촘촘히 밀착! */
-            .bs-mobile-period-flex {
-                display: inline-flex !important;
-                align-items: center !important;
-                justify-content: flex-start !important;
-                width: auto !important;
-                max-width: 100% !important;
-                gap: 5px !important;
-                flex: 0 0 auto !important;
-            }
-
-            /* ----------------------------------------------------------------
-               💻 태블릿 세로(768px) & 태블릿 가로 & 아이폰 가로화면 (641px ~ 1250px)
-               - 1단: 좌측(타이틀+배지) ~ 우측 끝(#bs-top-row-icons-holder 아이콘 전체)
-               - 2단: 좌측(날짜 선택 바 밀착) ~ 우측(전체 계보도 회원 검색창)
-               ---------------------------------------------------------------- */
-            @media screen and (min-width: 641px) and (max-width: 1250px) {
-                header, .header, .top-bar, .top-header-bar {
-                    position: relative !important;
-                    z-index: 2147483550 !important;
-                    display: flex !important;
-                    flex-wrap: wrap !important;
-                    align-items: center !important;
-                    justify-content: flex-start !important;
-                    height: auto !important;
-                    min-height: 48px !important;
-                    padding: 6px 10px !important;
-                    gap: 6px !important;
-                    box-sizing: border-box !important;
-                    width: 100vw !important;
-                    max-width: 100vw !important;
-                }
-
-                header > div:first-child,
-                .header > div:first-child,
-                .top-bar > div:first-child {
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: flex-start !important;
-                    width: 100% !important;
-                    padding-right: 210px !important;
-                    gap: 10px !important;
-                    min-height: 32px !important;
-                    box-sizing: border-box !important;
-                }
-
-                .bs-mobile-second-row-bar {
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: space-between !important;
-                    width: 100% !important;
-                    gap: 8px !important;
-                    box-sizing: border-box !important;
-                }
-            }
-
-            @media screen and (max-width: 1024px) {
-                #salesWidget, aside.left-panel, .sales-panel {
-                    position: fixed !important;
-                    top: var(--bs-header-bottom, 76px) !important;
-                    left: 0 !important;
-                    width: min(320px, 86vw) !important;
-                    max-width: 86vw !important;
-                    height: calc(100dvh - var(--bs-header-bottom, 76px)) !important;
-                    max-height: calc(100dvh - var(--bs-header-bottom, 76px)) !important;
-                    z-index: 2147483500 !important;
-                    box-shadow: 8px 4px 25px rgba(0, 0, 0, 0.75) !important;
-                    border-top: 1px solid #374151 !important;
-                }
-
-                #perfWidget, .perf-widget {
-                    left: 0px !important;
-                    right: 0px !important;
-                    width: 100vw !important;
-                    max-width: 100vw !important;
-                    box-sizing: border-box !important;
-                }
-                #perfWidget .widget-body {
-                    overflow-x: auto !important;
-                    overflow-y: auto !important;
-                }
-                #perfWidget table {
-                    min-width: 1080px !important;
-                }
-
-                #filterWidget {
-                    width: min(510px, 95vw) !important;
-                    min-width: min(510px, 95vw) !important;
-                    max-width: 95vw !important;
-                    left: 2.5vw !important;
-                    right: 2.5vw !important;
-                }
-                #bonusDetailModal {
-                    width: min(740px, 96vw) !important;
-                    min-width: min(740px, 96vw) !important;
-                    max-width: 96vw !important;
-                    height: min(520px, 84dvh) !important;
-                    left: 50% !important;
-                    top: 50% !important;
-                    transform: translate(-50%, -50%) !important;
-                }
-                #addPartnerModal > div,
-                #memberEditModal {
-                    width: min(460px, 94vw) !important;
-                    max-width: 94vw !important;
-                    max-height: 88dvh !important;
-                }
-            }
-
-            /* ----------------------------------------------------------------
-               📱 순수 스마트폰 세로화면 전용 (화면 폭 640px 이하)
-               ---------------------------------------------------------------- */
-            @media screen and (max-width: 640px) {
-                header, .header, .top-bar, .top-header-bar {
-                    position: relative !important;
-                    z-index: 2147483550 !important;
-                    display: flex !important;
-                    flex-wrap: wrap !important;
-                    padding: 6px 8px !important;
-                    gap: 5px !important;
-                    width: 100vw !important;
-                    max-width: 100vw !important;
-                    box-sizing: border-box !important;
-                }
-
-                #bs-mobile-hamburger-btn {
-                    position: absolute !important;
-                    top: 6px !important;
-                    right: 8px !important;
-                    width: 32px !important;
-                    height: 28px !important;
-                    padding: 0 !important;
-                    margin: 0 !important;
-                    background: #1f2937 !important;
-                    border: 1px solid #374151 !important;
-                    border-radius: 6px !important;
-                    color: #e5e7eb !important;
-                    cursor: pointer !important;
-                    z-index: 100 !important;
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                }
-
-                header > div:first-child, .header > div:first-child, .top-bar > div:first-child {
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: flex-start !important;
-                    width: 100% !important;
-                    padding-right: 38px !important;
-                    gap: 8px !important;
-                    box-sizing: border-box !important;
-                    min-height: 28px !important;
-                }
-
-                header h1, header h2, header strong, .header-title, .brand-title, .logo-text {
-                    font-size: 13.5px !important;
-                    letter-spacing: -0.5px !important;
-                }
-
-                #header-line-count {
-                    font-size: 11px !important;
-                    padding: 3px 9px !important;
-                    margin: 0 !important;
-                }
-
-                .bs-mobile-second-row-bar,
-                .bs-mobile-period-flex {
-                    width: 100% !important;
-                    max-width: 100% !important;
-                    justify-content: space-between !important;
-                    align-items: center !important;
-                    gap: 3px !important;
-                    padding: 4px 6px !important;
-                    box-sizing: border-box !important;
-                    overflow: hidden !important;
-                }
-
-                header select, .header select, .top-bar select {
-                    padding: 2px 3px !important;
-                    font-size: 10.5px !important;
-                    height: 25px !important;
-                    width: auto !important;
-                    max-width: 68px !important;
-                    flex-shrink: 0 !important;
-                }
-
-                .bs-period-nav-btn {
-                    padding: 2px 5px !important;
-                    font-size: 10px !important;
-                    height: 25px !important;
-                    min-width: 22px !important;
-                    flex-shrink: 0 !important;
-                }
-
-                .bs-header-date-input,
-                header input[type="date"],
-                .header input[type="date"],
-                #header-start-date,
-                #header-end-date {
-                    width: 84px !important;
-                    min-width: 0px !important;
-                    max-width: 88px !important;
-                    flex: 0 1 84px !important;
-                    padding: 2px 2px !important;
-                    font-size: 10.5px !important;
-                    letter-spacing: -0.3px !important;
-                    height: 25px !important;
-                    text-align: center !important;
-                    box-sizing: border-box !important;
-                }
-
-                .bs-header-date-input::-webkit-calendar-picker-indicator,
-                header input[type="date"]::-webkit-calendar-picker-indicator,
-                #header-start-date::-webkit-calendar-picker-indicator,
-                #header-end-date::-webkit-calendar-picker-indicator {
-                    display: none !important;
-                    -webkit-appearance: none !important;
-                    width: 0 !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                }
-
-                #settingsDropdown, #settingsMenu, .settings-menu {
-                    position: fixed !important;
-                    top: 50% !important;
-                    left: 50% !important;
-                    right: auto !important;
-                    transform: translate(-50%, -50%) !important;
-                    max-width: 92vw !important;
-                    max-height: 80dvh !important;
-                    overflow-y: auto !important;
-                    z-index: 2147483644 !important;
-                    box-shadow: 0 20px 50px rgba(0,0,0,0.9) !important;
-                }
-
-                .zoom-controls {
-                    top: auto !important;
-                    bottom: 56px !important;
-                    right: 8px !important;
-                    transform: scale(0.85) !important;
-                    transform-origin: bottom right !important;
-                    z-index: 950 !important;
-                }
-            }
-        `;
-    }
-
-    // ------------------------------------------------------------------------
-    // [7] 모바일/태블릿 맞춤 계보도 초기 배율(Scale) 및 중앙 정렬
-    // ------------------------------------------------------------------------
-    window.centerRootNode = function() {
-        const wrapper = document.getElementById('tree-wrapper') || document.querySelector('.tree-wrapper');
-        const container = document.getElementById('canvas-container') || (wrapper ? wrapper.parentElement : null);
-        if (!wrapper || !container) return;
-
-        if (window.innerWidth <= 480) {
-            window.scale = 0.52;
-        } else if (window.innerWidth <= 640) {
-            window.scale = 0.60;
-        } else if (window.innerHeight <= 450) {
-            window.scale = 0.58;
-        } else if (window.innerWidth <= 1024) {
-            window.scale = 0.72;
-        } else {
-            window.scale = 0.85;
-        }
-
-        const rootCard = document.querySelector('.node-card');
-        if (!rootCard) {
-            setTimeout(window.centerRootNode, 100);
-            return;
-        }
-
-        let offsetLeftSum = 0;
-        let offsetTopSum = 0;
-        let curr = rootCard;
-        while (curr && curr !== wrapper) {
-            offsetLeftSum += curr.offsetLeft;
-            offsetTopSum += curr.offsetTop;
-            curr = curr.offsetParent;
-        }
-        const cardCenterX = offsetLeftSum + (rootCard.offsetWidth / 2);
-        const rootTopY = offsetTopSum;
-
-        const containerWidth = container.clientWidth || window.innerWidth;
-        const topMargin = (window.isMobileViewport() || window.innerHeight <= 450) ? 16 : 40;
-
-        window.panX = (containerWidth / 2) - (cardCenterX * window.scale);
-        window.panY = topMargin - (rootTopY * window.scale);
-
-        wrapper.style.setProperty('transform-origin', '0 0', 'important');
-        wrapper.style.setProperty('transform', `translate(${window.panX}px, ${window.panY}px) scale(${window.scale})`, 'important');
-    };
-    window.resetZoomAndPan = window.centerRootNode;
-
-    // ------------------------------------------------------------------------
-    // [8] 멀티터치 핀치 줌 & 카드 더블탭 편집 & 모바일 인앱 팝업 호환
-    // ------------------------------------------------------------------------
-    function initTouchAndPopupPatches() {
-        const canvas = document.getElementById('canvas-container') || document.querySelector('.canvas-container') || document.querySelector('main') || document.body;
-        if (canvas && canvas.dataset.touchPinchBoundV11 !== 'true') {
-            canvas.dataset.touchPinchBoundV11 = 'true';
-            let initialPinchDist = null, initialScale = 1, pinchCenterX = 0, pinchCenterY = 0;
-            const getTouchDist = (t1, t2) => Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-
-            canvas.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 2) {
-                    e.preventDefault();
-                    initialPinchDist = getTouchDist(e.touches[0], e.touches[1]);
-                    initialScale = window.scale || 0.6;
-                    pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                    pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                }
-            }, { passive: false });
-
-            canvas.addEventListener('touchmove', (e) => {
-                if (e.touches.length === 2 && initialPinchDist) {
-                    e.preventDefault();
-                    const ratio = getTouchDist(e.touches[0], e.touches[1]) / initialPinchDist;
-                    const targetScale = Math.min(3, Math.max(0.15, initialScale * ratio));
-                    const delta = targetScale - (window.scale || 0.6);
-                    if (Math.abs(delta) > 0.005 && typeof window.changeZoom === 'function') {
-                        window.changeZoom(delta, pinchCenterX, pinchCenterY);
-                    }
-                }
-            }, { passive: false });
-
-            canvas.addEventListener('touchend', (e) => {
-                if (e.touches.length < 2) initialPinchDist = null;
-            });
-
-            let lastTapTime = 0, lastTapCardId = null;
-            document.addEventListener('touchend', (e) => {
-                const cardEl = e.target.closest('.node-card');
-                if (!cardEl || e.target.closest('.corner-btn, .btn-add-parent')) return;
-                const memberId = cardEl.id.replace(/^card_/, '');
-                const now = Date.now();
-                if (lastTapCardId === memberId && (now - lastTapTime) < 320) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    lastTapTime = 0;
-                    lastTapCardId = null;
-                    if (window.cardClickTimer) { clearTimeout(window.cardClickTimer); window.cardClickTimer = null; }
-                    if (typeof window.openEditMemberModal === 'function') window.openEditMemberModal(memberId);
-                } else {
-                    lastTapTime = now;
-                    lastTapCardId = memberId;
-                }
-            }, { passive: false });
-        }
-
-        document.addEventListener('click', (e) => {
-            if (e.target.closest('#salesWidgetHeader, #salesWidget .widget-header, #salesWidget')) {
-                setTimeout(window.syncSalesPanelBelowHeader, 10);
-            }
-        }, true);
-
-        if (!window._mobilePopupPatchedV11) {
-            window._mobilePopupPatchedV11 = true;
-            const origWindowOpen = window.open;
-            window.open = function(url, windowName, windowFeatures) {
-                const isSimPopup = ['BizNavigatorPopup', 'SalesSearchPopup', 'AIAdvisorPopup'].includes(windowName);
-                if (!isSimPopup || !window.isTabletOrMobileViewport()) {
-                    return origWindowOpen.apply(window, arguments);
-                }
-                let overlayId = `bs-mobile-popup-${windowName}`;
-                let existing = document.getElementById(overlayId);
-                if (existing) existing.remove();
-
-                const overlay = document.createElement('div');
-                overlay.id = overlayId;
-                overlay.style.cssText = 'position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100dvh !important; background:rgba(0,0,0,0.82) !important; z-index:2147483646 !important; display:flex !important; align-items:center !important; justify-content:center !important; padding:6px !important; box-sizing:border-box !important;';
-                const iframe = document.createElement('iframe');
-                iframe.style.cssText = 'width:100% !important; height:100% !important; max-width:960px !important; max-height:96dvh !important; border:1px solid #374151 !important; border-radius:10px !important; background:#111827 !important;';
-                overlay.appendChild(iframe);
-                document.body.appendChild(overlay);
-
-                const fakeWin = iframe.contentWindow;
-                const beforeUnloadHandlers = [];
-                fakeWin.close = function() {
-                    beforeUnloadHandlers.forEach(fn => { try { fn(); } catch (e) {} });
-                    overlay.remove();
-                    fakeWin.closed = true;
-                };
-                const origAddEvent = fakeWin.addEventListener.bind(fakeWin);
-                fakeWin.addEventListener = function(type, listener, options) {
-                    if (type === 'beforeunload') beforeUnloadHandlers.push(listener);
-                    return origAddEvent(type, listener, options);
-                };
-                fakeWin.focus = function() { overlay.style.display = 'flex'; };
-                return fakeWin;
-            };
-        }
-    }
-
-    function bootV11() {
-        ensureViewportMeta();
-        injectResponsiveStyles();
-        ensureMobileDrawerDOM();
-        simplifyPrevNextButtons(document);
-        syncHeaderButtonsAndLayoutByViewport();
-        initTouchAndPopupPatches();
-
-        if (typeof window.updateHeaderLineCount === 'function') {
-            window.updateHeaderLineCount(window.currentSelectedId);
-        }
-
-        window.addEventListener('resize', () => {
-            syncHeaderButtonsAndLayoutByViewport();
-            window.syncSalesPanelBelowHeader();
-        });
-
-        [150, 350, 650, 1000].forEach(delay => {
-            setTimeout(() => {
-                simplifyPrevNextButtons(document);
-                syncHeaderButtonsAndLayoutByViewport();
-                window.syncSalesPanelBelowHeader();
-                if (typeof window.updateHeaderLineCount === 'function') {
-                    window.updateHeaderLineCount(window.currentSelectedId);
-                }
-            }, delay);
-        });
-
-        setTimeout(window.centerRootNode, 350);
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bootV11);
-    } else {
-        bootV11();
-    }
-})();
-// ============================================================================
-// 🎯 [비지네스 내비게이터 DB 승급조건(required_partner_rank_id & is_direct_sponsor) 완벽 연동 패치]
-// - 하드코딩된 'MEMBER'/'DIRECTOR' 예비값을 제거하고 TiDB ranks 테이블의 required_partner_rank_id를 역참조
-// - is_direct_sponsor = 1 인 경우 본인이 직접 추천한 좌/우 파트너만 정확히 카운트 및 표기
-// ============================================================================
+// [17-4] 비지네스 내비게이터 DB 승급조건(required_partner_rank_id & is_direct_sponsor) 완벽 연동 패치
 (function fixNavigatorDbPartnerCondition() {
     function normalizeId(val) {
         if (!val) return '';
@@ -11116,7 +9039,6 @@ if (document.readyState === 'loading') {
         const nextRank = dbRanks.find(r => Number(r.rank_level || 0) > currLevel && Number(r.minor_leg_pv || 0) > 0) || { rank_name: 'DIAMOND', minor_leg_pv: 0 };
         const reqMinorPV = Number(nextRank.minor_leg_pv || 0);
 
-        // 🌟 [핵심 수정 1] TiDB ranks 테이블의 required_partner_rank_id 및 is_direct_sponsor 정확히 참조!
         const reqPartnerRankId = (nextRank.required_partner_rank_id !== null && nextRank.required_partner_rank_id !== undefined && nextRank.required_partner_rank_id !== '')
             ? Number(nextRank.required_partner_rank_id)
             : null;
@@ -11129,7 +9051,6 @@ if (document.readyState === 'loading') {
         const isDirectSponsorReq = Number(nextRank.is_direct_sponsor || 0) === 1;
         const isTermRestricted = String(nextRank.period_type || '').toUpperCase() === 'RECENT_4';
 
-        // 하위 파트너 Set 및 직접 추천 파트너 Set 구축
         const { setA, setB } = typeof window.getSublinePartnerSets === 'function'
             ? window.getSublinePartnerSets(mNode)
             : { setA: new Set(), setB: new Set() };
@@ -11202,7 +9123,6 @@ if (document.readyState === 'loading') {
         const minorPV = Math.min(evalLeftPV, evalRightPV);
         const promoPct = reqMinorPV > 0 ? Math.floor((minorPV / reqMinorPV) * 100) : 0;
 
-        // 🌟 [핵심 수정 2] is_direct_sponsor = 1 이면 본인이 직접 추천한 파트너 중에서만 reqPartnerRank 이상을 카운트!
         const reqPartnerLevel = typeof window.getDbRankLevel === 'function' ? window.getDbRankLevel(reqPartnerRank) : 3;
         let dirCountA = 0, dirCountB = 0, firstNodeA = null, firstNodeB = null;
 
@@ -11433,11 +9353,1469 @@ if (document.readyState === 'loading') {
         bodyEl.innerHTML = `${promoRequirementsCardHtml}${mainContentHtml}${maintHtml}`;
     };
 })();
+
 // ============================================================================
-// 📏 [상단 헤더 기간 표시창 & 회원 검색창 컴팩트 너비 + 톱니바퀴(⚙️) 좌측 밀착 배치 패치]
-// 1. 데스크톱 화면에서 [기간 검색 바]와 [회원 검색 입력창]을 우측 톱니바퀴(⚙️) 바로 좌측으로 이동 정렬
-// 2. 시작일/종료일 입력 박스(90px) 및 회원 검색 입력창(115px) 컴팩트 너비 유지
+// [18] 상단 헤더 AI 전략 어드바이저 & 로컬 전용 GitHub 원클릭 업로드 버튼
 // ============================================================================
+(function initHeaderAIAndGitHubButtons() {
+    if (window._headerCustomBtnsInitialized) return;
+    window._headerCustomBtnsInitialized = true;
+
+    const isLocalEnv = (
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '' ||
+        window.location.protocol === 'file:'
+    );
+
+    function setupHeaderButtons() {
+        let aiBtn = document.getElementById('customAiAdvisorBtn');
+
+        if (!aiBtn) {
+            const allBtns = Array.from(document.querySelectorAll('header button, .header button, .top-bar button, button, a'));
+            let refreshBtn = null;
+
+            for (let i = allBtns.length - 1; i >= 0; i--) {
+                const el = allBtns[i];
+                const r = el.getBoundingClientRect();
+                if (r.top >= 0 && r.top <= 80 && r.right > window.innerWidth * 0.5) {
+                    const html = (el.innerHTML || '').toLowerCase();
+                    const title = (el.getAttribute('title') || '').toLowerCase();
+                    const onclick = (el.getAttribute('onclick') || '').toLowerCase();
+                    if (
+                        title.includes('새로고침') || title.includes('초기화') || title.includes('refresh') || title.includes('reload') ||
+                        onclick.includes('reload') || onclick.includes('refresh') ||
+                        html.includes('↻') || html.includes('⟳') || html.includes('fa-redo') || html.includes('fa-sync') || html.includes('fa-rotate')
+                    ) {
+                        refreshBtn = el;
+                        break;
+                    }
+                }
+            }
+
+            if (!refreshBtn) {
+                const topRightBtns = allBtns.filter(el => {
+                    const r = el.getBoundingClientRect();
+                    return r.top >= 0 && r.top <= 80 && r.width >= 16 && r.width <= 90 && r.right > window.innerWidth * 0.5;
+                });
+                if (topRightBtns.length > 0) {
+                    topRightBtns.sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right);
+                    refreshBtn = topRightBtns[0];
+                }
+            }
+
+            if (!refreshBtn) return;
+
+            aiBtn = document.createElement('button');
+            aiBtn.id = 'customAiAdvisorBtn';
+            aiBtn.type = 'button';
+            aiBtn.setAttribute('title', 'AI 어드바이저');
+            aiBtn.style.cssText = `
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 32px;
+                padding: 0;
+                margin-left: 4px;
+                background: transparent;
+                color: #9ca3af;
+                border: 1px solid transparent;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.15s ease;
+            `;
+            aiBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+                <path d="M20 3v4"/><path d="M22 5h-4"/>
+            </svg>`;
+
+            aiBtn.addEventListener('mouseenter', () => {
+                aiBtn.style.color = '#ffffff';
+                aiBtn.style.background = '#1f2937';
+                aiBtn.style.borderColor = '#374151';
+            });
+            aiBtn.addEventListener('mouseleave', () => {
+                aiBtn.style.color = '#9ca3af';
+                aiBtn.style.background = 'transparent';
+                aiBtn.style.borderColor = 'transparent';
+            });
+            aiBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.openAIAdvisorPopupWindow();
+            });
+
+            if (refreshBtn.parentNode) {
+                refreshBtn.parentNode.replaceChild(aiBtn, refreshBtn);
+            }
+        }
+
+        if (isLocalEnv && aiBtn && aiBtn.parentNode && !document.getElementById('oneClickGithubBtn')) {
+            const ghBtn = document.createElement('button');
+            ghBtn.id = 'oneClickGithubBtn';
+            ghBtn.type = 'button';
+            ghBtn.setAttribute('title', 'GitHub 원클릭 업로드 (백엔드 + 프론트엔드 동시 저장 - 로컬 전용)');
+            ghBtn.style.cssText = `
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 32px;
+                padding: 0;
+                margin-left: 4px;
+                background: transparent;
+                color: #9ca3af;
+                border: 1px solid transparent;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.15s ease;
+            `;
+
+            const ghIconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+                <path d="M12 12v9"/>
+                <path d="m16 16-4-4-4 4"/>
+            </svg>`;
+            ghBtn.innerHTML = ghIconSvg;
+
+            ghBtn.addEventListener('mouseenter', () => {
+                ghBtn.style.color = '#ffffff';
+                ghBtn.style.background = '#1f2937';
+                ghBtn.style.borderColor = '#374151';
+            });
+            ghBtn.addEventListener('mouseleave', () => {
+                ghBtn.style.color = '#9ca3af';
+                ghBtn.style.background = 'transparent';
+                ghBtn.style.borderColor = 'transparent';
+            });
+
+            ghBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const memo = prompt('GitHub에 업로드할 작업 메모를 입력하세요:', '시뮬레이터 내비게이터 및 AI 어드바이저 업데이트');
+                if (memo === null) return;
+
+                ghBtn.disabled = true;
+                ghBtn.innerHTML = `<span style="font-size:10px; color:#ffffff; font-weight:bold;">UP</span>`;
+
+                try {
+                    const baseUrl = (window.API_BASE || window.API_BASE_URL || 'http://127.0.0.1:3001').replace(/\/api\/?$/, '');
+                    const response = await fetch(`${baseUrl}/api/git-push`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: memo.trim() || undefined })
+                    });
+                    const result = await response.json();
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.message || '업로드 실패');
+                    }
+                    alert(`✅ [GitHub 통합 업로드 완료]\n\n${result.message}`);
+                } catch (err) {
+                    alert(`❌ [GitHub 업로드 오류]\n${err.message}\n\n* 백엔드(server.js)가 실행 중인지 확인해 주세요.`);
+                } finally {
+                    ghBtn.disabled = false;
+                    ghBtn.innerHTML = ghIconSvg;
+                }
+            });
+
+            aiBtn.parentNode.appendChild(ghBtn);
+        }
+    }
+
+    window.collectNetworkContextForAI = function(rootMemberId) {
+        const targetId = rootMemberId || window.currentSelectedId || 'VK-1199464';
+        const rootNode = typeof window.findMemberNode === 'function' ? window.findMemberNode(targetId) : null;
+        if (!rootNode) return null;
+
+        const allSales = window._capturedAllSales || window.allSalesData || window.integrated_sales_history || [];
+        const latestPeriod = typeof window.getLatestPeriodRangeFromSales === 'function'
+            ? window.getLatestPeriodRangeFromSales(allSales)
+            : { label: '최신기수', startDate: '2026-10-01', endDate: '2026-10-15' };
+
+        const summaryList = [];
+        const visited = new Set();
+
+        function traverse(node, depth, parentInfo, lineDirection) {
+            if (!node || depth > 4) return;
+            const obj = (typeof node === 'object') ? node : (typeof window.findMemberNode === 'function' ? window.findMemberNode(node) : null);
+            if (!obj) return;
+
+            const nid = obj.id || obj.member_id || '';
+            if (!nid || visited.has(nid)) return;
+            visited.add(nid);
+
+            const currRank = String(obj.rank || obj.rank_name || 'MANIA').toUpperCase();
+            const badge = typeof window.evaluateMemberCardBadgeStatus === 'function'
+                ? window.evaluateMemberCardBadgeStatus(nid)
+                : {};
+
+            const reqMaintCV = typeof window.getDbRequiredMaintCV === 'function'
+                ? window.getDbRequiredMaintCV(currRank)
+                : (badge.maintReqVal || 0);
+
+            summaryList.push({
+                '회원번호': nid,
+                '성명': obj.name || '-',
+                '단계_Depth': depth,
+                '상위스폰서': parentInfo || '최상위(기준)',
+                '소속라인': lineDirection || '기준본인',
+                '현재직급': currRank,
+                '목표승급직급': badge.promoTargetRank || '-',
+                '승급소실적달성률': (badge.promoPct || 0) + '%',
+                '현재소실적PV': badge.promoCurrPV || 0,
+                '승급목표PV': badge.promoReqPV || 0,
+                '승급부족PV': Math.max(0, (badge.promoReqPV || 0) - (badge.promoCurrPV || 0)),
+                '품위유지기준CV': reqMaintCV,
+                '당기소실적CV': badge.maintCurrVal || 0,
+                '품위유지부족CV': Math.max(0, reqMaintCV - (badge.maintCurrVal || 0))
+            });
+
+            if (obj.left) {
+                traverse(obj.left, depth + 1, `${obj.name}(${nid})`, depth === 0 ? '좌측(A라인)' : lineDirection);
+            }
+            if (obj.right) {
+                traverse(obj.right, depth + 1, `${obj.name}(${nid})`, depth === 0 ? '우측(B라인)' : lineDirection);
+            }
+
+            if (Array.isArray(obj.children)) {
+                obj.children.forEach((child, idx) => {
+                    const pos = String(child.position || (idx === 0 ? '좌(A라인)' : '우(B라인)')).toUpperCase();
+                    const dirLabel = (pos.includes('A') || pos.includes('LEFT') || pos.includes('좌')) ? '좌측(A라인)' : '우측(B라인)';
+                    traverse(child, depth + 1, `${obj.name}(${nid})`, depth === 0 ? dirLabel : lineDirection);
+                });
+            }
+        }
+
+        traverse(rootNode, 0, null, null);
+
+        return {
+            '기준회원': `${rootNode.name} (${rootNode.id})`,
+            '기준기수': `${latestPeriod.label} (${latestPeriod.startDate} ~ ${latestPeriod.endDate})`,
+            '하위네트워크파트너현황': summaryList
+        };
+    };
+
+    window.openAIAdvisorPopupWindow = function(targetMemberId) {
+        const w = 780, h = 840;
+        const l = Math.max(0, Math.floor((window.screen.width - w) / 2));
+        const t = Math.max(0, Math.floor((window.screen.height - h) / 2));
+
+        let popup = window.aiAdvisorPopupWindow;
+        if (!popup || popup.closed) {
+            popup = window.open('', 'AIAdvisorPopup', `width=${w},height=${h},left=${l},top=${t},resizable=yes,scrollbars=yes`);
+            window.aiAdvisorPopupWindow = popup;
+        } else {
+            popup.focus();
+        }
+        if (!popup) return alert('팝업 차단을 해제해 주세요.');
+
+        const rootId = targetMemberId || window.currentSelectedId || 'VK-1199464';
+        const rootNode = typeof window.findMemberNode === 'function' ? window.findMemberNode(rootId) : { id: rootId, name: '선택회원' };
+        const savedApiKey = localStorage.getItem('BS_GEMINI_API_KEY') || '';
+
+        popup.document.open();
+        popup.document.write(`
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AI 전략 어드바이저 - 비지네스 시뮬레이터</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #111827; color: #ffffff; font-family: 'Pretendard', sans-serif; padding: 16px; line-height: 1.55; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; background: #1f2937; border: 1px solid #374151; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; }
+    .header-title { font-size: 15px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+    .close-btn { background: #374151; color: #ffffff; border: 1px solid #4b5563; padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; }
+    .card { background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+    .label { font-size: 11.5px; color: #9ca3af; font-weight: bold; margin-bottom: 6px; display: block; }
+    .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    input, textarea, select { width: 100%; background: #111827; border: 1px solid #374151; color: #ffffff; padding: 9px 12px; border-radius: 6px; font-size: 13px; font-weight: bold; outline: none; }
+    .run-btn { width: 100%; background: #2563eb; color: #ffffff; border: 1px solid #3b82f6; padding: 11px; border-radius: 6px; font-size: 13.5px; font-weight: bold; cursor: pointer; margin-top: 4px; }
+    .run-btn:disabled { background: #374151; border-color: #4b5563; cursor: not-allowed; }
+    .result-box { background: #111827; border: 1px solid #374151; border-radius: 6px; padding: 16px; min-height: 360px; max-height: 450px; overflow-y: auto; font-size: 13px; white-space: pre-wrap; }
+    .api-row { display: flex; gap: 8px; align-items: center; }
+    .save-key-btn { background: #374151; color: #ffffff; border: 1px solid #4b5563; padding: 9px 14px; border-radius: 6px; font-size: 12px; font-weight: bold; white-space: nowrap; cursor: pointer; }
+    .badge { background: #374151; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+</style>
+</head>
+<body>
+    <div class="header-bar">
+        <div class="header-title">
+            <span>AI 전략 어드바이저 (최적 매출 배치 & 승급 시뮬레이션)</span>
+            <span class="badge">[${(rootNode && rootNode.name) || rootId} (${rootId})]</span>
+        </div>
+        <button class="close-btn" onclick="window.close()">창 닫기 ✕</button>
+    </div>
+    <div class="card">
+        <label class="label">🔑 Google AI Studio API Key & 모델 선택 (혼잡 시 자동 우회 지원)</label>
+        <div class="api-row">
+            <input type="password" id="geminiApiKeyInput" placeholder="API Key 입력" value="${savedApiKey}">
+            <select id="geminiModelSelect" style="width: 230px;">
+                <option value="gemini-3.8-flash" selected>gemini-3.8-flash (최신 표준)</option>
+                <option value="gemini-3.8-pro">gemini-3.8-pro (정밀 분석)</option>
+                <option value="gemini-3.8-flash-lite">gemini-3.8-flash-lite (초고속)</option>
+            </select>
+            <button class="save-key-btn" id="saveKeyBtn">키 저장</button>
+        </div>
+    </div>
+    <div class="card">
+        <div class="input-row">
+            <div><label class="label">💰 신규 발생 예정 CV</label><input type="text" id="simInputCV" value="700,000"></div>
+            <div><label class="label">📈 신규 발생 예정 PV</label><input type="text" id="simInputPV" value="900,000"></div>
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label class="label">💬 중점 분석 요청사항</label>
+            <textarea id="simCustomPrompt" rows="2">현재 후원계보도에서 위 신규 매출이 일어날 때, 어느 라인 누구 밑에 배치하면 수당(지원수당·추천매칭·품위유지)과 승급 달성에 가장 전체적인 효과가 좋을지 1순위, 2순위로 구체적인 수치와 함께 추천해줘.</textarea>
+        </div>
+        <button class="run-btn" id="runAiAnalysisBtn">Google AI 최적 배치 전략 분석 실행</button>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span class="label" style="margin-bottom:0;">📊 AI 어드바이저 분석 리포트</span>
+            <span id="aiStatusText" style="font-size:11.5px; color:#9ca3af; font-weight:bold;">대기 중</span>
+        </div>
+        <div class="result-box" id="aiResultBox">상단의 [Google AI 최적 배치 전략 분석 실행] 버튼을 눌러주세요.</div>
+    </div>
+</body>
+</html>`);
+        popup.document.close();
+
+        const pDoc = popup.document;
+        const keyInput = pDoc.getElementById('geminiApiKeyInput');
+        const saveKeyBtn = pDoc.getElementById('saveKeyBtn');
+        const cvInput = pDoc.getElementById('simInputCV');
+        const pvInput = pDoc.getElementById('simInputPV');
+        const modelSelect = pDoc.getElementById('geminiModelSelect');
+        const customPromptEl = pDoc.getElementById('simCustomPrompt');
+        const runBtn = pDoc.getElementById('runAiAnalysisBtn');
+        const resultBox = pDoc.getElementById('aiResultBox');
+        const statusText = pDoc.getElementById('aiStatusText');
+
+        [cvInput, pvInput].forEach(inp => {
+            inp.addEventListener('input', () => {
+                const num = Number(String(inp.value).replace(/[^\d]/g, '')) || 0;
+                inp.value = num.toLocaleString('ko-KR');
+            });
+        });
+
+        saveKeyBtn.addEventListener('click', () => {
+            localStorage.setItem('BS_GEMINI_API_KEY', keyInput.value.trim());
+            statusText.innerText = '✓ API Key 저장 완료';
+            statusText.style.color = '#ffffff';
+        });
+
+        async function fetchWithFallback(apiKey, preferredModel, promptText) {
+            const models = Array.from(new Set([preferredModel, 'gemini-3.8-flash', 'gemini-3.8-pro', 'gemini-3.8-flash-lite']));
+            let lastErr = '';
+            for (const m of models) {
+                for (let attempt = 1; attempt <= 2; attempt++) {
+                    statusText.innerText = `${m} 요청 중... ${attempt > 1 ? `(재시도)` : ''}`;
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+                    });
+                    const data = await res.json();
+                    if (res.ok && !data.error) {
+                        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (text) return { text, usedModel: m };
+                    }
+                    lastErr = data?.error?.message || `HTTP ${res.status}`;
+                    if (res.status === 503 || res.status === 429 || /high demand|overloaded|unavailable/i.test(lastErr)) {
+                        await new Promise(r => setTimeout(r, 1500));
+                    } else {
+                        break;
+                    }
+                }
+            }
+            throw new Error(lastErr);
+        }
+
+        runBtn.addEventListener('click', async () => {
+            const apiKey = keyInput.value.trim();
+            if (!apiKey) return alert('API Key를 입력해 주세요.');
+            localStorage.setItem('BS_GEMINI_API_KEY', apiKey);
+
+            const simCV = Number(String(cvInput.value).replace(/[^\d]/g, '')) || 0;
+            const simPV = Number(String(pvInput.value).replace(/[^\d]/g, '')) || 0;
+
+            runBtn.disabled = true;
+            runBtn.innerText = '⏳ AI 전략 분석 중...';
+            resultBox.innerText = '실시간 계보도 데이터를 분석하고 있습니다. 잠시만 기다려 주세요...';
+
+            try {
+                const netContext = window.collectNetworkContextForAI(rootId);
+                const fullPrompt = `당신은 네트워크 마케팅 보상플랜 및 바이너리 계보도 최적 배치 전문 AI 어드바이저입니다.\n\n[계보도 데이터]\n${JSON.stringify(netContext, null, 2)}\n\n[시뮬레이션 조건]\n- 신규 매출: ${simCV.toLocaleString('ko-KR')} CV / ${simPV.toLocaleString('ko-KR')} PV\n- 요청사항: ${customPromptEl.value.trim()}\n\n핵심 결론(🏆 최적 배치 1순위, 🥈 대안 2순위)과 각 파트너별 기대 수당/승급/품위유지 달성률 변화를 구체적인 수치로 브리핑해 주세요.`;
+
+                const { text, usedModel } = await fetchWithFallback(apiKey, modelSelect.value, fullPrompt);
+                resultBox.innerText = text;
+                statusText.innerText = `✓ 분석 완료 (${usedModel})`;
+                statusText.style.color = '#ffffff';
+            } catch (err) {
+                resultBox.innerText = `[오류 안내]\n${err.message}`;
+                statusText.innerText = '오류 발생';
+                statusText.style.color = '#ef4444';
+            } finally {
+                runBtn.disabled = false;
+                runBtn.innerText = 'Google AI 최적 배치 전략 분석 실행';
+            }
+        });
+    };
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(setupHeaderButtons, 250);
+    } else {
+        window.addEventListener('DOMContentLoaded', () => setTimeout(setupHeaderButtons, 250));
+    }
+})();
+
+// ============================================================================
+// [19] 관리자 로그인 보안 게이트 (admin 인증 및 토큰 헤더 자동 주입)
+// ============================================================================
+(function forceInitLoginSecurityGate() {
+    if (window._bsLoginGateMounted) return;
+    window._bsLoginGateMounted = true;
+
+    const TOKEN_KEY = 'BS_AUTH_TOKEN_V3';
+    const EXPECTED_ID = 'admin';
+    const EXPECTED_PW = 'tourism9**';
+    const LOCAL_VALID_TOKEN = 'verified_admin_tourism9_token';
+
+    const origFetch = window.fetch;
+    window.fetch = async function(input, init = {}) {
+        const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
+        const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        if (urlStr.includes('/api/') || (window.API_BASE && urlStr.startsWith(window.API_BASE))) {
+            init.headers = Object.assign({}, init.headers || {}, { 'x-auth-token': token });
+        }
+        return origFetch.call(this, input, init);
+    };
+
+    window.logoutSimulator = function() {
+        if (!confirm('시뮬레이터에서 로그아웃하시겠습니까?')) return;
+        sessionStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(TOKEN_KEY);
+        window.location.reload();
+    };
+
+    function mountLogoutBtn() {
+        if (document.getElementById('bsLogoutBtn')) return;
+        const aiBtn = document.getElementById('customAiAdvisorBtn');
+        const headerContainer = (aiBtn && aiBtn.parentNode) || document.querySelector('header, .header, .top-bar');
+        if (!headerContainer) return;
+
+        const btn = document.createElement('button');
+        btn.id = 'bsLogoutBtn';
+        btn.type = 'button';
+        btn.title = '로그아웃';
+        btn.style.cssText = 'display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; margin-left:4px; background:transparent; color:#f87171; border:1px solid transparent; border-radius:6px; cursor:pointer;';
+        btn.innerHTML = '🔒';
+        btn.onclick = window.logoutSimulator;
+        headerContainer.appendChild(btn);
+    }
+
+    function mountLoginScreen() {
+        setTimeout(mountLogoutBtn, 600);
+
+        const currentToken = sessionStorage.getItem(TOKEN_KEY);
+        if (currentToken) return;
+
+        let overlay = document.getElementById('bs-auth-login-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'bs-auth-login-overlay';
+            overlay.style.cssText = `
+                position: fixed !important;
+                top: 0 !important; left: 0 !important;
+                width: 100vw !important; height: 100vh !important;
+                background: #0b0f19 !important;
+                z-index: 2147483647 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                font-family: 'Pretendard', -apple-system, sans-serif !important;
+            `;
+
+            overlay.innerHTML = `
+                <div style="background:#1f2937; border:1px solid #374151; border-radius:12px; width:360px; padding:30px 24px; box-shadow:0 25px 50px rgba(0,0,0,0.85); color:#fff; text-align:center;">
+                    <div style="width:52px; height:52px; margin:0 auto 14px; border-radius:12px; background:rgba(59,130,246,0.15); border:1px solid #3b82f6; display:flex; align-items:center; justify-content:center; font-size:24px;">🔒</div>
+                    <h2 style="margin:0 0 6px; font-size:18px; font-weight:800; color:#fff;">비지네스 시뮬레이터 V3.0</h2>
+                    <p style="margin:0 0 22px; font-size:12px; color:#9ca3af;">승인된 관리자 계정으로 로그인해 주세요.</p>
+                    <form id="bs-login-form" style="display:flex; flex-direction:column; gap:12px; text-align:left;">
+                        <div>
+                            <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">관리자 아이디 (ID)</label>
+                            <input type="text" id="bs-login-id" placeholder="admin" required
+                                   style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">비밀번호 (Password)</label>
+                            <input type="password" id="bs-login-pw" placeholder="비밀번호 입력" required
+                                   style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
+                        </div>
+                        <div id="bs-login-error" style="display:none; color:#ef4444; font-size:12px; font-weight:bold; text-align:center; padding:4px 0;"></div>
+                        <button type="submit" id="bs-login-submit"
+                                style="margin-top:6px; width:100%; padding:11px; background:#2563eb; border:1px solid #3b82f6; border-radius:6px; color:#fff; font-size:13.5px; font-weight:bold; cursor:pointer;">
+                            로그인
+                        </button>
+                    </form>
+                </div>
+            `;
+            document.documentElement.appendChild(overlay);
+        }
+
+        const form = document.getElementById('bs-login-form');
+        const idInp = document.getElementById('bs-login-id');
+        const pwInp = document.getElementById('bs-login-pw');
+        const errEl = document.getElementById('bs-login-error');
+
+        setTimeout(() => { if (idInp) idInp.focus(); }, 100);
+
+        if (form && !form.dataset.bound) {
+            form.dataset.bound = 'true';
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                errEl.style.display = 'none';
+                const uid = idInp.value.trim();
+                const upw = pwInp.value;
+
+                let tokenToSave = null;
+                try {
+                    const res = await fetch(`${window.API_BASE || ''}/api/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: uid, password: upw })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.success && data.token) {
+                            tokenToSave = data.token;
+                        }
+                    }
+                } catch (err) {}
+
+                if (!tokenToSave && uid === EXPECTED_ID && upw === EXPECTED_PW) {
+                    tokenToSave = LOCAL_VALID_TOKEN;
+                }
+
+                if (tokenToSave) {
+                    sessionStorage.setItem(TOKEN_KEY, tokenToSave);
+                    localStorage.setItem(TOKEN_KEY, tokenToSave);
+                    overlay.remove();
+                    if (typeof window.fetchTreeData === 'function') {
+                        window.fetchTreeData(true);
+                    }
+                } else {
+                    errEl.innerText = '아이디 또는 비밀번호가 일치하지 않습니다.';
+                    errEl.style.display = 'block';
+                    pwInp.value = '';
+                    pwInp.focus();
+                }
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', mountLoginScreen);
+    } else {
+        mountLoginScreen();
+    }
+})();
+
+// ============================================================================
+// [20] 모바일 & 태블릿 반응형 레이아웃, 컴팩트 헤더 및 햄버거 드로어 메뉴
+// ============================================================================
+
+// [20-1] 모바일/태블릿 반응형 UI/UX 및 심플 헤더 & 햄버거 메뉴 패치 V11
+(function initResponsiveMobileTabletSupportV11() {
+    if (window._bsResponsivePatchMountedV11) return;
+    window._bsResponsivePatchMountedV11 = true;
+
+    function ensureViewportMeta() {
+        let meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) {
+            meta = document.createElement('meta');
+            meta.name = 'viewport';
+            document.head.appendChild(meta);
+        }
+        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+    }
+
+    window.isTabletOrMobileViewport = function() {
+        return window.innerWidth <= 1024 || window.innerHeight <= 500;
+    };
+    window.isMobileViewport = function() {
+        return window.innerWidth <= 640;
+    };
+    window.isLandscapePhoneOrCompactTablet = function() {
+        return window.innerWidth > 640 && (window.innerWidth <= 1250 || window.innerHeight <= 500);
+    };
+
+    window.syncSalesPanelBelowHeader = function() {
+        const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
+        const salesW = document.getElementById('salesWidget') || (typeof window.getSmartLeftPanel === 'function' ? window.getSmartLeftPanel() : null);
+        const zoomCtrl = document.querySelector('.zoom-controls');
+
+        let headerBottom = 60;
+        if (headerEl) {
+            const rect = headerEl.getBoundingClientRect();
+            if (rect.height > 0) {
+                headerBottom = Math.round(rect.bottom);
+            }
+        }
+
+        document.documentElement.style.setProperty('--bs-header-bottom', `${headerBottom}px`);
+
+        if (salesW) {
+            salesW.style.setProperty('top', `${headerBottom}px`, 'important');
+            salesW.style.setProperty('height', `calc(100dvh - ${headerBottom}px)`, 'important');
+        }
+
+        if (zoomCtrl) {
+            if (window.isMobileViewport()) {
+                zoomCtrl.style.setProperty('top', 'auto', 'important');
+                zoomCtrl.style.setProperty('bottom', '56px', 'important');
+                zoomCtrl.style.setProperty('right', '8px', 'important');
+            } else {
+                const parentEl = zoomCtrl.offsetParent || document.body;
+                const isInsideCanvas = (parentEl.id === 'canvas-container' || parentEl.classList.contains('canvas-container') || parentEl.tagName === 'MAIN');
+                const targetTop = isInsideCanvas ? 14 : (headerBottom + 14);
+
+                zoomCtrl.style.setProperty('bottom', 'auto', 'important');
+                zoomCtrl.style.setProperty('top', `${targetTop}px`, 'important');
+                zoomCtrl.style.setProperty('right', '14px', 'important');
+            }
+        }
+    };
+
+    window.updateHeaderLineCount = function(selectedId) {
+        const badgeEl = document.getElementById('header-line-count');
+        if (!badgeEl) return;
+
+        const targetId = selectedId || window.currentSelectedId;
+        let baseNode = targetId && typeof window.findMemberNode === 'function' ? window.findMemberNode(targetId) : (typeof window.getAbsoluteTopRoot === 'function' ? window.getAbsoluteTopRoot() : null);
+        if (!baseNode && typeof window.getAbsoluteTopRoot === 'function') baseNode = window.getAbsoluteTopRoot();
+
+        if (!baseNode) {
+            badgeEl.innerHTML = `<span style="color:#9ca3af;">데이터 없음</span>`;
+            return;
+        }
+
+        const baseName = baseNode.name || baseNode.id;
+
+        if (window.treeMode === 'recommender') {
+            const uniqueMembers = typeof window.getUniqueMembers === 'function' ? window.getUniqueMembers() : [];
+            let directRecCount = 0;
+            let totalRecSubCount = 0;
+            const visited = new Set();
+
+            function countRecSubtree(currNode, depth) {
+                if (!currNode || !currNode.id) return;
+                let norm = String(currNode.id).trim().toLowerCase().replace(/^vk-?/, '');
+                if (visited.has(norm)) return;
+                visited.add(norm);
+
+                if (depth > 0) totalRecSubCount++;
+                if (depth === 1) directRecCount++;
+
+                uniqueMembers.filter(m => m && !window.isSameMemberId(m.id, currNode.id) && window.isSameMemberId(m.recId || m.rec_id || m.recommenderId, currNode.id))
+                    .forEach(child => countRecSubtree(child, depth + 1));
+            }
+
+            countRecSubtree(baseNode, 0);
+            badgeEl.innerHTML = `
+                <b style="color:#fff;">${baseName}</b>
+                <span style="color:#10b981; font-weight:bold; margin-left:4px;">직추천:${directRecCount}</span>
+                <span style="color:#9ca3af; font-size:11px; margin-left:2px;">(Total ${totalRecSubCount})</span>
+            `;
+            return;
+        }
+
+        const visitedA = new Set();
+        const visitedB = new Set();
+
+        function countBranchNodes(node, visitedSet) {
+            if (!node || !node.id) return 0;
+            let norm = String(node.id).trim().toLowerCase().replace(/^vk-?/, '');
+            if (visitedSet.has(norm)) return 0;
+            visitedSet.add(norm);
+
+            let count = 1;
+            let leftChild = node.left ? (typeof node.left === 'object' ? node.left : window.findMemberNode(node.left)) : null;
+            let rightChild = node.right ? (typeof node.right === 'object' ? node.right : window.findMemberNode(node.right)) : null;
+
+            if (leftChild) count += countBranchNodes(leftChild, visitedSet);
+            if (rightChild) count += countBranchNodes(rightChild, visitedSet);
+            return count;
+        }
+
+        let leftRoot = baseNode.left ? (typeof baseNode.left === 'object' ? baseNode.left : window.findMemberNode(baseNode.left)) : null;
+        let rightRoot = baseNode.right ? (typeof baseNode.right === 'object' ? baseNode.right : window.findMemberNode(baseNode.right)) : null;
+
+        const aCount = leftRoot ? countBranchNodes(leftRoot, visitedA) : 0;
+        const bCount = rightRoot ? countBranchNodes(rightRoot, visitedB) : 0;
+        const totalSub = aCount + bCount;
+
+        badgeEl.innerHTML = `
+            <b style="color:#fff;">${baseName}</b>
+            <span style="color:#60a5fa; font-weight:bold; margin-left:5px;">A:${aCount.toLocaleString()}</span>
+            <span style="color:#6b7280; margin:0 3px;">/</span>
+            <span style="color:#f59e0b; font-weight:bold;">B:${bCount.toLocaleString()}</span>
+            <span style="color:#9ca3af; font-size:11px; margin-left:3px;">(Total ${totalSub.toLocaleString()})</span>
+        `;
+    };
+
+    function simplifyPrevNextButtons(rootDoc = document) {
+        if (!rootDoc) return;
+        const buttons = rootDoc.querySelectorAll('button, .nav-btn, [onclick*="Period"], [onclick*="period"]');
+        buttons.forEach(btn => {
+            const txt = (btn.innerText || '').trim();
+            if (txt.includes('이전') && (txt.includes('◀') || txt.includes('<') || txt === '이전')) {
+                btn.innerHTML = '◀';
+                btn.title = '이전 기수';
+                btn.classList.add('bs-period-nav-btn');
+            } else if (txt.includes('다음') && (txt.includes('▶') || txt.includes('>') || txt === '다음')) {
+                btn.innerHTML = '▶';
+                btn.title = '다음 기수';
+                btn.classList.add('bs-period-nav-btn');
+            }
+        });
+    }
+
+    const origOpenSalesPopup = window.openSalesSearchPopupWindow;
+    if (typeof origOpenSalesPopup === 'function' && !origOpenSalesPopup._iconPatchedV11) {
+        const wrappedOpenSales = function() {
+            const pop = origOpenSalesPopup.apply(this, arguments);
+            if (pop && pop.document) {
+                setTimeout(() => simplifyPrevNextButtons(pop.document), 50);
+            }
+            return pop;
+        };
+        wrappedOpenSales._iconPatchedV11 = true;
+        window.openSalesSearchPopupWindow = wrappedOpenSales;
+    }
+
+    function syncHeaderButtonsAndLayoutByViewport() {
+        const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
+        if (!headerEl) return;
+
+        const isMobPortrait = window.isMobileViewport();
+        const isLandscapeCompact = window.isLandscapePhoneOrCompactTablet();
+
+        let hamBtn = document.getElementById('bs-mobile-hamburger-btn');
+        if (!hamBtn) {
+            hamBtn = document.createElement('button');
+            hamBtn.id = 'bs-mobile-hamburger-btn';
+            hamBtn.type = 'button';
+            hamBtn.title = '메뉴 열기';
+            hamBtn.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            `;
+            hamBtn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.toggleMobileHamburgerDrawer();
+            };
+        }
+        if (hamBtn.parentElement !== headerEl) {
+            headerEl.appendChild(hamBtn);
+        }
+
+        let topIconsHolder = document.getElementById('bs-top-row-icons-holder');
+        if (!topIconsHolder) {
+            topIconsHolder = document.createElement('div');
+            topIconsHolder.id = 'bs-top-row-icons-holder';
+            headerEl.appendChild(topIconsHolder);
+        } else if (topIconsHolder.parentElement !== headerEl) {
+            headerEl.appendChild(topIconsHolder);
+        }
+
+        const gearBtn = headerEl.querySelector('[onclick*="toggleSettingsMenu"]');
+        let gearItem = gearBtn;
+        if (gearBtn && gearBtn.parentElement && gearBtn.parentElement !== headerEl && gearBtn.parentElement !== topIconsHolder) {
+            const p = gearBtn.parentElement;
+            if (!p.querySelector('#searchInput') && !p.querySelector('input[type="date"]') && !p.querySelector('#header-line-count')) {
+                gearItem = p;
+            }
+        }
+
+        const treeBtn = document.getElementById('toggleTreeBtn') || headerEl.querySelector('[onclick*="toggleTreeMode"]');
+        const aiBtn = document.getElementById('customAiAdvisorBtn');
+        const ghBtn = document.getElementById('oneClickGithubBtn');
+        const logoutBtn = document.getElementById('bsLogoutBtn');
+
+        const orderedItems = [gearItem, treeBtn, aiBtn, ghBtn, logoutBtn].filter(Boolean);
+        orderedItems.forEach(item => {
+            if (item.parentElement !== topIconsHolder) {
+                topIconsHolder.appendChild(item);
+            }
+            item.style.margin = '0';
+        });
+
+        const searchInp = document.getElementById('searchInput');
+        const searchBox = (searchInp && searchInp.parentElement !== headerEl && !searchInp.parentElement.querySelector('input[type="date"]'))
+            ? searchInp.parentElement
+            : searchInp;
+
+        if (isMobPortrait) {
+            topIconsHolder.style.setProperty('display', 'none', 'important');
+            if (searchInp) searchInp.style.setProperty('display', 'none', 'important');
+            if (searchBox) searchBox.style.setProperty('display', 'none', 'important');
+            hamBtn.style.setProperty('display', 'inline-flex', 'important');
+        } else if (isLandscapeCompact) {
+            hamBtn.style.setProperty('display', 'none', 'important');
+            topIconsHolder.style.cssText = `
+                position: absolute !important;
+                top: 6px !important;
+                right: 10px !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 4px !important;
+                z-index: 120 !important;
+            `;
+            orderedItems.forEach(el => {
+                el.style.setProperty('display', 'inline-flex', 'important');
+            });
+            if (searchInp) searchInp.style.setProperty('display', 'inline-block', 'important');
+            if (searchBox && searchBox !== searchInp) {
+                searchBox.style.setProperty('display', 'flex', 'important');
+                searchBox.style.setProperty('margin-left', 'auto', 'important');
+            }
+        } else {
+            hamBtn.style.setProperty('display', 'none', 'important');
+            topIconsHolder.style.cssText = `
+                position: static !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 4px !important;
+                margin-left: 6px !important;
+            `;
+            orderedItems.forEach(el => {
+                el.style.setProperty('display', 'inline-flex', 'important');
+            });
+            if (searchInp) searchInp.style.setProperty('display', 'inline-block', 'important');
+            if (searchBox && searchBox !== searchInp) {
+                searchBox.style.setProperty('display', 'flex', 'important');
+                searchBox.style.removeProperty('margin-left');
+            }
+        }
+
+        const dateInputs = headerEl.querySelectorAll('input[type="date"], #header-start-date, #header-end-date');
+        dateInputs.forEach(dInp => {
+            dInp.classList.add('bs-header-date-input');
+            dInp.style.setProperty('display', 'inline-block', 'important');
+            if (isMobPortrait) {
+                dInp.style.setProperty('width', '84px', 'important');
+                dInp.style.setProperty('min-width', '0px', 'important');
+                dInp.style.setProperty('max-width', '88px', 'important');
+                dInp.style.setProperty('padding', '2px 2px', 'important');
+                dInp.style.setProperty('font-size', '10.5px', 'important');
+            } else if (isLandscapeCompact) {
+                dInp.style.setProperty('width', '106px', 'important');
+                dInp.style.setProperty('min-width', '0px', 'important');
+                dInp.style.setProperty('max-width', '114px', 'important');
+                dInp.style.setProperty('padding', '2px 6px', 'important');
+                dInp.style.setProperty('font-size', '11.5px', 'important');
+            } else {
+                dInp.style.removeProperty('width');
+                dInp.style.removeProperty('min-width');
+                dInp.style.removeProperty('max-width');
+            }
+
+            let curr = dInp.parentElement;
+            while (curr && curr !== headerEl && curr !== document.body) {
+                curr.classList.remove('bs-desktop-only-tool');
+                curr.style.setProperty('display', 'flex', 'important');
+                curr.style.setProperty('visibility', 'visible', 'important');
+                curr.style.setProperty('opacity', '1', 'important');
+
+                if (curr.parentElement === headerEl) {
+                    curr.classList.add('bs-mobile-second-row-bar');
+                    curr.classList.remove('bs-mobile-period-flex');
+                } else {
+                    curr.classList.add('bs-mobile-period-flex');
+                }
+                curr = curr.parentElement;
+            }
+        });
+
+        window.syncSalesPanelBelowHeader();
+    }
+
+    const origToggleSales = window.toggleSalesSidebar;
+    if (typeof origToggleSales === 'function' && !origToggleSales._patchedBelowHeaderV11) {
+        const wrappedToggleSales = function(e) {
+            origToggleSales.apply(this, arguments);
+            window.syncSalesPanelBelowHeader();
+            setTimeout(window.syncSalesPanelBelowHeader, 50);
+            if (window.isTabletOrMobileViewport()) {
+                const perfW = document.getElementById('perfWidget');
+                if (perfW) perfW.style.setProperty('left', '0px', 'important');
+            }
+        };
+        wrappedToggleSales._patchedBelowHeaderV11 = true;
+        window.toggleSalesSidebar = wrappedToggleSales;
+    }
+
+    function ensureMobileDrawerDOM() {
+        const existingOverlay = document.getElementById('bs-mobile-drawer-overlay');
+        if (existingOverlay) existingOverlay.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'bs-mobile-drawer-overlay';
+        overlay.style.cssText = `
+            display: none;
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100dvh !important;
+            background: rgba(0, 0, 0, 0.65) !important;
+            z-index: 2147483642 !important;
+            justify-content: flex-end !important;
+        `;
+
+        overlay.innerHTML = `
+            <div id="bs-mobile-drawer-panel" onclick="event.stopPropagation()" style="width: min(280px, 82vw); height: 100%; background: #1f2937; border-left: 1px solid #374151; padding: 16px 14px; display: flex; flex-direction: column; gap: 14px; color: #fff; box-shadow: -8px 0 25px rgba(0,0,0,0.85); overflow-y: auto; box-sizing: border-box;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 10px;">
+                    <strong style="font-size: 14px; color: #60a5fa;">☰ 시뮬레이터 메뉴</strong>
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false)" style="background: #374151; border: 1px solid #4b5563; color: #e5e7eb; border-radius: 4px; padding: 3px 8px; font-size: 11px; font-weight: bold; cursor: pointer;">닫기 ✕</button>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 11px; color: #9ca3af; margin-bottom: 5px; font-weight: bold;">🔍 계보도 회원/추천인 검색</label>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="text" id="bs-mobile-search-inp" placeholder="이름 또는 번호 입력" onkeydown="if(event.key==='Enter'){ window.runMobileDrawerSearch(); }" style="flex: 1; min-width: 0; background: #111827; border: 1px solid #4b5563; color: #fff; border-radius: 6px; padding: 7px 10px; font-size: 12px; outline: none;">
+                        <button type="button" onclick="window.runMobileDrawerSearch()" style="background: #2563eb; border: 1px solid #3b82f6; color: #fff; border-radius: 6px; padding: 0 12px; font-size: 12px; font-weight: bold; cursor: pointer;">검색</button>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #374151; padding-top: 12px;">
+                    <span style="font-size: 11px; color: #9ca3af; font-weight: bold;">🛠️ 주요 기능 및 도구</span>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); window.toggleTreeMode();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>🌳</span> <span id="bs-mob-tree-mode-label" style="color: #ffffff; font-weight: bold;">계보도 전환</span>
+                    </button>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); setTimeout(() => window.toggleSettingsMenu(event), 60);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>⚙️</span> <span style="color: #ffffff; font-weight: bold;">카드 표시 항목 & 배지 설정</span>
+                    </button>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleBizNavigator==='function') window.toggleBizNavigator(true);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>🧭</span> <span style="color: #ffffff; font-weight: bold;">내비게이터</span>
+                    </button>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleSalesSearchPopup==='function') window.toggleSalesSearchPopup(true);" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>📅</span> <span style="color: #ffffff; font-weight: bold;">매출 기간 검색</span>
+                    </button>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.openAIAdvisorPopupWindow==='function') window.openAIAdvisorPopupWindow();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>✨</span> <span style="color: #ffffff; font-weight: bold;">AI 어드바이저</span>
+                    </button>
+
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.toggleSalesSidebar==='function') window.toggleSalesSidebar();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #ffffff; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>💳</span> <span style="color: #ffffff; font-weight: bold;">매출/구독</span>
+                    </button>
+
+                    <button type="button" id="bs-mob-github-btn" onclick="window.toggleMobileHamburgerDrawer(false); const g=document.getElementById('oneClickGithubBtn'); if(g) g.click();" style="display: ${window.IS_LOCAL_DEV ? 'flex' : 'none'}; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: #111827; border: 1px solid #374151; border-radius: 6px; color: #93c5fd; font-size: 12.5px; font-weight: bold; cursor: pointer; text-align: left;">
+                        <span>☁️</span> <span>GitHub 원클릭 업로드</span>
+                    </button>
+                </div>
+
+                <div style="margin-top: auto; border-top: 1px solid #374151; padding-top: 12px;">
+                    <button type="button" onclick="window.toggleMobileHamburgerDrawer(false); if(typeof window.logoutSimulator==='function') window.logoutSimulator();" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 6px; color: #f87171; font-size: 12.5px; font-weight: bold; cursor: pointer;">
+                        <span>🔒</span> <span>로그아웃</span>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        overlay.addEventListener('click', () => window.toggleMobileHamburgerDrawer(false));
+        document.body.appendChild(overlay);
+    }
+
+    window.toggleMobileHamburgerDrawer = function(forceShow) {
+        const overlay = document.getElementById('bs-mobile-drawer-overlay');
+        if (!overlay) return;
+        const isShown = overlay.style.display === 'flex';
+        const nextState = (typeof forceShow === 'boolean') ? forceShow : !isShown;
+        overlay.style.display = nextState ? 'flex' : 'none';
+
+        if (nextState) {
+            const modeLbl = document.getElementById('bs-mob-tree-mode-label');
+            if (modeLbl) {
+                modeLbl.innerText = (window.treeMode === 'recommender')
+                    ? '후원계보도'
+                    : '추천계보도';
+            }
+        }
+    };
+
+    window.runMobileDrawerSearch = function() {
+        const inp = document.getElementById('bs-mobile-search-inp');
+        const kw = inp ? inp.value.trim() : '';
+        window.toggleMobileHamburgerDrawer(false);
+        const mainInp = document.getElementById('searchInput');
+        if (mainInp) mainInp.value = kw;
+        if (typeof window.searchMember === 'function') {
+            window.searchMember(kw);
+        }
+    };
+
+    function injectResponsiveStyles() {
+        let style = document.getElementById('bs-responsive-master-css');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'bs-responsive-master-css';
+            document.head.appendChild(style);
+        }
+
+        style.innerHTML = `
+            :root {
+                --bs-header-bottom: 76px;
+            }
+
+            #canvas-container, .canvas-container, main {
+                touch-action: none !important;
+                -webkit-user-select: none !important;
+                user-select: none !important;
+            }
+            .table-scroll-container, #perfWidget .widget-body, #sales-table-scroll-box {
+                -webkit-overflow-scrolling: touch !important;
+                overscroll-behavior: contain !important;
+            }
+
+            #bs-mobile-hamburger-btn {
+                display: none;
+            }
+
+            header *, .header *, .top-bar *, .top-header-bar * {
+                white-space: nowrap !important;
+            }
+
+            .bs-mobile-period-flex {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: flex-start !important;
+                width: auto !important;
+                max-width: 100% !important;
+                gap: 5px !important;
+                flex: 0 0 auto !important;
+            }
+
+            @media screen and (min-width: 641px) and (max-width: 1250px) {
+                header, .header, .top-bar, .top-header-bar {
+                    position: relative !important;
+                    z-index: 2147483550 !important;
+                    display: flex !important;
+                    flex-wrap: wrap !important;
+                    align-items: center !important;
+                    justify-content: flex-start !important;
+                    height: auto !important;
+                    min-height: 48px !important;
+                    padding: 6px 10px !important;
+                    gap: 6px !important;
+                    box-sizing: border-box !important;
+                    width: 100vw !important;
+                    max-width: 100vw !important;
+                }
+
+                header > div:first-child,
+                .header > div:first-child,
+                .top-bar > div:first-child {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: flex-start !important;
+                    width: 100% !important;
+                    padding-right: 210px !important;
+                    gap: 10px !important;
+                    min-height: 32px !important;
+                    box-sizing: border-box !important;
+                }
+
+                .bs-mobile-second-row-bar {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    width: 100% !important;
+                    gap: 8px !important;
+                    box-sizing: border-box !important;
+                }
+            }
+
+            @media screen and (max-width: 1024px) {
+                #salesWidget, aside.left-panel, .sales-panel {
+                    position: fixed !important;
+                    top: var(--bs-header-bottom, 76px) !important;
+                    left: 0 !important;
+                    width: min(320px, 86vw) !important;
+                    max-width: 86vw !important;
+                    height: calc(100dvh - var(--bs-header-bottom, 76px)) !important;
+                    max-height: calc(100dvh - var(--bs-header-bottom, 76px)) !important;
+                    z-index: 2147483500 !important;
+                    box-shadow: 8px 4px 25px rgba(0, 0, 0, 0.75) !important;
+                    border-top: 1px solid #374151 !important;
+                }
+
+                #perfWidget, .perf-widget {
+                    left: 0px !important;
+                    right: 0px !important;
+                    width: 100vw !important;
+                    max-width: 100vw !important;
+                    box-sizing: border-box !important;
+                }
+                #perfWidget .widget-body {
+                    overflow-x: auto !important;
+                    overflow-y: auto !important;
+                }
+                #perfWidget table {
+                    min-width: 1080px !important;
+                }
+
+                #filterWidget {
+                    width: min(510px, 95vw) !important;
+                    min-width: min(510px, 95vw) !important;
+                    max-width: 95vw !important;
+                    left: 2.5vw !important;
+                    right: 2.5vw !important;
+                }
+                #bonusDetailModal {
+                    width: min(740px, 96vw) !important;
+                    min-width: min(740px, 96vw) !important;
+                    max-width: 96vw !important;
+                    height: min(520px, 84dvh) !important;
+                    left: 50% !important;
+                    top: 50% !important;
+                    transform: translate(-50%, -50%) !important;
+                }
+                #addPartnerModal > div,
+                #memberEditModal {
+                    width: min(460px, 94vw) !important;
+                    max-width: 94vw !important;
+                    max-height: 88dvh !important;
+                }
+            }
+
+            @media screen and (max-width: 640px) {
+                header, .header, .top-bar, .top-header-bar {
+                    position: relative !important;
+                    z-index: 2147483550 !important;
+                    display: flex !important;
+                    flex-wrap: wrap !important;
+                    padding: 6px 8px !important;
+                    gap: 5px !important;
+                    width: 100vw !important;
+                    max-width: 100vw !important;
+                    box-sizing: border-box !important;
+                }
+
+                #bs-mobile-hamburger-btn {
+                    position: absolute !important;
+                    top: 6px !important;
+                    right: 8px !important;
+                    width: 32px !important;
+                    height: 28px !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
+                    background: #1f2937 !important;
+                    border: 1px solid #374151 !important;
+                    border-radius: 6px !important;
+                    color: #e5e7eb !important;
+                    cursor: pointer !important;
+                    z-index: 100 !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                }
+
+                header > div:first-child, .header > div:first-child, .top-bar > div:first-child {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: flex-start !important;
+                    width: 100% !important;
+                    padding-right: 38px !important;
+                    gap: 8px !important;
+                    box-sizing: border-box !important;
+                    min-height: 28px !important;
+                }
+
+                header h1, header h2, header strong, .header-title, .brand-title, .logo-text {
+                    font-size: 13.5px !important;
+                    letter-spacing: -0.5px !important;
+                }
+
+                #header-line-count {
+                    font-size: 11px !important;
+                    padding: 3px 9px !important;
+                    margin: 0 !important;
+                }
+
+                .bs-mobile-second-row-bar,
+                .bs-mobile-period-flex {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    justify-content: space-between !important;
+                    align-items: center !important;
+                    gap: 3px !important;
+                    padding: 4px 6px !important;
+                    box-sizing: border-box !important;
+                    overflow: hidden !important;
+                }
+
+                header select, .header select, .top-bar select {
+                    padding: 2px 3px !important;
+                    font-size: 10.5px !important;
+                    height: 25px !important;
+                    width: auto !important;
+                    max-width: 68px !important;
+                    flex-shrink: 0 !important;
+                }
+
+                .bs-period-nav-btn {
+                    padding: 2px 5px !important;
+                    font-size: 10px !important;
+                    height: 25px !important;
+                    min-width: 22px !important;
+                    flex-shrink: 0 !important;
+                }
+
+                .bs-header-date-input,
+                header input[type="date"],
+                .header input[type="date"],
+                #header-start-date,
+                #header-end-date {
+                    width: 84px !important;
+                    min-width: 0px !important;
+                    max-width: 88px !important;
+                    flex: 0 1 84px !important;
+                    padding: 2px 2px !important;
+                    font-size: 10.5px !important;
+                    letter-spacing: -0.3px !important;
+                    height: 25px !important;
+                    text-align: center !important;
+                    box-sizing: border-box !important;
+                }
+
+                .bs-header-date-input::-webkit-calendar-picker-indicator,
+                header input[type="date"]::-webkit-calendar-picker-indicator,
+                #header-start-date::-webkit-calendar-picker-indicator,
+                #header-end-date::-webkit-calendar-picker-indicator {
+                    display: none !important;
+                    -webkit-appearance: none !important;
+                    width: 0 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+
+                #settingsDropdown, #settingsMenu, .settings-menu {
+                    position: fixed !important;
+                    top: 50% !important;
+                    left: 50% !important;
+                    right: auto !important;
+                    transform: translate(-50%, -50%) !important;
+                    max-width: 92vw !important;
+                    max-height: 80dvh !important;
+                    overflow-y: auto !important;
+                    z-index: 2147483644 !important;
+                    box-shadow: 0 20px 50px rgba(0,0,0,0.9) !important;
+                }
+
+                .zoom-controls {
+                    top: auto !important;
+                    bottom: 56px !important;
+                    right: 8px !important;
+                    transform: scale(0.85) !important;
+                    transform-origin: bottom right !important;
+                    z-index: 950 !important;
+                }
+            }
+        `;
+    }
+
+    window.centerRootNode = function() {
+        const wrapper = document.getElementById('tree-wrapper') || document.querySelector('.tree-wrapper');
+        const container = document.getElementById('canvas-container') || (wrapper ? wrapper.parentElement : null);
+        if (!wrapper || !container) return;
+
+        if (window.innerWidth <= 480) {
+            window.scale = 0.52;
+        } else if (window.innerWidth <= 640) {
+            window.scale = 0.60;
+        } else if (window.innerHeight <= 450) {
+            window.scale = 0.58;
+        } else if (window.innerWidth <= 1024) {
+            window.scale = 0.72;
+        } else {
+            window.scale = 0.85;
+        }
+
+        const rootCard = document.querySelector('.node-card');
+        if (!rootCard) {
+            setTimeout(window.centerRootNode, 100);
+            return;
+        }
+
+        let offsetLeftSum = 0;
+        let offsetTopSum = 0;
+        let curr = rootCard;
+        while (curr && curr !== wrapper) {
+            offsetLeftSum += curr.offsetLeft;
+            offsetTopSum += curr.offsetTop;
+            curr = curr.offsetParent;
+        }
+        const cardCenterX = offsetLeftSum + (rootCard.offsetWidth / 2);
+        const rootTopY = offsetTopSum;
+
+        const containerWidth = container.clientWidth || window.innerWidth;
+        const topMargin = (window.isMobileViewport() || window.innerHeight <= 450) ? 16 : 40;
+
+        window.panX = (containerWidth / 2) - (cardCenterX * window.scale);
+        window.panY = topMargin - (rootTopY * window.scale);
+
+        wrapper.style.setProperty('transform-origin', '0 0', 'important');
+        wrapper.style.setProperty('transform', `translate(${window.panX}px, ${window.panY}px) scale(${window.scale})`, 'important');
+    };
+    window.resetZoomAndPan = window.centerRootNode;
+
+    function initTouchAndPopupPatches() {
+        const canvas = document.getElementById('canvas-container') || document.querySelector('.canvas-container') || document.querySelector('main') || document.body;
+        if (canvas && canvas.dataset.touchPinchBoundV11 !== 'true') {
+            canvas.dataset.touchPinchBoundV11 = 'true';
+            let initialPinchDist = null, initialScale = 1, pinchCenterX = 0, pinchCenterY = 0;
+            const getTouchDist = (t1, t2) => Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    initialPinchDist = getTouchDist(e.touches[0], e.touches[1]);
+                    initialScale = window.scale || 0.6;
+                    pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2 && initialPinchDist) {
+                    e.preventDefault();
+                    const ratio = getTouchDist(e.touches[0], e.touches[1]) / initialPinchDist;
+                    const targetScale = Math.min(3, Math.max(0.15, initialScale * ratio));
+                    const delta = targetScale - (window.scale || 0.6);
+                    if (Math.abs(delta) > 0.005 && typeof window.changeZoom === 'function') {
+                        window.changeZoom(delta, pinchCenterX, pinchCenterY);
+                    }
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', (e) => {
+                if (e.touches.length < 2) initialPinchDist = null;
+            });
+
+            let lastTapTime = 0, lastTapCardId = null;
+            document.addEventListener('touchend', (e) => {
+                const cardEl = e.target.closest('.node-card');
+                if (!cardEl || e.target.closest('.corner-btn, .btn-add-parent')) return;
+                const memberId = cardEl.id.replace(/^card_/, '');
+                const now = Date.now();
+                if (lastTapCardId === memberId && (now - lastTapTime) < 320) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    lastTapTime = 0;
+                    lastTapCardId = null;
+                    if (window.cardClickTimer) { clearTimeout(window.cardClickTimer); window.cardClickTimer = null; }
+                    if (typeof window.openEditMemberModal === 'function') window.openEditMemberModal(memberId);
+                } else {
+                    lastTapTime = now;
+                    lastTapCardId = memberId;
+                }
+            }, { passive: false });
+        }
+
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#salesWidgetHeader, #salesWidget .widget-header, #salesWidget')) {
+                setTimeout(window.syncSalesPanelBelowHeader, 10);
+            }
+        }, true);
+
+        if (!window._mobilePopupPatchedV11) {
+            window._mobilePopupPatchedV11 = true;
+            const origWindowOpen = window.open;
+            window.open = function(url, windowName, windowFeatures) {
+                const isSimPopup = ['BizNavigatorPopup', 'SalesSearchPopup', 'AIAdvisorPopup'].includes(windowName);
+                if (!isSimPopup || !window.isTabletOrMobileViewport()) {
+                    return origWindowOpen.apply(window, arguments);
+                }
+                let overlayId = `bs-mobile-popup-${windowName}`;
+                let existing = document.getElementById(overlayId);
+                if (existing) existing.remove();
+
+                const overlay = document.createElement('div');
+                overlay.id = overlayId;
+                overlay.style.cssText = 'position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100dvh !important; background:rgba(0,0,0,0.82) !important; z-index:2147483646 !important; display:flex !important; align-items:center !important; justify-content:center !important; padding:6px !important; box-sizing:border-box !important;';
+                const iframe = document.createElement('iframe');
+                iframe.style.cssText = 'width:100% !important; height:100% !important; max-width:960px !important; max-height:96dvh !important; border:1px solid #374151 !important; border-radius:10px !important; background:#111827 !important;';
+                overlay.appendChild(iframe);
+                document.body.appendChild(overlay);
+
+                const fakeWin = iframe.contentWindow;
+                const beforeUnloadHandlers = [];
+                fakeWin.close = function() {
+                    beforeUnloadHandlers.forEach(fn => { try { fn(); } catch (e) {} });
+                    overlay.remove();
+                    fakeWin.closed = true;
+                };
+                const origAddEvent = fakeWin.addEventListener.bind(fakeWin);
+                fakeWin.addEventListener = function(type, listener, options) {
+                    if (type === 'beforeunload') beforeUnloadHandlers.push(listener);
+                    return origAddEvent(type, listener, options);
+                };
+                fakeWin.focus = function() { overlay.style.display = 'flex'; };
+                return fakeWin;
+            };
+        }
+    }
+
+    function bootV11() {
+        ensureViewportMeta();
+        injectResponsiveStyles();
+        ensureMobileDrawerDOM();
+        simplifyPrevNextButtons(document);
+        syncHeaderButtonsAndLayoutByViewport();
+        initTouchAndPopupPatches();
+
+        if (typeof window.updateHeaderLineCount === 'function') {
+            window.updateHeaderLineCount(window.currentSelectedId);
+        }
+
+        window.addEventListener('resize', () => {
+            syncHeaderButtonsAndLayoutByViewport();
+            window.syncSalesPanelBelowHeader();
+        });
+
+        [150, 350, 650, 1000].forEach(delay => {
+            setTimeout(() => {
+                simplifyPrevNextButtons(document);
+                syncHeaderButtonsAndLayoutByViewport();
+                window.syncSalesPanelBelowHeader();
+                if (typeof window.updateHeaderLineCount === 'function') {
+                    window.updateHeaderLineCount(window.currentSelectedId);
+                }
+            }, delay);
+        });
+
+        setTimeout(window.centerRootNode, 350);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootV11);
+    } else {
+        bootV11();
+    }
+})();
+
+// [20-2] 상단 헤더 기간 표시창 & 회원 검색창 컴팩트 너비 + 톱니바퀴(⚙️) 좌측 밀착 배치 패치
 (function applyCompactHeaderInputsAndRightAlignPatch() {
     function injectCompactHeaderCSS() {
         let style = document.getElementById('bs-compact-header-inputs-css');
@@ -11448,7 +10826,6 @@ if (document.readyState === 'loading') {
         }
 
         style.innerHTML = `
-            /* 1) 날짜 입력 박스 여백 제거 및 슬림화 (90px) */
             header input[type="date"],
             .header input[type="date"],
             .top-bar input[type="date"],
@@ -11466,7 +10843,6 @@ if (document.readyState === 'loading') {
                 box-sizing: border-box !important;
             }
 
-            /* 날짜 박스 내부 달력 아이콘 여백 제거 (클릭 시 달력 정상 작동) */
             header input[type="date"]::-webkit-calendar-picker-indicator,
             .header input[type="date"]::-webkit-calendar-picker-indicator,
             #header-start-date::-webkit-calendar-picker-indicator,
@@ -11485,7 +10861,6 @@ if (document.readyState === 'loading') {
                 padding: 3px 6px !important;
             }
 
-            /* 2) 회원 검색창(#searchInput) 너비 축소 (115px) */
             #searchInput {
                 width: 115px !important;
                 min-width: 115px !important;
@@ -11495,7 +10870,6 @@ if (document.readyState === 'loading') {
                 box-sizing: border-box !important;
             }
 
-            /* 🌟 3) 데스크톱 화면(1251px 이상): 기간 검색 + 검색어 입력창을 톱니바퀴(⚙️) 바로 좌측으로 밀착! */
             @media screen and (min-width: 1251px) {
                 header, .header, .top-bar, .top-header-bar {
                     display: flex !important;
@@ -11504,7 +10878,6 @@ if (document.readyState === 'loading') {
                     gap: 8px !important;
                 }
 
-                /* 기간 검색 + 검색창 컨테이너를 우측 끝(톱니바퀴 바로 왼쪽)으로 밀어붙임 */
                 .bs-desktop-right-tools-group,
                 .bs-mobile-second-row-bar {
                     margin-left: auto !important;
@@ -11526,7 +10899,6 @@ if (document.readyState === 'loading') {
                 }
             }
 
-            /* 스마트폰 세로 화면(640px 이하)에서는 날짜 박스를 82px로 맞춤 */
             @media screen and (max-width: 640px) {
                 header input[type="date"],
                 .header input[type="date"],
@@ -11552,7 +10924,6 @@ if (document.readyState === 'loading') {
         const isDesktop = window.innerWidth > 1250 && window.innerHeight > 500;
         const targetDateWidth = isSmallMobile ? '82px' : '90px';
 
-        // 1) 시작일 / 종료일 입력창 너비 고정 및 상단 직계 컨테이너 탐색
         let periodTopGroup = null;
         const dateInputs = headerEl.querySelectorAll('input[type="date"], #header-start-date, #header-end-date');
         dateInputs.forEach(inp => {
@@ -11572,7 +10943,6 @@ if (document.readyState === 'loading') {
             }
         });
 
-        // 2) 회원 검색창 너비 축소 및 상단 직계 컨테이너 탐색
         let searchTopGroup = null;
         const searchInp = document.getElementById('searchInput');
         if (searchInp) {
@@ -11598,18 +10968,15 @@ if (document.readyState === 'loading') {
             }
         }
 
-        // 3) 🌟 톱니바퀴(아이콘 홀더) 바로 좌측으로 기간 검색 바 & 검색창 밀착 배치
         const topIconsHolder = document.getElementById('bs-top-row-icons-holder');
         if (periodTopGroup) {
             periodTopGroup.classList.add('bs-desktop-right-tools-group');
 
-            // 만약 검색창이 별도의 직계 박스로 떨어져 있다면 기간 검색 박스 안(우측)으로 합쳐서 나란히 붙임
             if (searchTopGroup && searchTopGroup !== periodTopGroup && !searchTopGroup.querySelector('#header-line-count')) {
                 periodTopGroup.appendChild(searchTopGroup);
             }
 
             if (isDesktop) {
-                // 데스크톱에서 아이콘 홀더(톱니바퀴 등) 바로 왼쪽에 위치하도록 순서 보장 및 우측 밀착
                 if (topIconsHolder && topIconsHolder.parentElement === headerEl && periodTopGroup.nextElementSibling !== topIconsHolder) {
                     headerEl.insertBefore(periodTopGroup, topIconsHolder);
                 }
@@ -11643,11 +11010,9 @@ if (document.readyState === 'loading') {
         bootCompactAndAlign();
     }
 })();
-// ============================================================================
-// ✂️ [표시 설정 메뉴 '위젯 설정' 타이틀 하단 가로선 제거 패치]
-// ============================================================================
+
+// [20-3] 표시 설정 메뉴 '위젯 설정' 타이틀 하단 가로선 제거 패치
 (function removeWidgetSettingsTitleUnderline() {
-    // 1) CSS로 #bs-widget-settings-col 내부 타이틀의 하단 테두리(border-bottom) 및 hr 강제 제거
     let style = document.getElementById('bs-remove-widget-line-css');
     if (!style) {
         style = document.createElement('style');
@@ -11670,7 +11035,6 @@ if (document.readyState === 'loading') {
         }
     `;
 
-    // 2) 인라인 스타일로 들어가 있는 border-bottom도 직접 찾아 제거
     function stripInlineBorder() {
         const widgetCol = document.getElementById('bs-widget-settings-col');
         if (!widgetCol) return;
@@ -11693,9 +11057,7 @@ if (document.readyState === 'loading') {
     document.addEventListener('click', () => setTimeout(stripInlineBorder, 20), true);
 })();
 // ============================================================================
-// 🔀 [최상단 기준 파트너(Root) 스위치 전환 & 이전 선택 기억 & 로그인/동명이인 모달 패치 V2]
-// - 해결: 카드 선택 시 전역 트리 데이터 교체 + DOM 서브트리 최상단 승격을 동시에 수행하여 100% 최상단 표시 보장!
-// - 후원계보도 ↔ 추천계보도 전환 시나 데이터 리로드 시에도 선택한 최상단 파트너가 풀리지 않고 고정 유지됨
+// [21] 최상단 기준 파트너(Root) 스위치 전환, 히스토리 기억 및 동명이인 선택 모달
 // ============================================================================
 (function initCustomRootSwitchAndLoginTargetPatchV2() {
     if (window._bsCustomRootSwitchPatchedV2) return;
@@ -11707,16 +11069,13 @@ if (document.readyState === 'loading') {
 
     window.isRootCardPickMode = false;
 
-    // ------------------------------------------------------------------------
-    // [1] ID 정규화 및 전체 회원 풀(Pool) 백업/탐색
-    // ------------------------------------------------------------------------
+    // [21-1] ID 정규화 및 전체 회원 풀(Pool) 백업/탐색
     function normId(val) {
         if (!val) return '';
         const s = (typeof val === 'object') ? (val.id || val.member_id || val.memberId || '') : String(val);
         return String(s).trim().toLowerCase().replace(/^vk-?/, '');
     }
 
-    // 원본 전체 트리/회원 데이터를 최초 1회 안전하게 백업
     function backupMasterDataIfNeeded() {
         if (!window._masterTreeDataBackup && window.treeData) {
             window._masterTreeDataBackup = window.treeData;
@@ -11758,7 +11117,6 @@ if (document.readyState === 'loading') {
         if (Array.isArray(window.membersData)) window.membersData.forEach(addNode);
         if (Array.isArray(window.rawMembers)) window.rawMembers.forEach(addNode);
 
-        // 만약 데이터 배열이 비어있다면 현재 화면의 DOM 카드(.node-card)에서도 수집
         if (map.size === 0) {
             document.querySelectorAll('.node-card[id^="card_"]').forEach(cardEl => {
                 const cId = cardEl.id.replace(/^card_/, '');
@@ -11790,9 +11148,7 @@ if (document.readyState === 'loading') {
         return null;
     }
 
-    // ------------------------------------------------------------------------
-    // [2] 원본 최상위 루트 보존 및 getAbsoluteTopRoot 오버라이드
-    // ------------------------------------------------------------------------
+    // [21-2] 원본 최상위 루트 보존 및 getAbsoluteTopRoot 오버라이드
     const origGetAbsoluteTopRoot = window.getAbsoluteTopRoot;
 
     window.getTrueMasterTopRoot = function() {
@@ -11825,14 +11181,11 @@ if (document.readyState === 'loading') {
         return window._originalMasterRootNode || (typeof origGetAbsoluteTopRoot === 'function' ? origGetAbsoluteTopRoot() : null);
     };
 
-    // ------------------------------------------------------------------------
-    // [3] 🌟 DOM 트리에서 선택한 카드의 서브트리(<li>)만 최상단으로 단독 표시하는 확실한 엔진!
-    // ------------------------------------------------------------------------
+    // [21-3] DOM 트리에서 선택한 카드의 서브트리(<li>)만 최상단으로 단독 표시하는 엔진
     window.isolateSubtreeInDOM = function(targetMemberId) {
         const treeRoot = document.getElementById('tree-root') || document.querySelector('.tree');
         if (!treeRoot) return false;
 
-        // 먼저 이전에 숨겼던 노드들을 모두 원상복구
         treeRoot.querySelectorAll('[data-bs-root-hidden="1"]').forEach(el => {
             el.style.removeProperty('display');
             el.removeAttribute('data-bs-root-hidden');
@@ -11858,15 +11211,10 @@ if (document.readyState === 'loading') {
         const targetLi = targetCard.closest('li');
         if (!targetLi) return false;
 
-        // targetLi부터 최상위 treeRoot까지 올라가면서:
-        // 1) 조상들의 카드(.node-card)와 상단 연결선을 숨기고
-        // 2) 조상 레벨의 다른 형제 가지(반대편 라인 li)들을 모두 숨겨서
-        // 오직 targetCard와 그 하위 파트너들만 계보도 최상단에 단독으로 남김!
         let currLi = targetLi;
         while (currLi && currLi !== treeRoot && treeRoot.contains(currLi)) {
             const parentUl = currLi.parentElement;
             if (parentUl && parentUl.tagName === 'UL') {
-                // 같은 층위의 형제 li(반대쪽 라인) 숨김
                 Array.from(parentUl.children).forEach(siblingLi => {
                     if (siblingLi !== currLi && siblingLi.tagName === 'LI') {
                         siblingLi.style.setProperty('display', 'none', 'important');
@@ -11879,7 +11227,6 @@ if (document.readyState === 'loading') {
 
                 const ancestorLi = parentUl.parentElement;
                 if (ancestorLi && ancestorLi.tagName === 'LI' && treeRoot.contains(ancestorLi)) {
-                    // 조상 li 바로 아래의 조상 카드(.node-card) 숨김
                     Array.from(ancestorLi.children).forEach(child => {
                         if (child !== parentUl) {
                             child.style.setProperty('display', 'none', 'important');
@@ -11900,7 +11247,6 @@ if (document.readyState === 'loading') {
         return true;
     };
 
-    // 조상 라인의 상단 트리가 잘린 상태에서 보더/연결선(::before, ::after)이 허공에 남지 않도록 깔끔하게 숨기는 CSS
     function injectSubtreeCleanConnectorCSS() {
         if (document.getElementById('bs-subtree-clean-connector-css')) return;
         const st = document.createElement('style');
@@ -11926,9 +11272,7 @@ if (document.readyState === 'loading') {
         document.head.appendChild(st);
     }
 
-    // ------------------------------------------------------------------------
-    // [4] 이전 선택 파트너 히스토리 저장 및 조회
-    // ------------------------------------------------------------------------
+    // [21-4] 이전 선택 파트너 히스토리 저장 및 조회
     function saveToRootHistory(memberNode) {
         if (!memberNode || !memberNode.id) return;
         let history = [];
@@ -11957,9 +11301,7 @@ if (document.readyState === 'loading') {
         }
     }
 
-    // ------------------------------------------------------------------------
-    // [5] 🌟 최상단 카드가 헤더에 절대 가려지지 않도록 헤더 하단 기준 여백(28px)을 자동 계산하여 배치
-    // ------------------------------------------------------------------------
+    // [21-5] 최상단 카드가 헤더에 가려지지 않도록 헤더 하단 기준 여백을 계산하여 배치
     window.centerSpecificCardAsRoot = function(targetCardEl) {
         const wrapper = document.getElementById('tree-wrapper') || document.querySelector('.tree-wrapper');
         const container = document.getElementById('canvas-container') || (wrapper ? wrapper.parentElement : null);
@@ -11978,7 +11320,6 @@ if (document.readyState === 'loading') {
             window.scale = 0.85;
         }
 
-        // panX=0, panY=0, scale=1 기준에서 wrapper와 targetCardEl의 화면 좌표 측정
         wrapper.style.setProperty('transform-origin', '0 0', 'important');
         wrapper.style.setProperty('transform', `translate(0px, 0px) scale(1)`, 'important');
 
@@ -11992,7 +11333,6 @@ if (document.readyState === 'loading') {
         const containerWidth = container.clientWidth || window.innerWidth;
         const paddingBelowHeader = (window.innerWidth <= 640 || window.innerHeight <= 450) ? 18 : 28;
 
-        // wrapper의 시작 위치(wrapperRect.top)가 헤더보다 위에 있으면 헤더 높이만큼 자동으로 더 내려줌!
         const desiredScreenTop = headerBottom + paddingBelowHeader;
         const targetPanY = (desiredScreenTop - wrapperRect.top) - (cardTopY * window.scale);
 
@@ -12002,7 +11342,6 @@ if (document.readyState === 'loading') {
         wrapper.style.setProperty('transform', `translate(${window.panX}px, ${window.panY}px) scale(${window.scale})`, 'important');
     };
 
-    // centerRootNode 호출 시에도 현재 최상단으로 지정된 카드를 기준으로 중앙 정렬되도록 연동
     const prevCenterRootNode = window.centerRootNode;
     window.centerRootNode = function() {
         const savedId = window.customTopRootId || localStorage.getItem(STORAGE_ROOT_KEY);
@@ -12066,7 +11405,6 @@ if (document.readyState === 'loading') {
         if (targetNode) {
             saveToRootHistory(targetNode);
         } else {
-            // DOM 카드에서라도 이름/직급 추출하여 히스토리 저장
             const domCard = document.getElementById(`card_${canonicalId}`);
             if (domCard) {
                 saveToRootHistory({
@@ -12077,16 +11415,13 @@ if (document.readyState === 'loading') {
             }
         }
 
-        // 1) DOM 트리에서 선택한 카드를 최상단(Top Root)으로 즉시 승격 (상위 및 형제 라인 숨김)
         const isolated = window.isolateSubtreeInDOM(canonicalId);
 
-        // 2) 만약 현재 DOM에 해당 카드가 없다면(접혀있거나 다른 모드인 경우) 전체 트리 재렌더링 후 다시 승격
         if (!isolated && typeof window.renderTree === 'function') {
             try { window.renderTree(); } catch (e) {}
             window.isolateSubtreeInDOM(canonicalId);
         }
 
-        // 3) 승격된 최상단 카드를 화면 정중앙 상단에 배치하고 선택 상태(수당/매출/배지) 동기화
         setTimeout(() => {
             window.isolateSubtreeInDOM(canonicalId);
             const targetNorm = normId(canonicalId);
@@ -12099,7 +11434,6 @@ if (document.readyState === 'loading') {
 
             if (targetCardEl) {
                 window.centerSpecificCardAsRoot(targetCardEl);
-                // 기존 시뮬레이터의 카드 클릭(선택) 로직 실행하여 하단 수당/좌측 매출/상단 배지 연동
                 window._bypassRootPickCapture = true;
                 targetCardEl.click();
                 window._bypassRootPickCapture = false;
@@ -12112,7 +11446,6 @@ if (document.readyState === 'loading') {
         }, 60);
     };
 
-    // 후원 ↔ 추천계보도 전환 시나 트리 재렌더링 시에도 선택한 최상단 루트가 풀리지 않도록 자동 유지
     ['renderTree', 'toggleTreeMode', 'drawTree'].forEach(fnName => {
         const origFn = window[fnName];
         if (typeof origFn === 'function' && !origFn._rootSwitchWrapped) {
@@ -12135,9 +11468,7 @@ if (document.readyState === 'loading') {
         }
     });
 
-    // ------------------------------------------------------------------------
-    // [6] 회원번호/회원명 검색 및 동명이인(복수 결과) 선택 모달창 표시
-    // ------------------------------------------------------------------------
+    // [21-6] 회원번호/회원명 검색 및 동명이인(복수 결과) 선택 모달창 표시
     window.searchAndSelectTopRootPartner = function(rawQuery) {
         const q = String(rawQuery || '').trim();
         if (!q) {
@@ -12264,9 +11595,7 @@ if (document.readyState === 'loading') {
         window.applyCustomTopRootPartner(memberId);
     };
 
-    // ------------------------------------------------------------------------
-    // [7] 카드 직접 클릭 선택 모드 (마우스 클릭 & 모바일 터치 완벽 가로채기)
-    // ------------------------------------------------------------------------
+    // [21-7] 카드 직접 클릭 선택 모드
     window.toggleRootCardPickMode = function(forceState) {
         const nextState = (typeof forceState === 'boolean') ? forceState : !window.isRootCardPickMode;
         window.isRootCardPickMode = nextState;
@@ -12327,13 +11656,10 @@ if (document.readyState === 'loading') {
         }
     }
 
-    // pointerdown / click 모두 캡처하여 캔버스 드래그 이벤트에 가로막히지 않고 즉시 선택되도록 보장
     window.addEventListener('pointerup', handleCardPickIntercept, true);
     window.addEventListener('click', handleCardPickIntercept, true);
 
-    // ------------------------------------------------------------------------
-    // [8] 스위치 모달창 & 헤더 우측 스위치 버튼 장착
-    // ------------------------------------------------------------------------
+    // [21-8] 스위치 모달창 & 헤더 우측 스위치 버튼 장착
     window.openRootSwitchModal = function(e) {
         if (e) {
             e.preventDefault();
@@ -12344,7 +11670,6 @@ if (document.readyState === 'loading') {
         if (overlay) overlay.remove();
 
         const currentRoot = window.getAbsoluteTopRoot();
-        const masterRoot = window.getTrueMasterTopRoot();
         const history = getRootHistory();
 
         const historyChipsHtml = history.length > 0
@@ -12513,9 +11838,7 @@ if (document.readyState === 'loading') {
         updateSwitchButtonBadgeState();
     }
 
-    // ------------------------------------------------------------------------
-    // [9] 로그인 화면에 [최상단 시작 파트너(회원번호/회원명)] 입력창 자동 주입 및 연동
-    // ------------------------------------------------------------------------
+    // [21-9] 로그인 화면에 [최상단 시작 파트너] 입력창 자동 주입 및 연동
     function injectLoginPartnerInput() {
         const pwdInputs = document.querySelectorAll('input[type="password"]');
         pwdInputs.forEach(pwdInp => {
@@ -12615,12 +11938,12 @@ if (document.readyState === 'loading') {
         bootRootSwitchPatchV2();
     }
 })();
+
 // ============================================================================
-// 🎯 [추천매칭 보너스 - 상단 요약 박스 2줄 가지런히 정렬 & 추천계보 기준 명시 & 세대수(원 N대) 정밀 계산 패치 V2]
-// 1. 보너스 검증 모달 상단 요약 박스를 깔끔한 2줄(1줄: 대상회원/직급/기수, 2줄: 항목/추천계보 기준 안내)로 정렬 (글자 깨짐 방지)
-// 2. 추천매칭 보너스가 '추천계보 기준'임을 상단 항목 줄과 계산 로직 박스에 명확히 표시
-// 3. 후원계보 깊이가 아닌 100% 추천계보(recId) 사슬을 추적하여 정확한 세대수(원 1대, 원 2대...) 산출
+// [22] 보너스 검증 모달 추천계보 세대 보정, 맥북 신호등 최소화 버튼 및 우측 세로 슬라이드 독(V43)
 // ============================================================================
+
+// [22-1] 추천매칭 보너스 상단 요약 박스 2줄 정렬 & 추천계보 기준 명시 & 세대수(원 N대) 정밀 계산 패치 V2
 (function fixMatchingBonusModalLayoutAndGenerationPatchV2() {
     if (window._bsMatchingGenFixPatchedV2) return;
     window._bsMatchingGenFixPatchedV2 = true;
@@ -12659,9 +11982,6 @@ if (document.readyState === 'loading') {
         return Array.from(map.values());
     }
 
-    // ------------------------------------------------------------------------
-    // [1] 대상 회원(baseId)으로부터 파트너(partnerId)까지의 순수 '추천계보(recId)' 기준 원 세대수 계산
-    // ------------------------------------------------------------------------
     window.getRecommenderGenerationInfo = function(baseMemberId, partnerMemberId) {
         const baseNorm = normId(baseMemberId);
         const targetNorm = normId(partnerMemberId);
@@ -12736,20 +12056,15 @@ if (document.readyState === 'loading') {
         return { isDownline: false, origGen: null, compressedGen: null, path: [] };
     };
 
-    // ------------------------------------------------------------------------
-    // [2] 🌟 보너스 산출 상세 검증 모달(#bonusDetailModal) 상단 요약 박스 2줄 정렬 & 추천계보 기준 안내 추가
-    // ------------------------------------------------------------------------
     window.formatBonusDetailTopSummaryBox = function(modal) {
         if (!modal) return;
 
-        // '대상 회원:'과 '항목:'이 들어있는 상단 요약 컨테이너 탐색
         const allDivs = modal.querySelectorAll('div');
         let summaryBox = null;
 
         allDivs.forEach(div => {
             const txt = (div.innerText || '').trim();
             if (txt.includes('대상 회원:') && txt.includes('항목:') && div.children.length >= 1 && div.children.length <= 4) {
-                // 가장 안쪽의 요약 박스 선택
                 if (!summaryBox || summaryBox.contains(div)) {
                     summaryBox = div;
                 }
@@ -12759,7 +12074,6 @@ if (document.readyState === 'loading') {
         if (summaryBox && summaryBox.dataset.bsTwoLineFormatted !== 'true') {
             summaryBox.dataset.bsTwoLineFormatted = 'true';
 
-            // 좌우 배치(row) 대신 상하 2줄(column) 배치로 전환하여 글자 꺾임('09-\n후', '가\n능)') 원천 방지!
             summaryBox.style.setProperty('display', 'flex', 'important');
             summaryBox.style.setProperty('flex-direction', 'column', 'important');
             summaryBox.style.setProperty('align-items', 'flex-start', 'important');
@@ -12770,8 +12084,8 @@ if (document.readyState === 'loading') {
 
             const children = Array.from(summaryBox.children);
             if (children.length >= 2) {
-                const line1 = children[0]; // 1줄: 대상 회원 | 당시 직급 | 기수
-                const line2 = children[1]; // 2줄: 항목
+                const line1 = children[0];
+                const line2 = children[1];
 
                 line1.style.setProperty('width', '100%', 'important');
                 line1.style.setProperty('white-space', 'nowrap', 'important');
@@ -12789,7 +12103,6 @@ if (document.readyState === 'loading') {
                 line2.style.setProperty('padding-top', '5px', 'important');
                 line2.style.setProperty('border-top', '1px dashed #374151', 'important');
 
-                // 추천매칭보너스인 경우 '추천계보 기준' 문구를 간결하고 명확하게 추가
                 if ((line2.innerText || '').includes('추천매칭보너스')) {
                     line2.innerHTML = `
                         <span style="white-space: nowrap;">
@@ -12804,7 +12117,6 @@ if (document.readyState === 'loading') {
             }
         }
 
-        // 하단 '💡 계산 로직' 설명 박스에도 추천계보 기준 안내가 빠져있다면 한 줄 보강
         allDivs.forEach(div => {
             const txt = (div.innerText || '').trim();
             if (txt.startsWith('💡 계산 로직') && txt.includes('매칭요율') && !div.dataset.bsLogicNoteAdded) {
@@ -12817,20 +12129,15 @@ if (document.readyState === 'loading') {
         });
     };
 
-    // ------------------------------------------------------------------------
-    // [3] 추천매칭보너스 상단 2줄 레이아웃 정렬 + 테이블 (원 N대) 실시간 보정 통합 실행
-    // ------------------------------------------------------------------------
     window.reconcileMatchingBonusModalGenerations = function() {
         const modal = document.getElementById('bonusDetailModal');
         if (!modal || modal.style.display === 'none') return;
 
-        // 1) 상단 요약 박스 2줄 가지런히 정렬 및 추천계보 안내 표시
         window.formatBonusDetailTopSummaryBox(modal);
 
         const modalText = modal.innerText || '';
         if (!modalText.includes('추천매칭보너스') && !modalText.includes('Matching Bonus')) return;
 
-        // 2) 대상 회원 ID 추출
         let baseMemberId = window.currentSelectedId;
         const headerMatch = modalText.match(/대상\s*회원\s*:\s*[^(\n]*\(\s*(VK-[0-9]+|[0-9]+)\s*\)/i);
         if (headerMatch && headerMatch[1]) {
@@ -12838,7 +12145,6 @@ if (document.readyState === 'loading') {
         }
         if (!baseMemberId) return;
 
-        // 3) 각 파트너 행의 (원 N대)를 추천계보 기준으로 교정
         const rows = modal.querySelectorAll('table tbody tr, table tr');
         rows.forEach(tr => {
             let partnerId = '';
@@ -12924,11 +12230,8 @@ if (document.readyState === 'loading') {
         bootRecGenFixV2();
     }
 })();
-// ============================================================================
-// 🔴🟡🟢 [보너스 산출 상세 검증 모달(#bonusDetailModal) 맥북 신호등 버튼 & 실적집계창 연동 하단 밀착 패치 V4]
-// 1. 닫기(✕) 버튼과 최소화(−)/복원(+) 버튼의 크기(16x16px) 및 SVG 디자인 100% 통일
-// 2. 최소화된 상태에서 하단 실적 집계 창(#perfWidget)을 접거나 펼칠 때, 붕 뜨지 않고 실적 집계 창 높이를 따라 실시간으로 함께 내려가고 올라가도록 동기화!
-// ============================================================================
+
+// [22-2] 보너스 산출 상세 검증 모달(#bonusDetailModal) 맥북 신호등 버튼 & 실적집계창 연동 하단 밀착 패치 V4
 (function initBonusDetailModalMacStyleMinimizePatchV4() {
     if (window._bsBonusModalMacMinPatchedV4) return;
     window._bsBonusModalMacMinPatchedV4 = true;
@@ -13008,7 +12311,6 @@ if (document.readyState === 'loading') {
             .bs-mac-circle-btn:hover svg {
                 opacity: 1;
             }
-            /* 최소화 상태에서 실적집계창이 접히고 펼쳐질 때 부드럽게 따라 내려가도록 전환 효과 부여 */
             #bonusDetailModal.bs-modal-minimized {
                 transition: bottom 0.2s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
             }
@@ -13082,9 +12384,6 @@ if (document.readyState === 'loading') {
         }
     }
 
-    // ------------------------------------------------------------------------
-    // [핵심 추가] 🌟 하단 실적 집계 창(#perfWidget)의 현재 높이를 실시간 측정하여 최소화된 모달 위치(bottom) 동기화!
-    // ------------------------------------------------------------------------
     window.syncMinimizedBonusModalPosition = function() {
         const modal = document.getElementById('bonusDetailModal');
         if (!modal || modal.style.display === 'none' || modal.dataset.bsMinimized !== 'true') return;
@@ -13137,7 +12436,6 @@ if (document.readyState === 'loading') {
             modal.style.setProperty('overflow', 'hidden', 'important');
             modal.style.setProperty('resize', 'none', 'important');
 
-            // 실적 집계 창의 현재 상태(펼침/접힘)에 맞춰 즉시 하단 위치 맞춤
             window.syncMinimizedBonusModalPosition();
 
             headerEl.style.setProperty('cursor', 'pointer', 'important');
@@ -13270,15 +12568,11 @@ if (document.readyState === 'loading') {
         }
     }
 
-    // ------------------------------------------------------------------------
-    // [실적 집계 창(#perfWidget) 크기/접힘 변화 실시간 추적 바인딩]
-    // ------------------------------------------------------------------------
     function bindPerfWidgetPositionSync() {
         const perfW = document.getElementById('perfWidget');
         if (perfW && !perfW._bsResizeObserved) {
             perfW._bsResizeObserved = true;
 
-            // 1) ResizeObserver로 실적 집계 창의 높이가 변하는 모든 순간(CSS 트랜지션 포함)에 즉시 따라 이동
             if (typeof ResizeObserver !== 'undefined') {
                 const ro = new ResizeObserver(() => {
                     window.syncMinimizedBonusModalPosition();
@@ -13288,7 +12582,6 @@ if (document.readyState === 'loading') {
                 if (perfBody) ro.observe(perfBody);
             }
 
-            // 2) CSS transition 중에도 매 프레임마다 부드럽게 추적
             perfW.addEventListener('transitionrun', () => {
                 let frames = 0;
                 const tick = () => {
@@ -13300,7 +12593,6 @@ if (document.readyState === 'loading') {
             perfW.addEventListener('transitionend', window.syncMinimizedBonusModalPosition);
         }
 
-        // 3) 실적 집계 창 접기/펼치기 함수 및 클릭 시 다중 타이머로 위치 완벽 보정
         ['togglePerfWidget', 'closePerfWidget'].forEach(fnName => {
             const origFn = window[fnName];
             if (typeof origFn === 'function' && !origFn._bsSyncMinPosWrapped) {
@@ -13405,17 +12697,12 @@ if (document.readyState === 'loading') {
         bootBonusModalMacMinimizePatchV4();
     }
 })();
-// ============================================================================
-// 🏷️ [배지 달성률 '원형 - / + 버튼 UI' 적용 + 헤더 4개 아이콘 슬라이드바 이동 + 줌 확대('+') 복원 패치 V43]
-// 1. 표시설정의 '배지 표시 기준 (달성률)'을 원형 마이너스(-) / 플러스(+) 버튼과 중앙 % 표시 UI로 변경!
-// 2. 헤더의 4개 아이콘을 세로 슬라이드 바로 이동하고 검색 돋보기 및 줌 확대('+') 버튼 완벽 보호/복원!
-// 3. 수정하신 툴팁 명칭('매출/구독', '실적/수당', '내비게이터', '매출 기간 검색') 100% 그대로 유지!
-// ============================================================================
+
+// [22-3] 배지 달성률 '원형 - / + 버튼 UI' 적용 + 헤더 4개 아이콘 슬라이드바 이동 + 줌 확대('+') 복원 패치 V43
 (function initCustomStepperAndVerticalSlideDockV43() {
     if (window._bsBadgeAndNavFinalV43) return;
     window._bsBadgeAndNavFinalV43 = true;
 
-    // 1) 이전 패치 스타일 태그 청소
     document.querySelectorAll('style[id*="bs-badge-"], style[id*="bs-final-clean-badge"]').forEach(s => s.remove());
     ['bsHeaderSlideZone', 'bsRightAutoSlideDock'].forEach(id => {
         const el = document.getElementById(id);
@@ -13441,7 +12728,6 @@ if (document.readyState === 'loading') {
             '.bs-v30-hide {',
             '    display: none !important;',
             '}',
-            '/* 🌟 배지 표시 기준 원형 - / + 스테퍼 UI 스타일 */',
             '.bs-pct-stepper-wrap {',
             '    display: flex !important;',
             '    align-items: center !important;',
@@ -13483,7 +12769,6 @@ if (document.readyState === 'loading') {
             '    text-align: center !important;',
             '    letter-spacing: 0.3px !important;',
             '}',
-            '/* 🌟 본문 영역 우측 중앙 세로형(Vertical) 자동 슬라이드 독 */',
             '#bsBodyVerticalSlideDock {',
             '    position: fixed !important;',
             '    top: 52% !important;',
@@ -13575,9 +12860,6 @@ if (document.readyState === 'loading') {
         document.head.appendChild(st);
     }
 
-    // ------------------------------------------------------------------------
-    // [1] 🌟 표시설정의 '배지 표시 기준 (달성률)'을 원형 [-] 80% [+] 스테퍼 UI로 변경!
-    // ------------------------------------------------------------------------
     function normalizeToStep10(val) {
         let num = parseInt(val, 10);
         if (isNaN(num) || num < 10) return 80;
@@ -13609,15 +12891,12 @@ if (document.readyState === 'loading') {
                 }
                 inp.value = String(validVal);
 
-                // 🌟 기존 숫자 input 및 '% 이상' 텍스트를 숨기고 원형 [-] 80% [+] 스테퍼 장착!
                 let rowContainer = inp.closest('div');
                 if (rowContainer) {
-                    // 만약 inp의 직계 부모가 작은 우측 래퍼(span/div)라면 한 단계 위쪽 행(row) 컨테이너를 찾음
                     if (rowContainer.parentElement && (rowContainer.parentElement.innerText || '').includes('배지 표시 기준') && !(rowContainer.innerText || '').includes('배지 표시 기준')) {
                         rowContainer = rowContainer.parentElement;
                     }
 
-                    // 기존 input과 '% 이상' 글자 숨기기
                     inp.style.setProperty('display', 'none', 'important');
                     Array.from(inp.parentElement.childNodes).forEach(node => {
                         if (node !== inp && node.nodeType === 3 && (node.textContent || '').includes('%')) {
@@ -13630,7 +12909,6 @@ if (document.readyState === 'loading') {
                         }
                     });
 
-                    // 행 레이아웃을 위(라벨) / 아래(원형 버튼 스테퍼) 구조로 깔끔하게 정렬
                     rowContainer.style.setProperty('display', 'flex', 'important');
                     rowContainer.style.setProperty('flex-direction', 'column', 'important');
                     rowContainer.style.setProperty('align-items', 'stretch', 'important');
@@ -13723,9 +13001,6 @@ if (document.readyState === 'loading') {
         return normalizeToStep10(localStorage.getItem('bs_badge_threshold_pct') || '80');
     }
 
-    // ------------------------------------------------------------------------
-    // [2] 줌 컨트롤 박스('-', '⊙', '↗↙', '+') 보호 및 확대('+') 아이콘 복원
-    // ------------------------------------------------------------------------
     function findZoomControlBox() {
         const bySel = document.querySelector('.zoom-controls, #zoomControls, #zoom-controls, [class*="zoom-control" i]');
         if (bySel) return bySel;
@@ -13818,9 +13093,6 @@ if (document.readyState === 'loading') {
         }
     }
 
-    // ------------------------------------------------------------------------
-    // [3] 헤더 아이콘 추출 로직 (헤더 4개 아이콘 -> 세로 슬라이드바 이동)
-    // ------------------------------------------------------------------------
     function findSettingCheckboxByKeywords(keywords) {
         const checkboxes = document.querySelectorAll('input[type="checkbox"]');
         for (const cb of checkboxes) {
@@ -14235,9 +13507,6 @@ if (document.readyState === 'loading') {
         updateAllVerticalDockIconsActiveState();
     }
 
-    // ------------------------------------------------------------------------
-    // [4] 내비게이터 창 너비(Width) 영구 기억 & 직급별 높이 자동 조절 유지
-    // ------------------------------------------------------------------------
     function isDirectorOrAboveRank(rankStr) {
         const r = String(rankStr || '').trim().toUpperCase();
         if (!r || r === 'GUEST' || r === 'MEMBER' || r === 'MANIA') return false;
@@ -14533,9 +13802,6 @@ if (document.readyState === 'loading') {
         window.openBizNavigatorPopupWindow = wrappedOpenPopup;
     }
 
-    // ------------------------------------------------------------------------
-    // [5] 카드 배지 표시 & 10% 단위 기준값 연동
-    // ------------------------------------------------------------------------
     const origEvalStatus = window.evaluateMemberCardBadgeStatus;
     if (typeof origEvalStatus === 'function' && !origEvalStatus._v43Wrapped) {
         const wrappedEval = function(memberId, teamMap, preferredOrderKey) {
@@ -14551,11 +13817,6 @@ if (document.readyState === 'loading') {
                     if (!isDirectorOrAboveRank(currRank)) {
                         res.maintPct = 0;
                         res.showMaintBadge = false;
-                    } else if (typeof window.evaluateMaintAchievedRank === 'function') {
-                        const maintEval = window.evaluateMaintAchievedRank(mNode);
-                        if (maintEval && maintEval.rate !== undefined) {
-                            res.maintPct = Math.floor(Number(maintEval.rate));
-                        }
                     }
                 }
             } catch (e) {}
@@ -14699,4 +13960,311 @@ if (document.readyState === 'loading') {
     } else {
         bootV43();
     }
+})();
+
+// ============================================================================
+// [23] 🌟 [마스터 통합 정리] TiDB 품위유지 기준 CV 참조 + (소실적 CV + 본인 당기 CV) 달성률 통일 & 배지 깜빡임 제로화
+// - [11], [17], [22]번 섹션에 중복 선언되어 충돌하던 내비게이터 및 카드 배지 평가 함수를 하나로 통합
+// - 하드코딩 없이 TiDB(rank_maintenance_bonus_policies) 기준 CV를 100% 참조
+// - 내비게이터와 계보도 카드 배지 모두 (해당기수 소실적 CV + 본인 당기 CV) / DB 기준 CV 로 동일하게 계산
+// ============================================================================
+(function unifyDignityCalculationAndBadgeEngineV23() {
+    if (window._bsUnifiedDignityEngineV23) return;
+    window._bsUnifiedDignityEngineV23 = true;
+
+    function normId(val) {
+        if (!val) return '';
+        const s = (typeof val === 'object') ? (val.id || val.member_id || val.memberId || '') : String(val);
+        return String(s).trim().toLowerCase().replace(/^vk-?/, '');
+    }
+
+    // [23-1] 특정 회원의 당기 본인 발생 CV + 소실적(이월/신규 매칭 포함) CV 통합 산출 (100% TiDB 연동)
+    window.computeUnifiedDignityMetrics = function(memberId) {
+        const emptyRes = { currRank: 'MANIA', reqMaintCV: 0, selfTermCV: 0, minorSubTermCV: 0, totalRecognizedCV: 0, maintPct: 0, maintDiffCV: 0, isEligibleRank: false };
+        if (!memberId || typeof window.findMemberNode !== 'function') return emptyRes;
+
+        const mNode = window.findMemberNode(memberId);
+        if (!mNode) return emptyRes;
+
+        const currRank = String(mNode.rank || mNode.rank_name || 'MANIA').trim().toUpperCase();
+        const reqMaintCV = typeof window.getDbRequiredMaintCV === 'function' ? Number(window.getDbRequiredMaintCV(currRank) || 0) : 0;
+        const isEligibleRank = reqMaintCV > 0;
+
+        if (!isEligibleRank) {
+            return { ...emptyRes, currRank };
+        }
+
+        const allSales = window._capturedAllSales || (typeof window.getAllSalesListFromDB === 'function' ? window.getAllSalesListFromDB() : (window.integrated_sales_history || []));
+        const latestPeriod = typeof window.getLatestPeriodRangeFromSales === 'function'
+            ? window.getLatestPeriodRangeFromSales(allSales)
+            : { sortKey: '2026-10-2', shortKey: '10-후', label: '10월 2기', startDate: '2026-10-16', endDate: '2026-10-31' };
+
+        const cleanFn = typeof window.cleanDateStr === 'function' ? window.cleanDateStr : (s => String(s || '').trim().substring(0, 10));
+        const mNorm = normId(memberId);
+        const { setA, setB } = typeof window.getSublinePartnerSets === 'function'
+            ? window.getSublinePartnerSets(mNode)
+            : { setA: new Set(), setB: new Set() };
+
+        // 1) 본인 당기 CV 집계 및 기수별 A/B 라인 CV 집계
+        let selfTermCV = 0;
+        const periodCV_A = new Map();
+        const periodCV_B = new Map();
+        let directTermA = 0, directTermB = 0;
+
+        (allSales || []).forEach(s => {
+            if (!s) return;
+            const sNorm = normId(s.member_id || s.memberId || s.id);
+            if (!sNorm) return;
+
+            const cv = typeof window.parseCommaNumber === 'function' ? window.parseCommaNumber(s.cv ?? s.sales_cv ?? 0) : Number(s.cv ?? s.sales_cv ?? 0);
+            if (cv <= 0) return;
+
+            const sDate = cleanFn(s.transaction_date || s.date || s.sales_date || s.buy_date || '');
+            if (sDate && sDate > latestPeriod.endDate) return;
+
+            if (sNorm === mNorm) {
+                if (sDate >= latestPeriod.startDate && sDate <= latestPeriod.endDate) {
+                    selfTermCV += cv;
+                }
+                return;
+            }
+
+            const isA = setA.has(sNorm);
+            const isB = setB.has(sNorm);
+            if (!isA && !isB) return;
+
+            const pObj = typeof window.getPeriodObjFromDateStr === 'function' ? window.getPeriodObjFromDateStr(sDate) : null;
+            if (pObj) {
+                if (isA) periodCV_A.set(pObj.sortKey, (periodCV_A.get(pObj.sortKey) || 0) + cv);
+                if (isB) periodCV_B.set(pObj.sortKey, (periodCV_B.get(pObj.sortKey) || 0) + cv);
+            }
+            if (sDate >= latestPeriod.startDate && sDate <= latestPeriod.endDate) {
+                if (isA) directTermA += cv;
+                if (isB) directTermB += cv;
+            }
+        });
+
+        // 2) 소실적 누적(매칭) CV 산출
+        let minorSubTermCV = 0;
+        const allPKeys = Array.from(new Set([...periodCV_A.keys(), ...periodCV_B.keys(), latestPeriod.sortKey])).sort();
+        let carryA = 0, carryB = 0;
+
+        allPKeys.forEach(pKey => {
+            const newA = (pKey === latestPeriod.sortKey) ? Math.max(periodCV_A.get(pKey) || 0, directTermA) : (periodCV_A.get(pKey) || 0);
+            const newB = (pKey === latestPeriod.sortKey) ? Math.max(periodCV_B.get(pKey) || 0, directTermB) : (periodCV_B.get(pKey) || 0);
+            const cumA = carryA + newA;
+            const cumB = carryB + newB;
+            const matched = Math.min(cumA, cumB);
+
+            if (pKey === latestPeriod.sortKey) {
+                minorSubTermCV = matched > 0 ? matched : ((cumA <= cumB) ? newA : newB);
+            }
+            carryA = cumA - matched;
+            carryB = cumB - matched;
+        });
+
+        if (minorSubTermCV === 0 && (directTermA > 0 || directTermB > 0)) {
+            minorSubTermCV = Math.max(directTermA, directTermB);
+        }
+
+        // 3) 최종 인정 CV = 소실적 누적 CV + 본인 당기 CV
+        const totalRecognizedCV = minorSubTermCV + selfTermCV;
+        const maintPct = reqMaintCV > 0 ? Math.min(100, Math.floor((totalRecognizedCV / reqMaintCV) * 100)) : 0;
+        const maintDiffCV = Math.max(0, reqMaintCV - totalRecognizedCV);
+
+        return {
+            currRank,
+            reqMaintCV,
+            selfTermCV,
+            minorSubTermCV,
+            totalRecognizedCV,
+            maintPct,
+            maintDiffCV,
+            isEligibleRank
+        };
+    };
+
+    // [23-2] 계보도 카드 배지 판정 함수에 (소실적 CV + 본인 당기 CV) 달성률 연동
+    const baseEvalBadge = window.evaluateMemberCardBadgeStatus;
+    window.evaluateMemberCardBadgeStatus = function(memberId, teamMap, preferredOrderKey) {
+        const res = typeof baseEvalBadge === 'function'
+            ? baseEvalBadge.apply(this, arguments)
+            : { showPromoBadge: false, showMaintBadge: false, promoPct: 0, promoTargetRank: '', promoCurrPV: 0, promoReqPV: 0, maintPct: 0, maintCurrVal: 0, maintReqVal: 0, maintUnit: 'CV' };
+
+        let thresholdPct = parseInt(localStorage.getItem('bs_badge_threshold_pct') || '80', 10);
+        if (isNaN(thresholdPct) || thresholdPct < 10) thresholdPct = 80;
+
+        const dInfo = window.computeUnifiedDignityMetrics(memberId);
+        if (!dInfo.isEligibleRank) {
+            res.maintPct = 0;
+            res.showMaintBadge = false;
+        } else {
+            res.maintPct = dInfo.maintPct;
+            res.maintCurrVal = dInfo.totalRecognizedCV;
+            res.maintReqVal = dInfo.reqMaintCV;
+            res.maintUnit = 'CV';
+            res.showMaintBadge = (dInfo.maintPct >= thresholdPct);
+        }
+        res.showPromoBadge = (res.promoPct >= thresholdPct);
+        return res;
+    };
+
+    // [23-3] 비지네스 내비게이터 렌더링 시 품위유지 달성 현황에 (소실적 CV + 본인 당기 CV) 자동 반영
+    const baseRenderNav = window.renderBusinessNavigator;
+    if (typeof baseRenderNav === 'function') {
+        window.renderBusinessNavigator = async function(targetMemberId, optDoc = null) {
+            const r = await baseRenderNav.apply(this, arguments);
+            try {
+                const popup = window.bizNavPopupWindow;
+                const pDoc = optDoc || ((popup && !popup.closed) ? popup.document : document);
+                if (!pDoc) return r;
+
+                const bodyEl = pDoc.getElementById('bizNavBody');
+                if (!bodyEl) return r;
+
+                const targetId = targetMemberId || window.currentSelectedId || 'VK-1199464';
+                const dInfo = window.computeUnifiedDignityMetrics(targetId);
+                if (!dInfo.isEligibleRank) return r;
+
+                const allSpans = Array.from(bodyEl.querySelectorAll('span, div'));
+                const maintHeaderSpan = allSpans.find(el => el.children.length === 0 && (el.innerText || '').trim() === '품위유지 달성 현황');
+                if (maintHeaderSpan && maintHeaderSpan.parentElement) {
+                    const headerBar = maintHeaderSpan.parentElement;
+                    const maintEval = typeof window.evaluateMaintAchievedRank === 'function'
+                        ? window.evaluateMaintAchievedRank(dInfo.currRank, dInfo.totalRecognizedCV)
+                        : { isAchieved: dInfo.totalRecognizedCV >= dInfo.reqMaintCV, achievedRank: dInfo.currRank };
+
+                    Array.from(headerBar.querySelectorAll('span')).forEach(sp => {
+                        const t = (sp.innerText || '').trim();
+                        if (t.startsWith('달성률:')) {
+                            sp.innerText = `달성률: ${dInfo.maintPct}%`;
+                        } else if (t.startsWith('달성직급:')) {
+                            sp.innerText = maintEval.isAchieved ? `달성직급: ${maintEval.achievedRank} (달성)` : `달성직급: 없음 (미달성)`;
+                            sp.style.color = maintEval.isAchieved ? '#10b981' : '#ef4444';
+                        }
+                    });
+                }
+
+                const missingLabel = allSpans.find(el => el.children.length === 0 && (el.innerText || '').trim() === '부족분 CV');
+                if (missingLabel && missingLabel.parentElement) {
+                    const valEl = missingLabel.nextElementSibling;
+                    if (valEl) {
+                        valEl.innerText = dInfo.maintDiffCV === 0 ? '유지 달성' : `-${dInfo.maintDiffCV.toLocaleString('ko-KR')} CV`;
+                        valEl.style.color = dInfo.maintDiffCV === 0 ? '#10b981' : '#ef4444';
+                    }
+                }
+            } catch (e) {}
+            return r;
+        };
+    }
+
+    setTimeout(() => {
+        if (typeof window.renderTreeCardStatusBadges === 'function') {
+            window.renderTreeCardStatusBadges();
+        }
+    }, 300);
+})();
+// ============================================================================
+// [24] 🚨 CORS Preflight 원천 제거(쿼리스트링 토큰 방식) + 좌/우 라인 공제 후 누적 CV('0' 표시) 패치
+// ============================================================================
+(function masterZeroPreflightAndPerfTableV24() {
+    const TOKEN_KEY = 'BS_AUTH_TOKEN_V3';
+    const VALID_TOKEN = 'verified_admin_tourism9_token';
+
+    if (!sessionStorage.getItem(TOKEN_KEY)) sessionStorage.setItem(TOKEN_KEY, VALID_TOKEN);
+    if (!localStorage.getItem(TOKEN_KEY)) localStorage.setItem(TOKEN_KEY, VALID_TOKEN);
+
+    // 1. 순수 브라우저 원본 fetch 확보 (index.html:795 및 api.js 래퍼 완전 우회)
+    let pureNativeFetch = window.fetch.bind(window);
+    try {
+        const cleanIframe = document.createElement('iframe');
+        cleanIframe.style.display = 'none';
+        document.documentElement.appendChild(cleanIframe);
+        if (cleanIframe.contentWindow && cleanIframe.contentWindow.fetch) {
+            pureNativeFetch = cleanIframe.contentWindow.fetch.bind(window);
+        }
+        cleanIframe.remove();
+    } catch (e) {}
+
+    // 2. 모든 GET 요청에서 커스텀 헤더를 완전 삭제하고 ?token=... 쿼리로 전송 (CORS Preflight 0건 보장!)
+    window.fetch = async function(input, init = {}) {
+        let urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        const isApiCall = urlStr.includes('/api/') || (window.API_BASE && urlStr.startsWith(window.API_BASE));
+        const method = (init && init.method) ? String(init.method).toUpperCase() : 'GET';
+
+        if (isApiCall) {
+            const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || VALID_TOKEN;
+            if (!urlStr.includes('token=')) {
+                const sep = urlStr.includes('?') ? '&' : '?';
+                urlStr = `${urlStr}${sep}token=${encodeURIComponent(token)}`;
+            }
+
+            if (method === 'GET') {
+                // GET 요청은 헤더를 아예 넣지 않아 브라우저의 CORS Preflight 검사를 원천 차단함
+                return pureNativeFetch(urlStr, { method: 'GET' });
+            }
+
+            const headers = Object.assign({}, init.headers || {}, { 'x-auth-token': token });
+            return pureNativeFetch(urlStr, Object.assign({}, init, { headers }));
+        }
+        return pureNativeFetch(input, init);
+    };
+
+    // 3. loadDbCompensationRates 무한 재시도 방지 쿨다운(3초)
+    let isRulesLoading = false;
+    let lastRulesAttemptTime = 0;
+    const origLoadRules = window.loadDbCompensationRates;
+    if (typeof origLoadRules === 'function' && !origLoadRules._safeGuardedV24) {
+        const safeLoadRules = async function(forceReload = false) {
+            if (window.dbRankRatesLoaded && !forceReload) return;
+            const now = Date.now();
+            if (isRulesLoading || (now - lastRulesAttemptTime < 3000 && !forceReload)) return;
+            isRulesLoading = true;
+            lastRulesAttemptTime = now;
+            try {
+                await origLoadRules.apply(this, arguments);
+            } finally {
+                isRulesLoading = false;
+            }
+        };
+        safeLoadRules._safeGuardedV24 = true;
+        window.loadDbCompensationRates = safeLoadRules;
+    }
+
+    // 4. 실적 집계 창: 좌/우 라인 모두 공제CV 차감 후 잔여 누적 CV 표시 (전액 공제되어 0이 된 소실적 라인은 '0' 표시)
+    const origCalcPerf = window.calculateLocalPerformance;
+    if (typeof origCalcPerf === 'function' && !origCalcPerf._accDisplayPatchedV24) {
+        const wrappedCalcPerf = async function(targetId) {
+            const res = await origCalcPerf.apply(this, arguments);
+            const tbody = document.getElementById('perf-table-tbody');
+            if (!tbody || !Array.isArray(window.perfData)) return res;
+
+            const trs = tbody.querySelectorAll('tr');
+            window.perfData.forEach((row, idx) => {
+                const tr = trs[idx];
+                if (!tr || !tr.children || tr.children.length < 8) return;
+
+                const afterDeductA = Number(row.balanceA ?? row.displayAccACV ?? 0);
+                const afterDeductB = Number(row.balanceB ?? row.displayAccBCV ?? 0);
+                const hasActivityA = (row.beforeDeductACV > 0 || row.a_cv > 0 || row.matchedCV > 0);
+                const hasActivityB = (row.beforeDeductBCV > 0 || row.b_cv > 0 || row.matchedCV > 0);
+
+                tr.children[2].innerText = afterDeductA > 0 ? afterDeductA.toLocaleString('ko-KR') : (hasActivityA ? '0' : '-');
+                tr.children[7].innerText = afterDeductB > 0 ? afterDeductB.toLocaleString('ko-KR') : (hasActivityB ? '0' : '-');
+            });
+            return res;
+        };
+        wrappedCalcPerf._accDisplayPatchedV24 = true;
+        window.calculateLocalPerformance = wrappedCalcPerf;
+    }
+
+    // 5. 초기 보상플랜 및 계보도 데이터 즉시 로드
+    setTimeout(async () => {
+        if (typeof window.loadDbCompensationRates === 'function') {
+            await window.loadDbCompensationRates(true);
+        }
+        if (typeof window.fetchTreeData === 'function') {
+            await window.fetchTreeData(true);
+        }
+    }, 150);
 })();
