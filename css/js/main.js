@@ -9772,26 +9772,13 @@ if (document.readyState === 'loading') {
 })();
 
 // ============================================================================
-// [19] 관리자 로그인 보안 게이트 (admin 인증 및 토큰 헤더 자동 주입)
+// [19] 관리자 로그인 보안 게이트 (프론트엔드 비밀번호 평문 노출 제거 & 서버 인증 전용)
 // ============================================================================
 (function forceInitLoginSecurityGate() {
     if (window._bsLoginGateMounted) return;
     window._bsLoginGateMounted = true;
 
     const TOKEN_KEY = 'BS_AUTH_TOKEN_V3';
-    const EXPECTED_ID = 'admin';
-    const EXPECTED_PW = 'tourism9**';
-    const LOCAL_VALID_TOKEN = 'verified_admin_tourism9_token';
-
-    const origFetch = window.fetch;
-    window.fetch = async function(input, init = {}) {
-        const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
-        const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
-        if (urlStr.includes('/api/') || (window.API_BASE && urlStr.startsWith(window.API_BASE))) {
-            init.headers = Object.assign({}, init.headers || {}, { 'x-auth-token': token });
-        }
-        return origFetch.call(this, input, init);
-    };
 
     window.logoutSimulator = function() {
         if (!confirm('시뮬레이터에서 로그아웃하시겠습니까?')) return;
@@ -9816,11 +9803,23 @@ if (document.readyState === 'loading') {
         headerContainer.appendChild(btn);
     }
 
-    function mountLoginScreen() {
+    async function mountLoginScreen() {
         setTimeout(mountLogoutBtn, 600);
 
-        const currentToken = sessionStorage.getItem(TOKEN_KEY);
-        if (currentToken) return;
+        // 저장된 토큰이 있으면 백엔드(/api/auth-check)에 실제 유효한 서명 토큰인지 검증
+        const savedToken = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+        if (savedToken) {
+            try {
+                const checkRes = await fetch(`${window.API_BASE || ''}/api/auth-check`);
+                if (checkRes.ok) {
+                    sessionStorage.setItem(TOKEN_KEY, savedToken);
+                    return; // 유효한 토큰이면 로그인 창 생략
+                }
+            } catch (e) {}
+            // 만료되었거나 이전 버전의 구형 토큰이면 즉시 폐기 후 로그인 창 표시
+            sessionStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(TOKEN_KEY);
+        }
 
         let overlay = document.getElementById('bs-auth-login-overlay');
         if (!overlay) {
@@ -9846,7 +9845,7 @@ if (document.readyState === 'loading') {
                     <form id="bs-login-form" style="display:flex; flex-direction:column; gap:12px; text-align:left;">
                         <div>
                             <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">관리자 아이디 (ID)</label>
-                            <input type="text" id="bs-login-id" placeholder="admin" required
+                            <input type="text" id="bs-login-id" placeholder="관리자 ID 입력" required
                                    style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
                         </div>
                         <div>
@@ -9880,38 +9879,36 @@ if (document.readyState === 'loading') {
                 const uid = idInp.value.trim();
                 const upw = pwInp.value;
 
-                let tokenToSave = null;
                 try {
                     const res = await fetch(`${window.API_BASE || ''}/api/login`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ username: uid, password: upw })
                     });
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data && data.success && data.token) {
-                            tokenToSave = data.token;
+                    const data = await res.json();
+
+                    if (res.ok && data && data.success && data.token) {
+                        sessionStorage.setItem(TOKEN_KEY, data.token);
+                        localStorage.setItem(TOKEN_KEY, data.token);
+                        overlay.remove();
+                        if (typeof window.loadDbCompensationRates === 'function') {
+                            await window.loadDbCompensationRates(true);
                         }
+                        if (typeof window.fetchTreeData === 'function') {
+                            await window.fetchTreeData(true);
+                        }
+                        return;
                     }
-                } catch (err) {}
-
-                if (!tokenToSave && uid === EXPECTED_ID && upw === EXPECTED_PW) {
-                    tokenToSave = LOCAL_VALID_TOKEN;
-                }
-
-                if (tokenToSave) {
-                    sessionStorage.setItem(TOKEN_KEY, tokenToSave);
-                    localStorage.setItem(TOKEN_KEY, tokenToSave);
-                    overlay.remove();
-                    if (typeof window.fetchTreeData === 'function') {
-                        window.fetchTreeData(true);
-                    }
-                } else {
-                    errEl.innerText = '아이디 또는 비밀번호가 일치하지 않습니다.';
+                } catch (err) {
+                    errEl.innerText = '서버와 통신할 수 없습니다. 백엔드 실행 상태를 확인해 주세요.';
                     errEl.style.display = 'block';
-                    pwInp.value = '';
-                    pwInp.focus();
+                    return;
                 }
+
+                errEl.innerText = '아이디 또는 비밀번호가 일치하지 않습니다.';
+                errEl.style.display = 'block';
+                pwInp.value = '';
+                pwInp.focus();
             });
         }
     }
@@ -14165,49 +14162,168 @@ if (document.readyState === 'loading') {
     }, 300);
 })();
 // ============================================================================
-// [24] 🚨 CORS Preflight 원천 제거(쿼리스트링 토큰 방식) + 좌/우 라인 공제 후 누적 CV('0' 표시) 패치
+// [24] 🚨 3005 포트 라우팅 + 로그인 창 재생성(입력 초기화) 원천 차단 + 좌/우 라인 공제 후 누적 CV('0' 표시)
 // ============================================================================
-(function masterZeroPreflightAndPerfTableV24() {
+(function masterPort3005AndStableLoginV24() {
     const TOKEN_KEY = 'BS_AUTH_TOKEN_V3';
-    const VALID_TOKEN = 'verified_admin_tourism9_token';
 
-    if (!sessionStorage.getItem(TOKEN_KEY)) sessionStorage.setItem(TOKEN_KEY, VALID_TOKEN);
-    if (!localStorage.getItem(TOKEN_KEY)) localStorage.setItem(TOKEN_KEY, VALID_TOKEN);
+    const host = window.location.hostname;
+    const isLocal = (host === '127.0.0.1' || host === 'localhost' || host === '' || window.location.protocol === 'file:');
+    window.API_BASE = isLocal ? 'http://127.0.0.1:3005' : window.location.origin;
+    window.API_BASE_URL = window.API_BASE;
 
-    // 1. 순수 브라우저 원본 fetch 확보 (index.html:795 및 api.js 래퍼 완전 우회)
-    let pureNativeFetch = window.fetch.bind(window);
-    try {
-        const cleanIframe = document.createElement('iframe');
-        cleanIframe.style.display = 'none';
-        document.documentElement.appendChild(cleanIframe);
-        if (cleanIframe.contentWindow && cleanIframe.contentWindow.fetch) {
-            pureNativeFetch = cleanIframe.contentWindow.fetch.bind(window);
+    // 1. 로그인 창 호출 함수 (이미 창이 떠 있으면 절대 지우거나 다시 그리지 않음!)
+    window.showSecurityLoginOverlay = function() {
+        const existingOverlay = document.getElementById('bs-auth-login-overlay');
+        if (existingOverlay) {
+            // 이미 로그인 창이 열려 있다면 입력 중인 텍스트가 사라지지 않도록 그대로 유지!
+            return;
         }
-        cleanIframe.remove();
-    } catch (e) {}
 
-    // 2. 모든 GET 요청에서 커스텀 헤더를 완전 삭제하고 ?token=... 쿼리로 전송 (CORS Preflight 0건 보장!)
-    window.fetch = async function(input, init = {}) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(TOKEN_KEY);
+
+        const overlay = document.createElement('div');
+        overlay.id = 'bs-auth-login-overlay';
+        overlay.style.cssText = `
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            background: #0b0f19 !important;
+            z-index: 2147483647 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-family: 'Pretendard', -apple-system, sans-serif !important;
+        `;
+
+        overlay.innerHTML = `
+            <div style="background:#1f2937; border:1px solid #374151; border-radius:12px; width:360px; padding:30px 24px; box-shadow:0 25px 50px rgba(0,0,0,0.85); color:#fff; text-align:center;">
+                <div style="width:52px; height:52px; margin:0 auto 14px; border-radius:12px; background:rgba(59,130,246,0.15); border:1px solid #3b82f6; display:flex; align-items:center; justify-content:center; font-size:24px;">🔒</div>
+                <h2 style="margin:0 0 6px; font-size:18px; font-weight:800; color:#fff;">비지네스 시뮬레이터 V3.0</h2>
+                <p style="margin:0 0 22px; font-size:12px; color:#9ca3af;">승인된 관리자 계정으로 로그인해 주세요.</p>
+                <form id="bs-login-form" style="display:flex; flex-direction:column; gap:12px; text-align:left;">
+                    <div>
+                        <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">관리자 아이디 (ID)</label>
+                        <input type="text" id="bs-login-id" placeholder="관리자 ID 입력" autocomplete="username" required
+                               style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">비밀번호 (Password)</label>
+                        <input type="password" id="bs-login-pw" placeholder="비밀번호 입력" autocomplete="current-password" required
+                               style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
+                    </div>
+                    <div id="bs-login-error" style="display:none; color:#ef4444; font-size:12px; font-weight:bold; text-align:center; padding:4px 0;"></div>
+                    <button type="submit" id="bs-login-submit"
+                            style="margin-top:6px; width:100%; padding:11px; background:#2563eb; border:1px solid #3b82f6; border-radius:6px; color:#fff; font-size:13.5px; font-weight:bold; cursor:pointer;">
+                        로그인
+                    </button>
+                </form>
+            </div>
+        `;
+        document.documentElement.appendChild(overlay);
+
+        const form = document.getElementById('bs-login-form');
+        const idInp = document.getElementById('bs-login-id');
+        const pwInp = document.getElementById('bs-login-pw');
+        const errEl = document.getElementById('bs-login-error');
+
+        setTimeout(() => { if (idInp) idInp.focus(); }, 100);
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errEl.style.display = 'none';
+            const uid = idInp.value.trim();
+            const upw = pwInp.value.trim();
+
+            try {
+                const res = await window.fetch(`${window.API_BASE}/api/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: uid, password: upw })
+                });
+                const data = await res.json();
+
+                if (res.ok && data && data.success && data.token) {
+                    sessionStorage.setItem(TOKEN_KEY, data.token);
+                    localStorage.setItem(TOKEN_KEY, data.token);
+                    overlay.remove();
+                    if (typeof window.loadDbCompensationRates === 'function') {
+                        await window.loadDbCompensationRates(true);
+                    }
+                    if (typeof window.fetchTreeData === 'function') {
+                        await window.fetchTreeData(true);
+                    }
+                    return;
+                }
+            } catch (err) {
+                errEl.innerText = '서버와 통신할 수 없습니다. 백엔드(3005번 포트) 실행 상태를 확인해 주세요.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            errEl.innerText = '아이디 또는 비밀번호가 일치하지 않습니다.';
+            errEl.style.display = 'block';
+            pwInp.value = '';
+            pwInp.focus();
+        });
+    };
+
+    // 2. 커스텀 fetch: 로그인 전에는 백그라운드 API 요청을 즉시 차단하여 401 루프 방지!
+    window.fetch = function(input, init = {}) {
         let urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
-        const isApiCall = urlStr.includes('/api/') || (window.API_BASE && urlStr.startsWith(window.API_BASE));
+        urlStr = urlStr.replace('127.0.0.1:3001', '127.0.0.1:3005').replace('localhost:3001', '127.0.0.1:3005');
+
+        const isApiCall = urlStr.includes('/api/') || urlStr.includes(':3005');
+        const isLoginCall = urlStr.includes('/api/login');
+        const isAuthCheck = urlStr.includes('/api/auth-check');
         const method = (init && init.method) ? String(init.method).toUpperCase() : 'GET';
+        const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
 
-        if (isApiCall) {
-            const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || VALID_TOKEN;
-            if (!urlStr.includes('token=')) {
-                const sep = urlStr.includes('?') ? '&' : '?';
-                urlStr = `${urlStr}${sep}token=${encodeURIComponent(token)}`;
-            }
-
-            if (method === 'GET') {
-                // GET 요청은 헤더를 아예 넣지 않아 브라우저의 CORS Preflight 검사를 원천 차단함
-                return pureNativeFetch(urlStr, { method: 'GET' });
-            }
-
-            const headers = Object.assign({}, init.headers || {}, { 'x-auth-token': token });
-            return pureNativeFetch(urlStr, Object.assign({}, init, { headers }));
+        // 토큰이 없거나 로그인 모달이 떠 있는 상태에서는 /api/login 외의 백그라운드 호출을 즉시 가상 응답으로 멈춤
+        if (isApiCall && !isLoginCall && !isAuthCheck && (!token || document.getElementById('bs-auth-login-overlay'))) {
+            window.showSecurityLoginOverlay();
+            return Promise.resolve({
+                ok: false,
+                status: 401,
+                json: () => Promise.resolve({ success: false, data: [], compRules: {} }),
+                text: () => Promise.resolve('{}')
+            });
         }
-        return pureNativeFetch(input, init);
+
+        if (isApiCall && token && !urlStr.includes('token=')) {
+            const sep = urlStr.includes('?') ? '&' : '?';
+            urlStr = `${urlStr}${sep}token=${encodeURIComponent(token)}`;
+        }
+
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open(method, urlStr, true);
+
+            if (method !== 'GET') {
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                if (token) xhr.setRequestHeader('x-auth-token', token);
+            }
+
+            xhr.onload = function() {
+                if (xhr.status === 401 && !isLoginCall) {
+                    window.showSecurityLoginOverlay();
+                }
+                const bodyText = xhr.responseText;
+                let parsedJson = {};
+                try { parsedJson = bodyText ? JSON.parse(bodyText) : {}; } catch (e) {}
+                resolve({
+                    ok: xhr.status >= 200 && xhr.status < 300,
+                    status: xhr.status,
+                    json: () => Promise.resolve(parsedJson),
+                    text: () => Promise.resolve(bodyText)
+                });
+            };
+            xhr.onerror = function() {
+                reject(new TypeError('Failed to fetch'));
+            };
+            xhr.send(init && init.body ? init.body : null);
+        });
     };
 
     // 3. loadDbCompensationRates 무한 재시도 방지 쿨다운(3초)
@@ -14216,6 +14332,7 @@ if (document.readyState === 'loading') {
     const origLoadRules = window.loadDbCompensationRates;
     if (typeof origLoadRules === 'function' && !origLoadRules._safeGuardedV24) {
         const safeLoadRules = async function(forceReload = false) {
+            if (!sessionStorage.getItem(TOKEN_KEY) && !localStorage.getItem(TOKEN_KEY)) return;
             if (window.dbRankRatesLoaded && !forceReload) return;
             const now = Date.now();
             if (isRulesLoading || (now - lastRulesAttemptTime < 3000 && !forceReload)) return;
@@ -14231,7 +14348,7 @@ if (document.readyState === 'loading') {
         window.loadDbCompensationRates = safeLoadRules;
     }
 
-    // 4. 실적 집계 창: 좌/우 라인 모두 공제CV 차감 후 잔여 누적 CV 표시 (전액 공제되어 0이 된 소실적 라인은 '0' 표시)
+    // 4. 실적 집계 창: 좌/우 라인 모두 공제CV 차감 후 잔여 누적 CV 표시 (0이 된 소실적 라인은 '0' 표시)
     const origCalcPerf = window.calculateLocalPerformance;
     if (typeof origCalcPerf === 'function' && !origCalcPerf._accDisplayPatchedV24) {
         const wrappedCalcPerf = async function(targetId) {
@@ -14258,13 +14375,27 @@ if (document.readyState === 'loading') {
         window.calculateLocalPerformance = wrappedCalcPerf;
     }
 
-    // 5. 초기 보상플랜 및 계보도 데이터 즉시 로드
+    // 5. 초기 토큰 확인 후 미인증 시 로그인 창 1회만 고정 표시
     setTimeout(async () => {
-        if (typeof window.loadDbCompensationRates === 'function') {
-            await window.loadDbCompensationRates(true);
+        const hasToken = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+        if (!hasToken) {
+            window.showSecurityLoginOverlay();
+            return;
         }
-        if (typeof window.fetchTreeData === 'function') {
-            await window.fetchTreeData(true);
+        try {
+            const checkRes = await window.fetch(`${window.API_BASE}/api/auth-check`);
+            if (!checkRes.ok) {
+                window.showSecurityLoginOverlay();
+                return;
+            }
+            if (typeof window.loadDbCompensationRates === 'function') {
+                await window.loadDbCompensationRates(true);
+            }
+            if (typeof window.fetchTreeData === 'function') {
+                await window.fetchTreeData(true);
+            }
+        } catch (e) {
+            window.showSecurityLoginOverlay();
         }
     }, 150);
 })();
