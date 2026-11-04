@@ -14399,3 +14399,1027 @@ if (document.readyState === 'loading') {
         }
     }, 150);
 })();
+// ============================================================================
+// [25] 하위 파트너 신규 생성 시 기본 직급 'GUEST' 자동 고정 패치 (직급 자동계산 연동)
+// ============================================================================
+(function enforceDefaultGuestRankOnNewPartnerV25() {
+    function lockRankToGuest(container) {
+        if (!container) return;
+
+        // 모달 내 직급 select 요소 탐색
+        const rankSelects = container.querySelectorAll(
+            'select#member-rank, select#add-rank, select#new-member-rank, select#input-rank, select[name="rank"], select[id*="rank" i]'
+        );
+
+        rankSelects.forEach(sel => {
+            // GUEST 옵션이 없으면 맨 위에 추가
+            let guestOpt = Array.from(sel.options).find(o => String(o.value).toUpperCase() === 'GUEST');
+            if (!guestOpt) {
+                guestOpt = document.createElement('option');
+                guestOpt.value = 'GUEST';
+                guestOpt.textContent = 'GUEST (매출 연동 자동산정)';
+                sel.insertBefore(guestOpt, sel.firstChild);
+            }
+
+            // 신규 추가 모드인지 확인 (모달 제목에 '추가/생성/등록'이 있거나 ID 입력칸이 비어있을 때)
+            const modalEl = sel.closest('.modal, .popup, [id*="modal" i], [class*="modal" i], form') || document.body;
+            const titleText = (modalEl.querySelector('h2, h3, h4, .modal-title, .title')?.innerText || '').trim();
+            const isEditMode = titleText.includes('수정') || titleText.includes('편집');
+
+            if (!isEditMode) {
+                sel.value = guestOpt.value;
+                // 폼 전송(submit) 시 disabled이면 값이 빠질 수 있으므로 pointer-events로 클릭만 잠금
+                sel.style.pointerEvents = 'none';
+                sel.style.opacity = '0.75';
+                sel.style.backgroundColor = '#111827';
+                sel.title = '직급은 매출 및 산하 실적에 따라 자동 계산되므로 기본 GUEST로 시작합니다.';
+            } else {
+                sel.style.pointerEvents = '';
+                sel.style.opacity = '';
+            }
+        });
+    }
+
+    // 1) 하위 파트너 추가 버튼 클릭 또는 모달 오픈 시 즉시 GUEST 세팅
+    document.addEventListener('click', () => {
+        setTimeout(() => lockRankToGuest(document.body), 50);
+    }, true);
+
+    // 2) DOM에 모달 창이 동적으로 렌더링될 때 즉시 감지하여 GUEST 세팅
+    const observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            if (m.addedNodes.length > 0 || (m.type === 'attributes' && m.attributeName === 'style')) {
+                lockRankToGuest(document.body);
+                break;
+            }
+        }
+    });
+
+    if (document.body) {
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+    } else {
+        window.addEventListener('DOMContentLoaded', () => {
+            observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+        });
+    }
+})();
+// ============================================================================
+// [26] 🔒 회원정보 수정 시 회원번호 더블클릭 ➔ 비밀번호 인증 후 편집 잠금 해제 & DB 연동
+// ============================================================================
+(function enableMemberIdEditOnDblClickV26() {
+    let unlockedInputEl = null;
+    let originalMemberIdVal = '';
+
+    // 1. 회원정보 수정 모달에서 회원번호 입력창인지 판별하는 헬퍼
+    function isMemberIdInput(el) {
+        if (!el || el.tagName !== 'INPUT') return false;
+        const idStr = (el.id || '').toLowerCase();
+        const nameStr = (el.name || '').toLowerCase();
+        const phStr = (el.placeholder || '').toLowerCase();
+        const valStr = (el.value || '').trim().toUpperCase();
+
+        // 추천인/후원인 ID 칸은 제외
+        if (idStr.includes('rec') || idStr.includes('spon') || idStr.includes('parent') ||
+            nameStr.includes('rec') || nameStr.includes('spon') || nameStr.includes('parent')) {
+            return false;
+        }
+
+        // 라벨 텍스트 확인
+        const wrapper = el.closest('div, label, tr, .form-group');
+        const labelText = wrapper ? (wrapper.innerText || '') : '';
+
+        return (
+            idStr.includes('id') || idStr.includes('code') ||
+            nameStr.includes('id') ||
+            phStr.includes('회원번호') || phStr.includes('id') ||
+            labelText.includes('회원번호') || labelText.includes('회원 ID') ||
+            valStr.startsWith('VK-')
+        );
+    }
+
+    // 2. 비밀번호 확인 전용 미니 모달 생성 및 백엔드(/api/login) 검증
+    function openPasswordVerifyModal(onSuccess) {
+        const exist = document.getElementById('bs-id-unlock-pw-modal');
+        if (exist) exist.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'bs-id-unlock-pw-modal';
+        modal.style.cssText = `
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            background: rgba(0, 0, 0, 0.75) !important;
+            z-index: 2147483647 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-family: 'Pretendard', -apple-system, sans-serif !important;
+        `;
+
+        modal.innerHTML = `
+            <div style="background:#1f2937; border:1px solid #3b82f6; border-radius:10px; width:320px; padding:22px 20px; box-shadow:0 20px 40px rgba(0,0,0,0.85); color:#fff; text-align:center;">
+                <div style="font-size:22px; margin-bottom:8px;">🔓</div>
+                <h3 style="margin:0 0 6px; font-size:15.5px; font-weight:800; color:#fff;">회원번호 변경 잠금 해제</h3>
+                <p style="margin:0 0 16px; font-size:11.5px; color:#9ca3af; line-height:1.4;">
+                    회원번호 수정을 위해<br>관리자 로그인 비밀번호를 입력해 주세요.
+                </p>
+                <form id="bs-id-unlock-form" style="display:flex; flex-direction:column; gap:10px;">
+                    <input type="password" id="bs-id-unlock-pw-input" placeholder="관리자 비밀번호 입력" required
+                           style="width:100%; box-sizing:border-box; padding:9px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none; text-align:center;">
+                    <div id="bs-id-unlock-err" style="display:none; color:#ef4444; font-size:11.5px; font-weight:bold;"></div>
+                    <div style="display:flex; gap:8px; margin-top:4px;">
+                        <button type="button" id="bs-id-unlock-cancel"
+                                style="flex:1; padding:9px; background:#374151; border:1px solid #4b5563; border-radius:6px; color:#d1d5db; font-size:12.5px; font-weight:bold; cursor:pointer;">
+                            취소
+                        </button>
+                        <button type="submit" id="bs-id-unlock-submit"
+                                style="flex:1; padding:9px; background:#2563eb; border:1px solid #3b82f6; border-radius:6px; color:#fff; font-size:12.5px; font-weight:bold; cursor:pointer;">
+                            인증 및 해제
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        document.documentElement.appendChild(modal);
+
+        const form = document.getElementById('bs-id-unlock-form');
+        const pwInput = document.getElementById('bs-id-unlock-pw-input');
+        const errBox = document.getElementById('bs-id-unlock-err');
+        const cancelBtn = document.getElementById('bs-id-unlock-cancel');
+
+        setTimeout(() => pwInput && pwInput.focus(), 60);
+
+        cancelBtn.onclick = () => modal.remove();
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            errBox.style.display = 'none';
+            const pw = pwInput.value.trim();
+            if (!pw) return;
+
+            try {
+                const res = await window.fetch(`${window.API_BASE || ''}/api/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'admin', password: pw })
+                });
+                const data = await res.json();
+
+                if (res.ok && data && data.success) {
+                    modal.remove();
+                    onSuccess();
+                    return;
+                }
+            } catch (err) {
+                errBox.innerText = '서버 통신 오류가 발생했습니다.';
+                errBox.style.display = 'block';
+                return;
+            }
+
+            errBox.innerText = '비밀번호가 일치하지 않습니다.';
+            errBox.style.display = 'block';
+            pwInput.value = '';
+            pwInput.focus();
+        };
+    }
+
+    // 3. 더블클릭 이벤트 감지 (disabled된 input은 클릭 이벤트를 삼키므로 부모 좌표까지 정밀 탐색)
+    document.addEventListener('dblclick', (e) => {
+        let targetInput = null;
+
+        if (isMemberIdInput(e.target)) {
+            targetInput = e.target;
+        } else {
+            // disabled 상태인 input 위를 더블클릭했을 때 좌표로 해당 input 찾기
+            const inputs = document.querySelectorAll('input[disabled], input[readonly], input');
+            for (const inp of inputs) {
+                if (!isMemberIdInput(inp)) continue;
+                const rect = inp.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0 &&
+                    e.clientX >= rect.left && e.clientX <= rect.right &&
+                    e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    targetInput = inp;
+                    break;
+                }
+            }
+        }
+
+        if (!targetInput) return;
+
+        // 이미 편집 가능한 신규 등록 창이면 패스, 잠겨 있는(수정 불가) 상태일 때만 동작
+        const isLocked = targetInput.disabled || targetInput.readOnly ||
+                         targetInput.style.pointerEvents === 'none' ||
+                         getComputedStyle(targetInput).pointerEvents === 'none';
+
+        if (!isLocked && targetInput.dataset.unlockedByAuth !== 'true') return;
+        if (targetInput.dataset.unlockedByAuth === 'true') return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const currentVal = (targetInput.value || '').trim();
+
+        openPasswordVerifyModal(() => {
+            originalMemberIdVal = currentVal;
+            unlockedInputEl = targetInput;
+
+            // 잠금 완전 해제 및 시각적 강조 표시
+            targetInput.disabled = false;
+            targetInput.readOnly = false;
+            targetInput.removeAttribute('disabled');
+            targetInput.removeAttribute('readonly');
+            targetInput.style.pointerEvents = 'auto';
+            targetInput.style.opacity = '1';
+            targetInput.style.backgroundColor = '#1e293b';
+            targetInput.style.border = '1.5px solid #3b82f6';
+            targetInput.style.color = '#60a5fa';
+            targetInput.style.fontWeight = 'bold';
+            targetInput.dataset.unlockedByAuth = 'true';
+            targetInput.dataset.originalId = originalMemberIdVal;
+
+            targetInput.focus();
+            targetInput.select();
+        });
+    }, true);
+
+    // 4. 회원정보 수정 API(PUT /api/member/:id) 호출 시 변경된 회원번호(newId) 자동 주입
+    const prevFetch = window.fetch;
+    if (typeof prevFetch === 'function' && !prevFetch._memberIdUpdateWrappedV26) {
+        const wrappedFetch = function(input, init = {}) {
+            try {
+                const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+                const method = (init && init.method) ? String(init.method).toUpperCase() : 'GET';
+
+                // 회원 수정(PUT) 또는 저장(POST) 요청일 때 잠금 해제된 새 회원번호가 있으면 body에 newId로 반영
+                if ((method === 'PUT' || method === 'POST') && urlStr.includes('/api/member')) {
+                    const activeInput = document.querySelector('input[data-unlocked-by-auth="true"]') || unlockedInputEl;
+                    if (activeInput && activeInput.value) {
+                        const editedId = activeInput.value.trim();
+                        const origId = (activeInput.dataset.originalId || originalMemberIdVal || '').trim();
+
+                        if (editedId && init.body) {
+                            const bodyObj = typeof init.body === 'string' ? JSON.parse(init.body) : { ...init.body };
+                            bodyObj.newId = editedId;
+                            bodyObj.id = editedId;
+                            bodyObj.member_id = editedId;
+                            if (origId && !bodyObj.originalId) {
+                                bodyObj.originalId = origId;
+                            }
+                            init = { ...init, body: JSON.stringify(bodyObj) };
+                        }
+                    }
+                }
+            } catch (err) {}
+
+            return prevFetch.call(this, input, init);
+        };
+        wrappedFetch._memberIdUpdateWrappedV26 = true;
+        window.fetch = wrappedFetch;
+    }
+})();
+// ============================================================================
+// [27] 🌟 VJ 모드 완벽 패치:
+//      1) 신규 파트너 추가 시 최상위(VJ-001) 덮어쓰기 버그 완전 해결
+//      2) 하위 파트너 추가 시 VK- 대신 VJ-002, VJ-003 자동채번 표시
+//      3) 추천인 번호(VJ-001 또는 001 또는 1) 입력 시 추천인명 즉시 자동완성
+//      4) 회원정보 수정 시 회원번호 자유 수정 + 새로고침 영구 보존
+// ============================================================================
+(function initVjCanvasCompleteSolutionV27() {
+    const MODE_KEY = 'BS_CANVAS_MODE_V1';
+    const TOKEN_KEY = 'BS_AUTH_TOKEN_V3';
+
+    const savedMode = localStorage.getItem(MODE_KEY) || sessionStorage.getItem(MODE_KEY) || 'main';
+    window.currentCanvasMode = (savedMode === 'vj') ? 'vj' : 'main';
+
+    // 서버에서 받아온 최신 회원 맵을 별도로 캐싱 (추천인명 자동완성 및 다음 번호 채번용)
+    window._vjCachedMembersMap = {};
+
+    function setCanvasMode(mode) {
+        const cleanMode = (mode === 'vj') ? 'vj' : 'main';
+        window.currentCanvasMode = cleanMode;
+        localStorage.setItem(MODE_KEY, cleanMode);
+        sessionStorage.setItem(MODE_KEY, cleanMode);
+    }
+
+    // 1. 현재 VJ 계보도에 존재하는 회원들을 기준으로 다음 번호(VJ-002, VJ-003...) 산출
+    window.getNextVjAutoId = function() {
+        let maxNum = 1; // 최상위가 VJ-001이므로 최소 1부터 시작
+        const sources = [
+            window._vjCachedMembersMap || {},
+            window.memberMap || {},
+            window.flatMembers || {}
+        ];
+        sources.forEach(mapObj => {
+            Object.keys(mapObj).forEach(k => {
+                const m = String(k).match(/^VJ-0*(\d+)$/i);
+                if (m) {
+                    const n = parseInt(m[1], 10);
+                    if (!isNaN(n) && n < 100000 && n > maxNum) maxNum = n;
+                }
+            });
+        });
+
+        // 화면에 렌더링된 카드 텍스트에서도 VJ- 번호 스캔
+        document.querySelectorAll('.node-card, .member-card, [data-id], [data-member-id]').forEach(el => {
+            const txt = (el.getAttribute('data-id') || el.getAttribute('data-member-id') || el.innerText || '');
+            const matches = txt.match(/VJ-0*(\d+)/gi) || [];
+            matches.forEach(token => {
+                const n = parseInt(token.replace(/[^0-9]/g, ''), 10);
+                if (!isNaN(n) && n < 100000 && n > maxNum) maxNum = n;
+            });
+        });
+
+        return `VJ-${String(maxNum + 1).padStart(3, '0')}`;
+    };
+
+    // 2. 회원 ID로 회원 이름 찾기 헬퍼 (VJ-001, 001, 1 모두 인식)
+    window.findMemberNameById = function(rawId) {
+        if (!rawId) return '';
+        let clean = String(rawId).trim().toUpperCase();
+        if (!clean) return '';
+
+        const isVj = (window.currentCanvasMode === 'vj');
+        const candidates = [clean];
+
+        if (/^\d+$/.test(clean)) {
+            if (isVj) {
+                candidates.push(`VJ-${clean.padStart(3, '0')}`);
+                candidates.push(`VJ-${clean}`);
+            } else {
+                candidates.push(`VK-${clean}`);
+            }
+        } else if (isVj && /^VJ-\d+$/.test(clean)) {
+            const numPart = clean.replace(/^VJ-/, '');
+            candidates.push(`VJ-${numPart.padStart(3, '0')}`);
+        } else if (isVj && /^VK-/i.test(clean)) {
+            const numPart = clean.replace(/^VK-/i, '');
+            candidates.push(`VJ-${numPart.padStart(3, '0')}`);
+            candidates.push(`VJ-${numPart}`);
+        }
+
+        const sources = [
+            window._vjCachedMembersMap || {},
+            window.memberMap || {},
+            window.flatMembers || {}
+        ];
+
+        for (const cand of candidates) {
+            for (const mapObj of sources) {
+                if (mapObj[cand] && mapObj[cand].name) {
+                    return mapObj[cand].name;
+                }
+            }
+        }
+
+        // DOM 카드에서도 탐색
+        for (const cand of candidates) {
+            const card = document.querySelector(`[data-id="${cand}"], [data-member-id="${cand}"]`);
+            if (card) {
+                const nameEl = card.querySelector('.member-name, .name, strong, b');
+                if (nameEl && nameEl.innerText) return nameEl.innerText.trim();
+            }
+        }
+        return '';
+    };
+
+    // 3. XMLHttpRequest 통합 래퍼 (PUT 수정과 POST 신규 추가를 엄격히 분리하여 덮어쓰기 원천 차단!)
+    window.fetch = function(input, init = {}) {
+        let urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        urlStr = urlStr.replace('127.0.0.1:3001', '127.0.0.1:3005').replace('localhost:3001', '127.0.0.1:3005');
+
+        const isApiCall = urlStr.includes('/api/') || urlStr.includes(':3005');
+        const isLoginCall = urlStr.includes('/api/login');
+        const isAuthCheck = urlStr.includes('/api/auth-check');
+        const method = (init && init.method) ? String(init.method).toUpperCase() : 'GET';
+        const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
+        const mode = (localStorage.getItem(MODE_KEY) === 'vj' || window.currentCanvasMode === 'vj') ? 'vj' : 'main';
+        window.currentCanvasMode = mode;
+
+        if (isApiCall && !isLoginCall && !isAuthCheck && (!token || document.getElementById('bs-auth-login-overlay'))) {
+            if (typeof window.showSecurityLoginOverlay === 'function') {
+                window.showSecurityLoginOverlay();
+            }
+            return Promise.resolve({
+                ok: false,
+                status: 401,
+                json: () => Promise.resolve({ success: false, data: [], compRules: {} }),
+                text: () => Promise.resolve('{}')
+            });
+        }
+
+        if (isApiCall) {
+            if (mode === 'vj') {
+                urlStr = urlStr.replace(/\/api\/member(s?)\/(ON|VJ-ON|VJ-1000001)(\?|$)/i, '/api/member$1/VJ-001$3');
+            }
+            if (token && !urlStr.includes('token=')) {
+                const sep = urlStr.includes('?') ? '&' : '?';
+                urlStr = `${urlStr}${sep}token=${encodeURIComponent(token)}`;
+            }
+            if (urlStr.includes('canvasMode=')) {
+                urlStr = urlStr.replace(/canvasMode=[^&]+/, `canvasMode=${mode}`);
+            } else {
+                const sep = urlStr.includes('?') ? '&' : '?';
+                urlStr = `${urlStr}${sep}canvasMode=${mode}`;
+            }
+            if (method === 'GET' && !urlStr.includes('_t=')) {
+                const sep = urlStr.includes('?') ? '&' : '?';
+                urlStr = `${urlStr}${sep}_t=${Date.now()}`;
+            }
+        }
+
+        let requestBody = init && init.body ? init.body : null;
+        if (isApiCall && (method === 'POST' || method === 'PUT') && requestBody) {
+            try {
+                const bodyObj = typeof requestBody === 'string' ? JSON.parse(requestBody) : { ...requestBody };
+                bodyObj._canvasMode = mode;
+
+                if (urlStr.includes('/api/member')) {
+                    // 현재 화면에 실제로 열려 있는 모달 내부의 회원번호 input만 참조!
+                    const visibleIdInput = Array.from(document.querySelectorAll('input[data-vj-current-id-input="true"], input[data-unlocked-by-auth="true"]'))
+                        .find(el => el.offsetParent !== null);
+
+                    if (method === 'PUT') {
+                        // [회원정보 수정(PUT)]일 때만 originalId -> newId 변경 적용
+                        if (visibleIdInput && visibleIdInput.value) {
+                            const editedId = visibleIdInput.value.trim().toUpperCase();
+                            const origId = (visibleIdInput.dataset.originalId || '').trim().toUpperCase();
+                            if (editedId) {
+                                bodyObj.newId = editedId;
+                                bodyObj.id = editedId;
+                                bodyObj.member_id = editedId;
+                            }
+                            if (origId) {
+                                bodyObj.originalId = origId;
+                            }
+                        }
+                    } else if (method === 'POST') {
+                        // [신규 파트너 추가(POST)]일 때: 절대 최상위 ID(VJ-001)로 덮어쓰지 않음!
+                        if (mode === 'vj') {
+                            let inputIdVal = visibleIdInput && visibleIdInput.value ? visibleIdInput.value.trim().toUpperCase() : String(bodyObj.id || bodyObj.member_id || '').trim().toUpperCase();
+                            // 만약 VK-로 시작하거나 비어있거나 VJ-001(부모 ID와 중복)이면 새로운 VJ-002 순번 부여
+                            if (!inputIdVal || /^VK-/i.test(inputIdVal) || /^VJ-\d{5,}$/i.test(inputIdVal) || inputIdVal === 'VJ-001') {
+                                inputIdVal = window.getNextVjAutoId();
+                            }
+                            bodyObj.id = inputIdVal;
+                            bodyObj.member_id = inputIdVal;
+                            delete bodyObj.newId;
+                            delete bodyObj.originalId;
+                        }
+                    }
+                }
+                requestBody = JSON.stringify(bodyObj);
+            } catch (e) {}
+        }
+
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open(method, urlStr, true);
+
+            if (isApiCall) {
+                xhr.setRequestHeader('x-canvas-mode', mode);
+            }
+            if (method !== 'GET') {
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                if (token) xhr.setRequestHeader('x-auth-token', token);
+            }
+
+            xhr.onload = function() {
+                if (xhr.status === 401 && !isLoginCall && typeof window.showSecurityLoginOverlay === 'function') {
+                    window.showSecurityLoginOverlay();
+                }
+                const bodyText = xhr.responseText;
+                let parsedJson = {};
+                try { parsedJson = bodyText ? JSON.parse(bodyText) : {}; } catch (e) {}
+
+                // /api/tree 응답이 오면 회원 목록을 캐시에 저장하여 추천인 검색과 자동채번에 활용
+                if (urlStr.includes('/api/tree') && parsedJson && parsedJson.flatMembers) {
+                    window._vjCachedMembersMap = parsedJson.flatMembers;
+                }
+
+                resolve({
+                    ok: xhr.status >= 200 && xhr.status < 300,
+                    status: xhr.status,
+                    json: () => Promise.resolve(parsedJson),
+                    text: () => Promise.resolve(bodyText)
+                });
+            };
+            xhr.onerror = function() {
+                reject(new TypeError('Failed to fetch'));
+            };
+            xhr.send(requestBody);
+        });
+    };
+
+    // 4. 헤더 우측 [VJ] 캔버스 토글 버튼
+    function mountVjHeaderButton() {
+        let btn = document.getElementById('bsVjCanvasToggleBtn');
+        if (!btn) {
+            const lockBtn = document.getElementById('bsLogoutBtn');
+            const gearBtn = document.querySelector('header button, .top-bar button');
+            const targetParent = (lockBtn && lockBtn.parentNode) || (gearBtn && gearBtn.parentNode) || document.querySelector('header, .header, .top-bar');
+            if (!targetParent) return;
+
+            btn = document.createElement('button');
+            btn.id = 'bsVjCanvasToggleBtn';
+            btn.type = 'button';
+
+            btn.onclick = async function() {
+                const nextMode = (window.currentCanvasMode === 'vj') ? 'main' : 'vj';
+                setCanvasMode(nextMode);
+                updateVjUI();
+
+                window.selectedMemberId = null;
+                window.perfData = [];
+                const tbody = document.getElementById('perf-table-tbody');
+                if (tbody) tbody.innerHTML = '';
+
+                if (typeof window.fetchTreeData === 'function') {
+                    await window.fetchTreeData(true);
+                } else {
+                    window.location.reload();
+                }
+            };
+
+            if (lockBtn) {
+                targetParent.insertBefore(btn, lockBtn);
+            } else {
+                targetParent.appendChild(btn);
+            }
+        }
+        updateVjUI();
+    }
+
+    function updateVjUI() {
+        const btn = document.getElementById('bsVjCanvasToggleBtn');
+        if (!btn) return;
+        const isVj = (window.currentCanvasMode === 'vj');
+
+        btn.innerHTML = isVj ? '✨ VJ 모드 활성' : 'VJ';
+        btn.style.cssText = isVj
+            ? 'display:inline-flex; align-items:center; justify-content:center; height:30px; padding:0 11px; margin-right:6px; background:linear-gradient(135deg, #7c3aed, #2563eb); color:#ffffff; border:1px solid #a78bfa; border-radius:6px; font-size:12px; font-weight:800; cursor:pointer; box-shadow:0 0 12px rgba(124,58,237,0.6);'
+            : 'display:inline-flex; align-items:center; justify-content:center; height:30px; padding:0 10px; margin-right:6px; background:#1f2937; color:#cbd5e1; border:1px solid #475569; border-radius:6px; font-size:12px; font-weight:800; cursor:pointer;';
+    }
+
+    // 5. 모달 내부 입력칸 정밀 제어:
+    //    - 하위 파트너 추가 모달일 때: VK- 번호를 즉시 VJ-002, VJ-003으로 변경!
+    //    - 추천인 번호 입력 시: VJ-001 또는 001 입력 시 추천인명 칸에 즉시 이름 자동 입력!
+    function handleVjModalAndRecommenderAutoFill() {
+        const isVj = (window.currentCanvasMode === 'vj');
+
+        // 현재 화면에 보이는 모달 창 찾기
+        const allInputs = Array.from(document.querySelectorAll('input')).filter(el => el.offsetParent !== null);
+        if (allInputs.length === 0) return;
+
+        let recIdInput = null;
+        let recNameInput = null;
+
+        allInputs.forEach(inp => {
+            const idStr = (inp.id || '').toLowerCase();
+            const nameStr = (inp.name || '').toLowerCase();
+            const phStr = (inp.placeholder || '').toLowerCase();
+            const wrapper = inp.closest('div, label, tr, .form-group');
+            const labelText = wrapper ? (wrapper.innerText || '') : '';
+
+            // (1) 추천인 ID 입력칸과 추천인명 입력칸 식별
+            if (idStr.includes('rec') && !idStr.includes('name') ||
+                nameStr.includes('rec') && !nameStr.includes('name') ||
+                labelText.includes('추천인 번호') || labelText.includes('추천인ID') || labelText.includes('추천인 ID') ||
+                phStr.includes('추천인 번호') || phStr.includes('추천인 id')) {
+                recIdInput = inp;
+            } else if (idStr.includes('rec') && idStr.includes('name') ||
+                       nameStr.includes('rec') && nameStr.includes('name') ||
+                       labelText.includes('추천인명') || labelText.includes('추천인 이름') ||
+                       phStr.includes('추천인명') || phStr.includes('추천인 이름')) {
+                recNameInput = inp;
+            }
+
+            if (!isVj) return;
+            if (phStr.includes('검색') || idStr.includes('search') || idStr.includes('date')) return;
+
+            // 후원인/추천인 칸에 VK-가 들어가면 VJ-로 변환
+            if (idStr.includes('rec') || idStr.includes('spon') || idStr.includes('parent') ||
+                labelText.includes('추천인') || labelText.includes('후원인')) {
+                if (/^VK-/i.test(inp.value)) {
+                    inp.value = inp.value.replace(/^VK-/i, 'VJ-');
+                }
+                return;
+            }
+
+            // (2) 본인의 회원번호(ID) 입력칸 식별
+            const isMemberIdField = (
+                idStr === 'member-id' || idStr === 'add-id' || idStr === 'edit-id' || idStr === 'input-id' ||
+                (idStr.includes('id') && !idStr.includes('rec') && !idStr.includes('spon') && !idStr.includes('parent')) ||
+                nameStr === 'id' || nameStr === 'member_id' ||
+                labelText.includes('회원번호') || labelText.includes('회원 ID') ||
+                /^V[KJ]-/i.test((inp.value || '').trim())
+            );
+
+            if (!isMemberIdField) return;
+
+            const modalEl = inp.closest('.modal, .popup, [id*="modal" i], [class*="modal" i], form') || document.body;
+            const modalTitle = (modalEl.querySelector('h2, h3, h4, .modal-title, .title')?.innerText || '').trim();
+            const isEditModal = modalTitle.includes('수정') || modalTitle.includes('편집');
+            const valStr = (inp.value || '').trim();
+
+            if (!isEditModal) {
+                // [신규 파트너 추가 모달]: VK- 로 표시되어 있거나 6자리 이상 난수이면 즉시 VJ-002, VJ-003으로 교체!
+                if (!valStr || /^VK-/i.test(valStr) || /^VJ-\d{5,}$/i.test(valStr) || valStr === 'ON') {
+                    const nextVjId = window.getNextVjAutoId();
+                    inp.value = nextVjId;
+                    inp.setAttribute('value', nextVjId);
+                }
+                delete inp.dataset.originalId;
+            } else {
+                // [회원정보 수정 모달]: 최초 열렸을 때 원래 ID를 기록해 둠
+                if (/^VK-/i.test(valStr)) {
+                    inp.value = valStr.replace(/^VK-/i, 'VJ-');
+                }
+                if (!inp.dataset.originalId && inp.value && inp.dataset.vjSessionTracked !== 'true') {
+                    inp.dataset.originalId = inp.value.trim();
+                    inp.dataset.vjSessionTracked = 'true';
+                }
+            }
+
+            // VJ 모드에서는 회원번호 칸 항상 수정 가능하게 잠금 해제
+            inp.disabled = false;
+            inp.readOnly = false;
+            inp.removeAttribute('disabled');
+            inp.removeAttribute('readonly');
+            inp.style.pointerEvents = 'auto';
+            inp.style.opacity = '1';
+            inp.style.backgroundColor = '#1e1b4b';
+            inp.style.border = '1.5px solid #a78bfa';
+            inp.style.color = '#ffffff';
+            inp.style.fontWeight = 'bold';
+            inp.dataset.vjCurrentIdInput = 'true';
+        });
+
+        // (3) 추천인 번호 입력 시 추천인명 실시간 자동 매칭!
+        if (recIdInput && recNameInput) {
+            if (!recIdInput.dataset.vjRecBound) {
+                recIdInput.dataset.vjRecBound = 'true';
+                const syncRecName = () => {
+                    let rawVal = recIdInput.value.trim();
+                    if (window.currentCanvasMode === 'vj' && /^VK-/i.test(rawVal)) {
+                        rawVal = rawVal.replace(/^VK-/i, 'VJ-');
+                        recIdInput.value = rawVal;
+                    }
+                    const foundName = window.findMemberNameById(rawVal);
+                    if (foundName) {
+                        recNameInput.value = foundName;
+                        recNameInput.setAttribute('value', foundName);
+                    }
+                };
+                recIdInput.addEventListener('input', syncRecName);
+                recIdInput.addEventListener('change', syncRecName);
+                recIdInput.addEventListener('blur', () => {
+                    let rawVal = recIdInput.value.trim();
+                    if (window.currentCanvasMode === 'vj' && /^\d+$/.test(rawVal)) {
+                        recIdInput.value = `VJ-${rawVal.padStart(3, '0')}`;
+                    }
+                    syncRecName();
+                });
+            }
+            // 현재 이미 추천인 번호가 들어있는데 추천인명이 비어있다면 즉시 채워줌
+            if (recIdInput.value && !recNameInput.value) {
+                const foundName = window.findMemberNameById(recIdInput.value);
+                if (foundName) recNameInput.value = foundName;
+            }
+        }
+    }
+
+    // 모달이 닫힐 때 이전 originalId 기록 초기화
+    document.addEventListener('click', (e) => {
+        const txt = (e.target && e.target.innerText || '').trim();
+        if (txt === '취소' || txt === '닫기' || txt === '저장' || txt === '추가' || txt === '확인') {
+            setTimeout(() => {
+                document.querySelectorAll('input[data-vj-session-tracked="true"]').forEach(el => {
+                    delete el.dataset.originalId;
+                    delete el.dataset.vjSessionTracked;
+                });
+            }, 300);
+        }
+        setTimeout(handleVjModalAndRecommenderAutoFill, 40);
+        setTimeout(handleVjModalAndRecommenderAutoFill, 150);
+    }, true);
+
+    setInterval(() => {
+        mountVjHeaderButton();
+        handleVjModalAndRecommenderAutoFill();
+    }, 200);
+})();
+// ============================================================================
+// [28] 🖱️ 계보도 파트너 카드 마우스 드래그 앤 드롭(Drag & Drop)으로 후원인 및 라인(A/B) 즉시 변경
+// ============================================================================
+(function initPartnerCardDragAndDropSponsorChangeV28() {
+    let draggedMemberId = null;
+    let draggedCardEl = null;
+
+    // 1. 드래그 앤 드롭 시각적 강조 스타일 주입
+    function injectDragDropStyles() {
+        if (document.getElementById('bs-drag-drop-style-v28')) return;
+        const style = document.createElement('style');
+        style.id = 'bs-drag-drop-style-v28';
+        style.innerHTML = `
+            .bs-draggable-card-v28 {
+                cursor: grab !important;
+                transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+            }
+            .bs-draggable-card-v28:active {
+                cursor: grabbing !important;
+            }
+            .bs-dragging-source-v28 {
+                opacity: 0.45 !important;
+                transform: scale(0.96) !important;
+                border: 2px dashed #60a5fa !important;
+            }
+            .bs-drop-target-hover-v28 {
+                outline: 3px solid #10b981 !important;
+                box-shadow: 0 0 22px rgba(16, 185, 129, 0.85) !important;
+                transform: scale(1.05) !important;
+                z-index: 999 !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // 2. 현재 활성화된 전체 회원 맵 가져오기 (기본 모드 & VJ 모드 겸용)
+    function getAllMembersMap() {
+        const merged = {};
+        const sources = [
+            window._vjCachedMembersMap || {},
+            window.memberMap || {},
+            window.flatMembers || {}
+        ];
+        sources.forEach(src => {
+            if (!src || typeof src !== 'object') return;
+            Object.keys(src).forEach(k => {
+                if (src[k] && typeof src[k] === 'object') {
+                    merged[String(k).toUpperCase()] = src[k];
+                }
+            });
+        });
+        return merged;
+    }
+
+    // 3. 카드 DOM 요소에서 회원번호(VK-xxx 또는 VJ-xxx) 정확히 추출
+    function extractMemberIdFromCard(cardEl) {
+        if (!cardEl) return null;
+        const attrId = cardEl.getAttribute('data-id') ||
+                       cardEl.getAttribute('data-member-id') ||
+                       cardEl.dataset.id ||
+                       cardEl.dataset.memberId;
+        if (attrId && /^V[KJ]-/i.test(String(attrId).trim())) {
+            return String(attrId).trim().toUpperCase();
+        }
+        const txt = cardEl.innerText || '';
+        const match = txt.match(/\b(V[KJ]-[A-Z0-9]+)\b/i);
+        return match ? match[1].toUpperCase() : null;
+    }
+
+    // 4. 순환 참조 검사: targetId가 sourceId의 하위(자손)에 속하는지 확인
+    function isDescendantOf(sourceId, targetId, mapObj) {
+        if (!sourceId || !targetId) return false;
+        const src = String(sourceId).toUpperCase();
+        let curr = String(targetId).toUpperCase();
+        const visited = new Set();
+
+        while (curr && mapObj[curr]) {
+            if (curr === src) return true;
+            if (visited.has(curr)) break;
+            visited.add(curr);
+            const nextParent = mapObj[curr].parent_id || mapObj[curr].parentId || mapObj[curr].sponId;
+            curr = nextParent ? String(nextParent).toUpperCase() : null;
+        }
+        return false;
+    }
+
+    // 5. 드롭 시 좌측(A) / 우측(B) 라인 선택 모달 표시 및 백엔드 저장
+    function openLineSelectModal(sourceId, targetId) {
+        const exist = document.getElementById('bs-dnd-line-modal-v28');
+        if (exist) exist.remove();
+
+        const mapObj = getAllMembersMap();
+        const sourceMember = mapObj[sourceId] || { id: sourceId, name: sourceId };
+        const targetMember = mapObj[targetId] || { id: targetId, name: targetId };
+
+        // 대상 카드의 현재 좌/우 직속 파트너 존재 여부 확인
+        const children = Object.values(mapObj).filter(m => {
+            const pId = String(m.parent_id || m.parentId || '').toUpperCase();
+            return pId === targetId && String(m.id || m.member_id || '').toUpperCase() !== sourceId;
+        });
+        const leftChild = children.find(c => {
+            const pos = String(c.position || 'A').toUpperCase();
+            return pos === 'A' || pos === 'LEFT' || pos === '좌';
+        });
+        const rightChild = children.find(c => {
+            const pos = String(c.position || 'A').toUpperCase();
+            return pos === 'B' || pos === 'RIGHT' || pos === '우';
+        });
+
+        const modal = document.createElement('div');
+        modal.id = 'bs-dnd-line-modal-v28';
+        modal.style.cssText = `
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            background: rgba(0, 0, 0, 0.75) !important;
+            z-index: 2147483647 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-family: 'Pretendard', -apple-system, sans-serif !important;
+        `;
+
+        const leftStatusText = leftChild
+            ? `<span style="font-size:11px; color:#fbbf24; display:block; margin-top:3px;">(현재: ${leftChild.name || leftChild.id} 산하 연결)</span>`
+            : `<span style="font-size:11px; color:#34d399; display:block; margin-top:3px;">(현재 빈자리 - 직속 배치)</span>`;
+
+        const rightStatusText = rightChild
+            ? `<span style="font-size:11px; color:#fbbf24; display:block; margin-top:3px;">(현재: ${rightChild.name || rightChild.id} 산하 연결)</span>`
+            : `<span style="font-size:11px; color:#34d399; display:block; margin-top:3px;">(현재 빈자리 - 직속 배치)</span>`;
+
+        modal.innerHTML = `
+            <div style="background:#1e293b; border:1.5px solid #10b981; border-radius:12px; width:380px; padding:22px 20px; box-shadow:0 20px 45px rgba(0,0,0,0.85); color:#fff; text-align:center;">
+                <div style="font-size:24px; margin-bottom:6px;">🔄</div>
+                <h3 style="margin:0 0 10px; font-size:16px; font-weight:800; color:#fff;">파트너 후원인(라인) 이동</h3>
+                <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px; margin-bottom:16px; font-size:13px; line-height:1.6;">
+                    <div>이동할 파트너: <strong style="color:#60a5fa;">${sourceMember.name || ''} (${sourceId})</strong></div>
+                    <div style="color:#94a3b8; font-size:11.5px; margin:2px 0;">⬇️ 새로운 상위 후원인으로 지정 ⬇️</div>
+                    <div>새 후원인: <strong style="color:#34d399;">${targetMember.name || ''} (${targetId})</strong></div>
+                </div>
+                <p style="margin:0 0 12px; font-size:12px; color:#cbd5e1;">
+                    배치할 라인(좌측 A / 우측 B)을 선택해 주세요:
+                </p>
+                <div style="display:flex; gap:10px; margin-bottom:14px;">
+                    <button type="button" id="bs-dnd-btn-left"
+                            style="flex:1; padding:12px 8px; background:linear-gradient(135deg, #1d4ed8, #2563eb); border:1px solid #60a5fa; border-radius:8px; color:#fff; font-size:13.5px; font-weight:800; cursor:pointer;">
+                        ⬅️ 좌측 (A라인)
+                        ${leftStatusText}
+                    </button>
+                    <button type="button" id="bs-dnd-btn-right"
+                            style="flex:1; padding:12px 8px; background:linear-gradient(135deg, #6d28d9, #7c3aed); border:1px solid #a78bfa; border-radius:8px; color:#fff; font-size:13.5px; font-weight:800; cursor:pointer;">
+                        ➡️ 우측 (B라인)
+                        ${rightStatusText}
+                    </button>
+                </div>
+                <button type="button" id="bs-dnd-btn-cancel"
+                        style="width:100%; padding:9px; background:#334155; border:1px solid #475569; border-radius:7px; color:#cbd5e1; font-size:12.5px; font-weight:bold; cursor:pointer;">
+                    취소
+                </button>
+            </div>
+        `;
+
+        document.documentElement.appendChild(modal);
+
+        const applySponsorChange = async (newPos) => {
+            const leftBtn = document.getElementById('bs-dnd-btn-left');
+            const rightBtn = document.getElementById('bs-dnd-btn-right');
+            if (leftBtn) leftBtn.disabled = true;
+            if (rightBtn) rightBtn.disabled = true;
+
+            try {
+                const payload = {
+                    originalId: sourceId,
+                    id: sourceId,
+                    member_id: sourceId,
+                    name: sourceMember.name || sourceMember.member_name || sourceId,
+                    rank: sourceMember.db_rank_name || sourceMember.rank_name || sourceMember.rank || 'GUEST',
+                    type: sourceMember.member_type || sourceMember.type || '사업자',
+                    code: sourceMember.code || '',
+                    join_date: sourceMember.joinDate || sourceMember.join_date || sourceMember.date1 || '',
+                    first_sales_date: sourceMember.firstSales || sourceMember.first_sales_date || '',
+                    last_sales_date: sourceMember.lastSales || sourceMember.last_sales_date || '',
+                    recId: sourceMember.recId || sourceMember.recommender_id || null,
+                    recName: sourceMember.recName || sourceMember.recommender_name || null,
+                    parentId: targetId,
+                    parent_id: targetId,
+                    position: newPos,
+                    _canvasMode: window.currentCanvasMode || 'main'
+                };
+
+                const res = await window.fetch(`${window.API_BASE || ''}/api/member/${encodeURIComponent(sourceId)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const resData = await res.json();
+
+                modal.remove();
+
+                if (res.ok && resData && resData.success !== false) {
+                    if (typeof window.fetchTreeData === 'function') {
+                        await window.fetchTreeData(true);
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    alert('후원인 변경 실패: ' + (resData.error || '알 수 없는 오류'));
+                }
+            } catch (err) {
+                modal.remove();
+                alert('서버 통신 중 오류가 발생했습니다: ' + err.message);
+            }
+        };
+
+        document.getElementById('bs-dnd-btn-left').onclick = () => applySponsorChange('A');
+        document.getElementById('bs-dnd-btn-right').onclick = () => applySponsorChange('B');
+        document.getElementById('bs-dnd-btn-cancel').onclick = () => modal.remove();
+    }
+
+    // 6. 계보도 내 모든 파트너 카드에 드래그 앤 드롭 이벤트 바인딩
+    function bindDragEventsToCards() {
+        injectDragDropStyles();
+
+        const cards = document.querySelectorAll('.node-card, .member-card, .tree-node-card, [data-id], [data-member-id]');
+        cards.forEach(card => {
+            if (card.dataset.dndBoundV28 === 'true') return;
+
+            const mId = extractMemberIdFromCard(card);
+            if (!mId) return;
+
+            card.dataset.dndBoundV28 = 'true';
+            card.dataset.dndMemberId = mId;
+            card.setAttribute('draggable', 'true');
+            card.classList.add('bs-draggable-card-v28');
+
+            // 카드를 잡고 끌기 시작할 때 배경 캔버스 패닝(이동) 이벤트와 충돌하지 않도록 전파 차단
+            card.addEventListener('mousedown', (e) => {
+                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+                e.stopPropagation();
+            });
+
+            card.addEventListener('dragstart', (e) => {
+                const currentId = extractMemberIdFromCard(card) || card.dataset.dndMemberId;
+                if (!currentId) return;
+
+                // 최상위 루트 노드는 다른 노드 밑으로 드래그할 수 없도록 보호
+                const mapObj = getAllMembersMap();
+                const memberObj = mapObj[currentId];
+                const hasParent = memberObj && (memberObj.parent_id || memberObj.parentId);
+                if (!hasParent && Object.keys(mapObj).length > 1) {
+                    e.preventDefault();
+                    alert('최상위 루트 파트너는 하위 라인으로 이동할 수 없습니다.');
+                    return;
+                }
+
+                draggedMemberId = currentId;
+                draggedCardEl = card;
+                card.classList.add('bs-dragging-source-v28');
+
+                if (e.dataTransfer) {
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', currentId);
+                }
+                e.stopPropagation();
+            });
+
+            card.addEventListener('dragend', () => {
+                if (draggedCardEl) draggedCardEl.classList.remove('bs-dragging-source-v28');
+                document.querySelectorAll('.bs-drop-target-hover-v28').forEach(el => {
+                    el.classList.remove('bs-drop-target-hover-v28');
+                });
+                draggedMemberId = null;
+                draggedCardEl = null;
+            });
+
+            card.addEventListener('dragover', (e) => {
+                if (!draggedMemberId) return;
+                const targetId = extractMemberIdFromCard(card) || card.dataset.dndMemberId;
+                if (!targetId || targetId === draggedMemberId) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+                card.classList.add('bs-drop-target-hover-v28');
+            });
+
+            card.addEventListener('dragleave', (e) => {
+                e.stopPropagation();
+                card.classList.remove('bs-drop-target-hover-v28');
+            });
+
+            card.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                card.classList.remove('bs-drop-target-hover-v28');
+
+                const sourceId = draggedMemberId || (e.dataTransfer && e.dataTransfer.getData('text/plain'));
+                const targetId = extractMemberIdFromCard(card) || card.dataset.dndMemberId;
+
+                if (!sourceId || !targetId || sourceId === targetId) return;
+
+                const mapObj = getAllMembersMap();
+                if (isDescendantOf(sourceId, targetId, mapObj)) {
+                    alert('⚠️ 본인의 하위(산하) 파트너 밑으로는 이동할 수 없습니다.');
+                    return;
+                }
+
+                openLineSelectModal(sourceId, targetId);
+            });
+        });
+    }
+
+    setInterval(bindDragEventsToCards, 500);
+})();
