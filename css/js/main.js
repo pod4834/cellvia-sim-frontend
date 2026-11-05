@@ -15423,3 +15423,657 @@ if (document.readyState === 'loading') {
 
     setInterval(bindDragEventsToCards, 500);
 })();
+// ============================================================================
+// [29] 💰 '매출 기간 검색' 팝업창(about:blank) 및 메인 화면 내부에 '매출 직접 입력 바' 장착
+//      (CV / PV 각각 쉼표(,) 스타일 수동 입력 지원)
+// ============================================================================
+(function initPeriodSalesPopupAndModalDirectEntryV29() {
+    window._bsTrackedPopupsV29 = window._bsTrackedPopupsV29 || [];
+
+    // 숫자만 추출하여 천 단위 쉼표(,) 문자열로 변환하는 헬퍼
+    function formatCommaNumber(val) {
+        const numStr = String(val || '').replace(/[^0-9]/g, '');
+        if (!numStr) return '';
+        return Number(numStr).toLocaleString('en-US');
+    }
+
+    // 쉼표가 포함된 문자열을 실제 숫자(Number)로 변환하는 헬퍼
+    function parseCommaNumber(val) {
+        const numStr = String(val || '').replace(/[^0-9]/g, '');
+        return numStr ? parseInt(numStr, 10) : 0;
+    }
+
+    // 1. window.open을 가로채어 '매출 기간 검색 (about:blank)' 팝업 창을 실시간 추적
+    if (!window.open._bsPopupWrappedV29) {
+        const origWindowOpen = window.open;
+        const wrappedOpen = function(...args) {
+            const win = origWindowOpen.apply(this, args);
+            if (win) {
+                window._bsTrackedPopupsV29.push(win);
+                [80, 200, 450, 900].forEach(ms => {
+                    setTimeout(() => inspectAndInjectIntoDoc(win.document, win), ms);
+                });
+            }
+            return win;
+        };
+        wrappedOpen._bsPopupWrappedV29 = true;
+        window.open = wrappedOpen;
+    }
+
+    // 2. 현재 활성 캔버스(기본 VK / 예비 VJ)의 전체 회원 배열 가져오기
+    function getActiveMemberList() {
+        const mapObj = {};
+        const sources = [
+            window._vjCachedMembersMap || {},
+            window.memberMap || {},
+            window.flatMembers || {}
+        ];
+        sources.forEach(src => {
+            if (!src || typeof src !== 'object') return;
+            Object.keys(src).forEach(k => {
+                const m = src[k];
+                if (m && typeof m === 'object') {
+                    const id = String(m.id || m.member_id || k).trim().toUpperCase();
+                    if (id) {
+                        mapObj[id] = {
+                            id,
+                            name: m.name || m.member_name || id,
+                            rank: m.rank || m.rank_name || 'GUEST',
+                            line: (m.position === 'B' || m.position === 'RIGHT') ? 'B라인' : 'A라인'
+                        };
+                    }
+                }
+            });
+        });
+        return Object.values(mapObj).sort((a, b) => a.id.localeCompare(b.id));
+    }
+
+    // 3. 입력된 회원번호(VK-1220934, VJ-001, 숫자) 또는 이름으로 회원 정보 찾기
+    function resolveMemberInput(rawVal) {
+        if (!rawVal) return null;
+        const clean = String(rawVal).trim();
+        const upper = clean.toUpperCase();
+        const list = getActiveMemberList();
+        const isVj = (window.currentCanvasMode === 'vj');
+
+        const prefixMatch = upper.match(/^([A-Z]+-\d+)/);
+        if (prefixMatch) {
+            const found = list.find(m => m.id === prefixMatch[1]);
+            if (found) return found;
+        }
+
+        let found = list.find(m => m.id === upper || m.name === clean);
+        if (found) return found;
+
+        if (/^\d+$/.test(clean)) {
+            const candidate = isVj ? `VJ-${clean.padStart(3, '0')}` : `VK-${clean}`;
+            found = list.find(m => m.id === candidate || m.id.endsWith(`-${clean}`));
+            if (found) return found;
+            return { id: candidate, name: '', line: 'A라인' };
+        }
+
+        found = list.find(m => m.name && m.name.includes(clean));
+        if (found) return found;
+
+        return { id: upper, name: '', line: 'A라인' };
+    }
+
+    // 4. 팝업 창(또는 모달)의 대상 Document 안에 '매출 직접 입력 바' 생성 및 삽입
+    function createPopupSalesEntryBar(targetDoc, targetWin) {
+        const wrap = targetDoc.createElement('div');
+        wrap.className = 'bs-period-sales-entry-bar-v29';
+        wrap.style.cssText = `
+            background: #111827;
+            border: 1.5px solid #3b82f6;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin: 10px 16px 6px 16px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+            color: #ffffff;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+        `;
+
+        // 팝업창 내 날짜 입력칸에서 기본 날짜 가져오기
+        let defaultDate = new Date().toISOString().slice(0, 10);
+        const popupInputs = Array.from(targetDoc.querySelectorAll('input'));
+        for (const inp of popupInputs) {
+            const v = String(inp.value || '').trim().replace(/\//g, '-');
+            if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+                defaultDate = v;
+                break;
+            }
+        }
+
+        const members = getActiveMemberList();
+        const datalistId = 'bs-popup-member-dl-v29';
+        const optionsHtml = members.map(m => `<option value="${m.id}">${m.name} (${m.rank})</option>`).join('');
+
+        wrap.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12.5px; font-weight:800; color:#60a5fa;">➕ 매출 수동 입력</span>
+                    <span id="bs-popup-matched-info-v29" style="font-size:11.5px; color:#94a3b8; font-weight:bold;">회원번호/이름과 CV, PV를 수동 입력 후 등록하세요. (천단위 쉼표 자동적용)</span>
+                </div>
+            </div>
+            <datalist id="${datalistId}">${optionsHtml}</datalist>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                <input type="text" class="bs-se-member" list="${datalistId}" placeholder="회원ID 또는 이름 (예: 정인숙 / VK-...)"
+                       style="flex:1.4; min-width:165px; height:32px; padding:0 10px; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#fff; font-size:12.5px; font-weight:bold; outline:none;">
+                <input type="date" class="bs-se-date" value="${defaultDate}"
+                       style="width:132px; height:32px; padding:0 8px; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#fff; font-size:12.5px; outline:none;">
+                <select class="bs-se-cat"
+                        style="width:86px; height:32px; padding:0 6px; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#fff; font-size:12.5px; outline:none;">
+                    <option value="매출">일반매출</option>
+                    <option value="구독">구독매출</option>
+                </select>
+                <input type="text" inputmode="numeric" class="bs-se-cv" placeholder="CV 수동입력 (예: 700,000)"
+                       style="width:140px; height:32px; padding:0 10px; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#38bdf8; font-size:12.5px; font-weight:bold; text-align:right; outline:none;">
+                <input type="text" inputmode="numeric" class="bs-se-pv" placeholder="PV 수동입력 (예: 700,000)"
+                       style="width:140px; height:32px; padding:0 10px; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#34d399; font-size:12.5px; font-weight:bold; text-align:right; outline:none;">
+                <button type="button" class="bs-se-submit"
+                        style="height:32px; padding:0 16px; background:linear-gradient(135deg, #2563eb, #1d4ed8); border:1px solid #60a5fa; border-radius:6px; color:#fff; font-size:12.5px; font-weight:800; cursor:pointer; white-space:nowrap;">
+                    💾 매출 등록
+                </button>
+            </div>
+        `;
+
+        const memberInp = wrap.querySelector('.bs-se-member');
+        const dateInp = wrap.querySelector('.bs-se-date');
+        const catSel = wrap.querySelector('.bs-se-cat');
+        const cvInp = wrap.querySelector('.bs-se-cv');
+        const pvInp = wrap.querySelector('.bs-se-pv');
+        const submitBtn = wrap.querySelector('.bs-se-submit');
+        const matchLabel = wrap.querySelector('#bs-popup-matched-info-v29');
+
+        const updateMemberPreview = () => {
+            const resolved = resolveMemberInput(memberInp.value);
+            if (resolved && resolved.name) {
+                matchLabel.innerText = `✔ 대상 확인: ${resolved.name} (${resolved.id})`;
+                matchLabel.style.color = '#34d399';
+            } else if (resolved && resolved.id) {
+                matchLabel.innerText = `대상 ID: ${resolved.id}`;
+                matchLabel.style.color = '#fbbf24';
+            } else {
+                matchLabel.innerText = '회원번호/이름과 CV, PV를 수동 입력 후 등록하세요. (천단위 쉼표 자동적용)';
+                matchLabel.style.color = '#94a3b8';
+            }
+        };
+
+        memberInp.addEventListener('input', updateMemberPreview);
+        memberInp.addEventListener('change', updateMemberPreview);
+        memberInp.addEventListener('focus', () => {
+            const dl = wrap.querySelector(`#${datalistId}`);
+            if (dl) {
+                dl.innerHTML = getActiveMemberList()
+                    .map(m => `<option value="${m.id}">${m.name} (${m.rank})</option>`)
+                    .join('');
+            }
+        });
+
+        // 🌟 CV 및 PV 입력창에 실시간 천 단위 쉼표(,) 포맷팅 적용 (자동복사 없이 완전 수동 입력)
+        [cvInp, pvInp].forEach(inp => {
+            inp.addEventListener('input', () => {
+                const formatted = formatCommaNumber(inp.value);
+                if (inp.value !== formatted) {
+                    inp.value = formatted;
+                }
+            });
+        });
+
+        // 매출 등록 실행 함수
+        const handleSaveSales = async () => {
+            const resolved = resolveMemberInput(memberInp.value);
+            if (!resolved || !resolved.id) {
+                targetWin.alert('매출을 등록할 회원ID 또는 이름을 입력해 주세요.');
+                memberInp.focus();
+                return;
+            }
+            const tDate = dateInp.value;
+            if (!tDate) {
+                targetWin.alert('매출일자를 선택해 주세요.');
+                dateInp.focus();
+                return;
+            }
+
+            const cvVal = parseCommaNumber(cvInp.value);
+            const pvVal = parseCommaNumber(pvInp.value);
+
+            if (cvVal <= 0 && pvVal <= 0) {
+                targetWin.alert('CV 또는 PV 금액을 수동으로 입력해 주세요.');
+                cvInp.focus();
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = '등록중...';
+
+            try {
+                const payload = {
+                    member_id: resolved.id,
+                    category: catSel.value || '매출',
+                    transaction_date: tDate,
+                    cv: cvVal,
+                    pv: pvVal,
+                    _canvasMode: window.currentCanvasMode || 'main'
+                };
+
+                const res = await window.fetch(`${window.API_BASE || ''}/api/sales/history`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (res.ok && data && data.success !== false) {
+                    memberInp.value = resolved.id;
+                    cvInp.value = '';
+                    pvInp.value = '';
+                    matchLabel.innerText = `✅ [${resolved.name || resolved.id}] CV ${cvVal.toLocaleString()} / PV ${pvVal.toLocaleString()} 등록 완료!`;
+                    matchLabel.style.color = '#60a5fa';
+
+                    // 1) 메인 시뮬레이터 계보도 및 수당 즉시 갱신
+                    if (typeof window.fetchTreeData === 'function') {
+                        await window.fetchTreeData(true);
+                    }
+
+                    // 2) 팝업 창 테이블 및 상단 총 합계 실시간 업데이트
+                    appendRowToPopupTable(targetDoc, {
+                        id: data.id,
+                        date: tDate,
+                        memberId: resolved.id,
+                        memberName: resolved.name || resolved.id,
+                        line: resolved.line || 'A라인',
+                        cv: cvVal,
+                        pv: pvVal
+                    });
+
+                    cvInp.focus();
+                } else {
+                    targetWin.alert('매출 저장 실패: ' + (data.error || '오류가 발생했습니다.'));
+                }
+            } catch (err) {
+                targetWin.alert('매출 저장 중 통신 오류: ' + err.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = '💾 매출 등록';
+            }
+        };
+
+        submitBtn.onclick = handleSaveSales;
+
+        // 엔터키 이동 편의성: 회원입력(Enter) -> CV입력(Enter) -> PV입력(Enter) -> 즉시 저장
+        memberInp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                cvInp.focus();
+            }
+        });
+        cvInp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (!pvInp.value) {
+                    pvInp.focus();
+                } else {
+                    handleSaveSales();
+                }
+            }
+        });
+        pvInp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSaveSales();
+            }
+        });
+
+        return wrap;
+    }
+
+    // 5. 팝업 창 테이블에 방금 입력한 매출 행을 추가하고 건수/총합계를 실시간 업데이트
+    function appendRowToPopupTable(targetDoc, rowInfo) {
+        const table = targetDoc.querySelector('table');
+        if (!table) return;
+        const tbody = table.querySelector('tbody') || table;
+
+        const emptyRow = tbody.querySelector('td[colspan]');
+        if (emptyRow && emptyRow.parentElement) {
+            emptyRow.parentElement.remove();
+        }
+
+        const tr = targetDoc.createElement('tr');
+        tr.style.cssText = 'border-bottom: 1px solid #1e293b; background: rgba(37, 99, 235, 0.12);';
+        tr.innerHTML = `
+            <td style="padding:10px 8px; text-align:center;"><input type="checkbox" data-sales-id="${rowInfo.id || ''}"></td>
+            <td style="padding:10px 8px; color:#e2e8f0;">${rowInfo.date}</td>
+            <td style="padding:10px 8px; color:#60a5fa; font-weight:bold;">${rowInfo.memberId}</td>
+            <td style="padding:10px 8px; color:#ffffff; font-weight:bold;">${rowInfo.memberName}</td>
+            <td style="padding:10px 8px; color:#94a3b8;">${rowInfo.line}</td>
+            <td style="padding:10px 8px; text-align:right; color:#38bdf8; font-weight:bold;">${Number(rowInfo.cv).toLocaleString()}</td>
+            <td style="padding:10px 8px; text-align:right; color:#34d399; font-weight:bold;">${Number(rowInfo.pv).toLocaleString()}</td>
+        `;
+        tbody.insertBefore(tr, tbody.firstChild);
+
+        const allTrs = Array.from(tbody.querySelectorAll('tr'));
+        let totalCv = 0;
+        let totalPv = 0;
+        allTrs.forEach(r => {
+            const tds = r.querySelectorAll('td');
+            if (tds.length >= 7) {
+                const c = parseInt((tds[5].innerText || '0').replace(/[^0-9-]/g, ''), 10) || 0;
+                const p = parseInt((tds[6].innerText || '0').replace(/[^0-9-]/g, ''), 10) || 0;
+                totalCv += c;
+                totalPv += p;
+            }
+        });
+
+        const allSpans = targetDoc.querySelectorAll('span, div, strong');
+        allSpans.forEach(el => {
+            if (el.children.length === 0 && el.innerText) {
+                if (/검색\s*결과\s*:\s*\d+\s*건/.test(el.innerText)) {
+                    el.innerText = `검색 결과: ${allTrs.length}건`;
+                } else if (/총\s*[\d,]+\s*CV/.test(el.innerText)) {
+                    el.innerText = `총 ${totalCv.toLocaleString()} CV`;
+                } else if (/총\s*[\d,]+\s*PV/.test(el.innerText)) {
+                    el.innerText = `총 ${totalPv.toLocaleString()} PV`;
+                }
+            }
+        });
+    }
+
+    // 6. 특정 Document(팝업 창 또는 메인 창)를 검사하여 '매출 기간 검색' 화면이면 입력 바 장착
+    function inspectAndInjectIntoDoc(targetDoc, targetWin) {
+        if (!targetDoc || !targetDoc.body) return;
+        if (targetDoc.querySelector('.bs-period-sales-entry-bar-v29')) return;
+
+        const bodyText = targetDoc.body.innerText || '';
+        const isSalesPeriodWindow = (
+            (targetDoc.title && targetDoc.title.includes('매출 기간 검색')) ||
+            (bodyText.includes('매출 기간 검색') && bodyText.includes('검색 결과'))
+        );
+
+        if (!isSalesPeriodWindow) return;
+
+        const entryBar = createPopupSalesEntryBar(targetDoc, targetWin || window);
+
+        const tableEl = targetDoc.querySelector('table');
+        let inserted = false;
+
+        const summaryBar = Array.from(targetDoc.querySelectorAll('div, section')).find(el => {
+            const txt = (el.innerText || '').trim();
+            return txt.startsWith('검색 결과:') && txt.includes('CV') && el.children.length <= 5;
+        });
+
+        if (summaryBar && summaryBar.parentElement) {
+            summaryBar.parentElement.insertBefore(entryBar, summaryBar);
+            inserted = true;
+        } else if (tableEl && tableEl.parentElement) {
+            tableEl.parentElement.insertBefore(entryBar, tableEl);
+            inserted = true;
+        }
+
+        if (!inserted) {
+            targetDoc.body.insertBefore(entryBar, targetDoc.body.firstChild);
+        }
+    }
+
+    // 7. 상시 모니터링
+    setInterval(() => {
+        inspectAndInjectIntoDoc(document, window);
+
+        window._bsTrackedPopupsV29 = (window._bsTrackedPopupsV29 || []).filter(w => {
+            try {
+                if (!w || w.closed) return false;
+                inspectAndInjectIntoDoc(w.document, w);
+                return true;
+            } catch (e) {
+                return false;
+            }
+        });
+    }, 400);
+})();
+// ============================================================================
+// [30] ⏳ 헤더 기간 설정 '타임머신' 완벽 연동 (당시 계보도 + 당시 직급 DOM 강제 동기화)
+// ============================================================================
+(function initHeaderPeriodTimeMachineV30() {
+    const ALL_RANK_NAMES = [
+        'GUEST', 'MEMBER', 'MANIA', 'DIRECTOR', 'EMERALD',
+        'DIAMOND', 'GREEN DIAMOND', 'BLUE DIAMOND', 'RED DIAMOND', 'CROWN'
+    ];
+
+    // 1. 상단 헤더의 시작일(startDate)과 종료일(endDate)을 읽어오는 헬퍼
+    window.getHeaderPeriodRange = function() {
+        const headerScope = document.querySelector('header, .header, .top-bar') || document.body;
+        const dateInputs = Array.from(headerScope.querySelectorAll('input[type="date"], input[type="text"]'))
+            .filter(el => {
+                if (el.closest('.modal, .popup')) return false;
+                const val = String(el.value || '').trim().replace(/\//g, '-');
+                return /^\d{4}-\d{2}-\d{2}$/.test(val);
+            });
+
+        if (dateInputs.length >= 2) {
+            const start = String(dateInputs[0].value).trim().replace(/\//g, '-');
+            const end = String(dateInputs[1].value).trim().replace(/\//g, '-');
+            return { start, end, startInput: dateInputs[0], endInput: dateInputs[1] };
+        }
+        return { start: '', end: '', startInput: null, endInput: null };
+    };
+
+    function isPeriodRowAfterEndDate(periodLabelText, endDateStr) {
+        if (!periodLabelText || !endDateStr) return false;
+        const cleanEnd = endDateStr.replace(/\//g, '-');
+        const parts = cleanEnd.split('-');
+        if (parts.length < 3) return false;
+
+        const targetMonth = parseInt(parts[1], 10);
+        const targetDay = parseInt(parts[2], 10);
+        const targetHalf = targetDay <= 15 ? 1 : 2;
+
+        const m = String(periodLabelText).trim().match(/^(\d{1,2})\s*[-월]\s*(전|후|1기|2기|상|하)/);
+        if (!m) return false;
+
+        const rowMonth = parseInt(m[1], 10);
+        const rowHalf = (m[2] === '전' || m[2] === '1기' || m[2] === '상') ? 1 : 2;
+
+        if (rowMonth > targetMonth) return true;
+        if (rowMonth === targetMonth && rowHalf > targetHalf) return true;
+        return false;
+    }
+
+    // 2. window.fetch 확장: /api/tree 및 /api/sales(/history 포함) 요청에 헤더의 endDate 자동 주입
+    const prevFetchV30 = window.fetch;
+    if (typeof prevFetchV30 === 'function' && !prevFetchV30._timeMachineWrappedV30) {
+        const tmFetch = function(input, init = {}) {
+            let urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+            const { start, end } = window.getHeaderPeriodRange();
+
+            if (end && (urlStr.includes('/api/tree') || urlStr.includes('/api/sales'))) {
+                // 이미 명시적인 end= 파라미터가 있는 팝업 검색은 isPopupSearch=1 표시
+                if (urlStr.includes('start=') && urlStr.includes('end=')) {
+                    if (!urlStr.includes('isPopupSearch=')) urlStr += '&isPopupSearch=1';
+                } else if (!urlStr.includes('endDate=')) {
+                    const sep = urlStr.includes('?') ? '&' : '?';
+                    urlStr = `${urlStr}${sep}startDate=${encodeURIComponent(start)}&endDate=${encodeURIComponent(end)}`;
+                }
+            }
+            return prevFetchV30.call(this, urlStr, init);
+        };
+        tmFetch._timeMachineWrappedV30 = true;
+        window.fetch = tmFetch;
+    }
+
+    // 3. 서버(/api/tree)에서 계산된 '당시 직급'을 화면의 모든 파트너 카드 DOM에 직접 강제 반영!
+    function syncHistoricalRanksToDomCards() {
+        const mapObj = window._vjCachedMembersMap || window.memberMap || window.flatMembers || {};
+        if (!mapObj || Object.keys(mapObj).length === 0) return;
+
+        const cards = document.querySelectorAll('.node-card, .member-card, .tree-node-card, [data-id], [data-member-id]');
+        cards.forEach(card => {
+            let mId = card.getAttribute('data-id') || card.getAttribute('data-member-id') || '';
+            if (!mId) {
+                const match = (card.innerText || '').match(/\b(V[KJ]-[A-Z0-9]+)\b/i);
+                if (match) mId = match[1];
+            }
+            if (!mId) return;
+            mId = mId.trim().toUpperCase();
+
+            const memberData = mapObj[mId];
+            if (!memberData) return;
+
+            const targetRank = String(memberData.rank_name || memberData.rank || 'GUEST').trim().toUpperCase();
+
+            // 카드 내부 요소 중 직급 텍스트(GUEST, MANIA, DIRECTOR 등)를 표시하고 있는 요소를 찾아 당시 직급으로 교체
+            const subEls = card.querySelectorAll('div, span, b, strong, p');
+            subEls.forEach(el => {
+                if (el.children.length === 0 && el.innerText) {
+                    const txt = el.innerText.trim().toUpperCase();
+                    if (ALL_RANK_NAMES.includes(txt) && txt !== targetRank) {
+                        el.innerText = targetRank;
+                    }
+                }
+            });
+        });
+    }
+
+    // 4. 하단 '실적 집계' 테이블 및 좌측 '매출/구독' 패널 타임머신 필터링
+    function filterSideAndBottomPanelsByHeaderDate() {
+        const { start, end } = window.getHeaderPeriodRange();
+        if (!end) return;
+
+        syncHistoricalRanksToDomCards();
+
+        const tables = document.querySelectorAll('table');
+        tables.forEach(tbl => {
+            const thText = (tbl.querySelector('thead')?.innerText || '');
+            if (thText.includes('기수') && thText.includes('라인')) {
+                const rows = tbl.querySelectorAll('tbody tr');
+                rows.forEach(tr => {
+                    const firstTd = tr.querySelector('td');
+                    if (!firstTd) return;
+                    const pText = firstTd.innerText.trim();
+                    tr.style.display = isPeriodRowAfterEndDate(pText, end) ? 'none' : '';
+                });
+            }
+        });
+
+        const leftPanel = document.querySelector('aside, .left-panel, .side-panel, [id*="sales-panel" i]') || document.body;
+        const dateRows = leftPanel.querySelectorAll('input[type="text"], input[type="date"]');
+        dateRows.forEach(inp => {
+            if (inp.closest('header, .header, .top-bar, .modal, .popup')) return;
+            const val = String(inp.value || '').trim().replace(/\//g, '-');
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) return;
+
+            const rowContainer = inp.closest('tr, .sales-row, .history-row, li') || inp.parentElement;
+            if (!rowContainer || rowContainer.tagName === 'HEADER') return;
+
+            rowContainer.style.display = (val > end) ? 'none' : '';
+        });
+
+        let tmBadge = document.getElementById('bsTimeMachineBadgeV30');
+        const headerScope = document.querySelector('header, .header, .top-bar');
+        if (headerScope) {
+            if (!tmBadge) {
+                tmBadge = document.createElement('span');
+                tmBadge.id = 'bsTimeMachineBadgeV30';
+                tmBadge.style.cssText = `
+                    margin-left: 8px;
+                    padding: 3px 9px;
+                    background: rgba(16, 185, 129, 0.18);
+                    border: 1px solid #10b981;
+                    color: #6ee7b7;
+                    border-radius: 6px;
+                    font-size: 11.5px;
+                    font-weight: 800;
+                    white-space: nowrap;
+                `;
+                const { endInput } = window.getHeaderPeriodRange();
+                if (endInput && endInput.parentElement) {
+                    endInput.parentElement.appendChild(tmBadge);
+                }
+            }
+            tmBadge.innerText = `⏳ ${end} 기준 계보도·직급 표시중`;
+        }
+    }
+
+    // 5. '매출 기간 검색' 팝업창 날짜 동기화
+    function syncHeaderPeriodToSalesPopup() {
+        const { start, end } = window.getHeaderPeriodRange();
+        if (!start || !end) return;
+
+        const popups = window._bsTrackedPopupsV29 || [];
+        popups.forEach(win => {
+            try {
+                if (!win || win.closed || !win.document) return;
+                const doc = win.document;
+                if (doc.body.dataset.syncedHeaderPeriod === `${start}_${end}`) return;
+
+                const popupDateInputs = Array.from(doc.querySelectorAll('input')).filter(inp => {
+                    if (inp.closest('.bs-period-sales-entry-bar-v29')) return false;
+                    const v = String(inp.value || '').trim();
+                    return /^\d{4}[-/]\d{2}[-/]\d{2}$/.test(v);
+                });
+
+                if (popupDateInputs.length >= 2) {
+                    const useSlash = popupDateInputs[0].value.includes('/');
+                    const formattedStart = useSlash ? start.replace(/-/g, '/') : start;
+                    const formattedEnd = useSlash ? end.replace(/-/g, '/') : end;
+
+                    if (popupDateInputs[0].value !== formattedStart || popupDateInputs[1].value !== formattedEnd) {
+                        popupDateInputs[0].value = formattedStart;
+                        popupDateInputs[1].value = formattedEnd;
+                        popupDateInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+                        popupDateInputs[1].dispatchEvent(new Event('change', { bubbles: true }));
+                        popupDateInputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    doc.body.dataset.syncedHeaderPeriod = `${start}_${end}`;
+                }
+
+                const entryDateInp = doc.querySelector('.bs-period-sales-entry-bar-v29 .bs-se-date');
+                if (entryDateInp && !entryDateInp.dataset.userEdited) {
+                    entryDateInp.value = start;
+                    entryDateInp.addEventListener('change', () => { entryDateInp.dataset.userEdited = 'true'; });
+                }
+            } catch (e) {}
+        });
+    }
+
+    // 6. 헤더 날짜 변경 시 계보도 + 전체 매출 데이터 동시 재호출
+    let lastAppliedRange = '';
+    async function triggerTimeMachineRefresh(force = false) {
+        const { start, end } = window.getHeaderPeriodRange();
+        if (!end) return;
+        const currentKey = `${start}~${end}`;
+        if (!force && currentKey === lastAppliedRange) {
+            filterSideAndBottomPanelsByHeaderDate();
+            syncHeaderPeriodToSalesPopup();
+            return;
+        }
+        lastAppliedRange = currentKey;
+
+        if (typeof window.fetchTreeData === 'function') {
+            await window.fetchTreeData(true);
+        }
+        setTimeout(filterSideAndBottomPanelsByHeaderDate, 80);
+        setTimeout(filterSideAndBottomPanelsByHeaderDate, 250);
+        setTimeout(syncHeaderPeriodToSalesPopup, 150);
+    }
+
+    document.addEventListener('change', (e) => {
+        if (e.target && e.target.closest('header, .header, .top-bar')) {
+            setTimeout(() => triggerTimeMachineRefresh(true), 50);
+        }
+    }, true);
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target && e.target.closest('header button, .header button, .top-bar button');
+        if (btn) {
+            const txt = (btn.innerText || '').trim();
+            if (txt.includes('◀') || txt.includes('▶') || txt.includes('<') || txt.includes('>') || txt.includes('조회')) {
+                setTimeout(() => triggerTimeMachineRefresh(true), 80);
+            }
+        }
+        setTimeout(filterSideAndBottomPanelsByHeaderDate, 100);
+    }, true);
+
+    setInterval(() => {
+        triggerTimeMachineRefresh(false);
+    }, 450);
+})();
