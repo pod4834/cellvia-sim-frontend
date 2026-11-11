@@ -15424,43 +15424,700 @@ if (document.readyState === 'loading') {
     setInterval(bindDragEventsToCards, 500);
 })();
 // ============================================================================
-// [29] 💰 '매출 기간 검색' 팝업창(about:blank) 및 메인 화면 내부에 '매출 직접 입력 바' 장착
-//      (CV / PV 각각 쉼표(,) 스타일 수동 입력 지원)
+// [29] 🍎 '나비게이터' & '매출 기간 검색' 맥북(macOS) 스타일 모달 + 마우스 휠 스크롤 완벽 패치
+//      1) 맥북 신호등 아이콘(🔴닫기 / 🟡접기 / 🟢최대화) 헤더 적용 & 내부 중복 '창 닫기' 헤더 자동 제거
+//      2) 본문 어디서나 마우스 휠(Wheel)로 부드럽게 상하 스크롤 작동 보장
+//      3) 창별(나비게이터 / 매출기간검색) 조절한 사이즈와 위치를 localStorage에 영구 기억
+//      4) 매출 기간 검색 모달 내부: 컴팩트 매출 수동 등록 + MMDD 날짜 변환 + 선택 행 삭제 탑재
 // ============================================================================
-(function initPeriodSalesPopupAndModalDirectEntryV29() {
+(function initMacStyleResizableModalsAndWheelFixV29() {
     window._bsTrackedPopupsV29 = window._bsTrackedPopupsV29 || [];
+    const MODAL_BOUNDS_STORAGE_PREFIX = 'BS_INPAGE_MODAL_BOUNDS_V5_';
 
-    // 숫자만 추출하여 천 단위 쉼표(,) 문자열로 변환하는 헬퍼
+    // 1. 맥북(macOS) 스타일 플로팅 모달 전용 CSS 주입
+    function injectModalManagerStyles() {
+        if (document.getElementById('bs-inpage-modal-style-v29')) return;
+        const style = document.createElement('style');
+        style.id = 'bs-inpage-modal-style-v29';
+        style.innerHTML = `
+            .bs-inpage-modal-wrap-v29 {
+                position: fixed !important;
+                z-index: 2147483640 !important;
+                background: #0f172a !important;
+                border: 1px solid rgba(148, 163, 184, 0.35) !important;
+                border-radius: 12px !important;
+                box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+                display: flex !important;
+                flex-direction: column !important;
+                overflow: hidden !important;
+                min-width: 360px !important;
+                min-height: 240px !important;
+                font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif !important;
+                user-select: none !important;
+                transition: box-shadow 0.15s ease, border-color 0.15s ease !important;
+            }
+            .bs-inpage-modal-wrap-v29.bs-modal-active-v29 {
+                z-index: 2147483645 !important;
+                border-color: #60a5fa !important;
+                box-shadow: 0 28px 65px rgba(0, 0, 0, 0.92), 0 0 0 1.5px rgba(96, 165, 250, 0.5) !important;
+            }
+            /* 맥북 스타일 상단 타이틀바 */
+            .bs-inpage-modal-header-v29 {
+                height: 38px !important;
+                background: linear-gradient(180deg, #1e293b 0%, #111827 100%) !important;
+                border-bottom: 1px solid #334155 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                padding: 0 14px !important;
+                cursor: move !important;
+                flex-shrink: 0 !important;
+            }
+            /* 좌측 맥북 신호등 버튼 그룹 (빨강/노랑/초록) */
+            .bs-mac-traffic-lights-v29 {
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                flex-shrink: 0 !important;
+            }
+            .bs-mac-btn-v29 {
+                width: 13px !important;
+                height: 13px !important;
+                border-radius: 50% !important;
+                border: none !important;
+                padding: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                cursor: pointer !important;
+                font-size: 9px !important;
+                font-weight: 900 !important;
+                color: transparent !important;
+                line-height: 1 !important;
+                transition: transform 0.1s ease, filter 0.15s ease, color 0.1s ease !important;
+            }
+            .bs-mac-traffic-lights-v29:hover .bs-mac-btn-v29 {
+                color: rgba(0, 0, 0, 0.75) !important;
+            }
+            .bs-mac-btn-v29:hover {
+                transform: scale(1.12) !important;
+                filter: brightness(1.1) !important;
+            }
+            .bs-mac-close-v29 {
+                background: #ff5f56 !important;
+                box-shadow: inset 0 0 0 1px #e0443e !important;
+            }
+            .bs-mac-min-v29 {
+                background: #ffbd2e !important;
+                box-shadow: inset 0 0 0 1px #dea123 !important;
+            }
+            .bs-mac-max-v29 {
+                background: #27c93f !important;
+                box-shadow: inset 0 0 0 1px #1aab29 !important;
+            }
+            /* 중앙 타이틀 영역 */
+            .bs-inpage-modal-title-v29 {
+                color: #f8fafc !important;
+                font-size: 13px !important;
+                font-weight: 800 !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                pointer-events: none !important;
+                overflow: hidden !important;
+                white-space: nowrap !important;
+                text-overflow: ellipsis !important;
+            }
+            .bs-inpage-modal-size-badge-v29 {
+                font-size: 10.5px !important;
+                color: #94a3b8 !important;
+                font-weight: 600 !important;
+                background: rgba(15, 23, 42, 0.75) !important;
+                padding: 2px 7px !important;
+                border-radius: 4px !important;
+                border: 1px solid #334155 !important;
+                flex-shrink: 0 !important;
+            }
+            .bs-inpage-modal-iframe-v29 {
+                flex: 1 !important;
+                width: 100% !important;
+                height: 100% !important;
+                border: none !important;
+                background: #0f172a !important;
+                display: block !important;
+            }
+            /* 리사이즈 핸들 */
+            .bs-resize-handle-v29 {
+                position: absolute !important;
+                z-index: 20 !important;
+            }
+            .bs-resize-r-v29 { top: 38px; right: 0; width: 7px; bottom: 14px; cursor: ew-resize; }
+            .bs-resize-l-v29 { top: 38px; left: 0; width: 7px; bottom: 14px; cursor: ew-resize; }
+            .bs-resize-b-v29 { bottom: 0; left: 14px; right: 14px; height: 7px; cursor: ns-resize; }
+            .bs-resize-br-v29 {
+                bottom: 0; right: 0; width: 16px; height: 16px;
+                cursor: nwse-resize;
+                background: linear-gradient(135deg, transparent 55%, rgba(96, 165, 250, 0.7) 55%) !important;
+                border-bottom-right-radius: 10px;
+            }
+            .bs-resize-bl-v29 { bottom: 0; left: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function resolveModalTypeKey(name, specs, docTitle, bodyText) {
+        const combined = `${name || ''} ${specs || ''} ${docTitle || ''} ${bodyText || ''}`.toLowerCase();
+        if (combined.includes('매출') || combined.includes('sales') || combined.includes('period')) {
+            return 'SALES_PERIOD';
+        }
+        if (combined.includes('내비') || combined.includes('나비') || combined.includes('네비') || combined.includes('nav') || combined.includes('가이드')) {
+            return 'NAVIGATOR';
+        }
+        if (name && name !== '_blank') {
+            return 'MODAL_' + String(name).replace(/[^a-z0-9]/gi, '_').toUpperCase();
+        }
+        return 'GENERIC';
+    }
+
+    function loadModalBounds(typeKey, defaultW, defaultH) {
+        const vw = window.innerWidth || 1400;
+        const vh = window.innerHeight || 900;
+        let fallbackW = defaultW || (typeKey === 'NAVIGATOR' ? 680 : 720);
+        let fallbackH = defaultH || (typeKey === 'NAVIGATOR' ? 740 : 660);
+
+        try {
+            const raw = localStorage.getItem(MODAL_BOUNDS_STORAGE_PREFIX + typeKey);
+            if (raw) {
+                const p = JSON.parse(raw);
+                if (p && p.width >= 360 && p.height >= 240) {
+                    const w = Math.min(Math.max(360, p.width), vw - 20);
+                    const h = Math.min(Math.max(240, p.height), vh - 20);
+                    const left = Math.min(Math.max(10, p.left ?? Math.round((vw - w) / 2)), Math.max(10, vw - w - 10));
+                    const top = Math.min(Math.max(10, p.top ?? Math.round((vh - h) / 2)), Math.max(10, vh - h - 10));
+                    return { width: w, height: h, left, top };
+                }
+            }
+        } catch (e) {}
+
+        const w = Math.min(fallbackW, vw - 40);
+        const h = Math.min(fallbackH, vh - 40);
+        const left = typeKey === 'NAVIGATOR' ? Math.max(20, vw - w - 50) : Math.max(20, Math.round((vw - w) / 2));
+        const top = Math.max(40, Math.round((vh - h) / 2));
+        return { width: w, height: h, left, top };
+    }
+
+    function saveModalBounds(typeKey, wrapEl) {
+        if (!typeKey || !wrapEl || wrapEl.dataset.minimized === '1' || wrapEl.dataset.maximized === '1') return;
+        try {
+            const rect = wrapEl.getBoundingClientRect();
+            if (rect.width >= 360 && rect.height >= 240) {
+                localStorage.setItem(MODAL_BOUNDS_STORAGE_PREFIX + typeKey, JSON.stringify({
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    left: Math.round(rect.left),
+                    top: Math.round(rect.top)
+                }));
+            }
+        } catch (e) {}
+    }
+
+    // 🌟 2. 모달 내부 문서의 중복 상단 바('창 닫기 X') 제거 + 마우스 휠 스크롤 100% 작동 보장!
+    function enhanceInnerModalDocScrollAndCleanHeader(doc, titleTextEl) {
+        if (!doc || !doc.body) return;
+
+        // (A) 내부 문서의 중복 헤더 바(제목 + 안쪽 '창 닫기 X' 버튼이 들어있는 첫 줄) 찾아 숨기고 제목만 외부 맥북 헤더로 추출
+        if (!doc.body.dataset.duplicateHeaderCleanedV29) {
+            const innerCloseBtns = Array.from(doc.querySelectorAll('button, a, span, div')).filter(el => {
+                if (el.children.length > 1) return false;
+                const t = (el.innerText || '').trim();
+                return t === '창 닫기 X' || t === '창 닫기 ✕' || t === '창닫기 X' || t === '창 닫기' || t === '닫기 X';
+            });
+
+            innerCloseBtns.forEach(btn => {
+                // 버튼이 속한 상단 헤더 컨테이너 탐색
+                const headerBar = btn.closest('header, .header, .top-bar') || btn.parentElement;
+                if (headerBar && headerBar !== doc.body) {
+                    const barRect = headerBar.getBoundingClientRect();
+                    // 높이가 80px 이하인 상단 타이틀 바라면 그 안의 텍스트를 맥북 모달 타이틀로 옮기고 바 전체를 숨김!
+                    if (barRect.height <= 85) {
+                        const rawTitle = (headerBar.innerText || '')
+                            .replace(/창\s*닫기\s*[X✕×]?/gi, '')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                        if (rawTitle && titleTextEl) {
+                            titleTextEl.innerText = rawTitle;
+                        }
+                        headerBar.style.setProperty('display', 'none', 'important');
+                        doc.body.dataset.duplicateHeaderCleanedV29 = '1';
+                    } else {
+                        btn.style.setProperty('display', 'none', 'important');
+                    }
+                } else {
+                    btn.style.setProperty('display', 'none', 'important');
+                }
+            });
+        }
+
+        // (B) 마우스 휠 스크롤 강제 활성화 스타일 및 휠 이벤트 핸들러 주입
+        if (!doc.getElementById('bs-inner-scroll-fix-style-v29')) {
+            const style = doc.createElement('style');
+            style.id = 'bs-inner-scroll-fix-style-v29';
+            style.innerHTML = `
+                html, body {
+                    height: 100% !important;
+                    max-height: 100vh !important;
+                    overflow-y: auto !important;
+                    overflow-x: hidden !important;
+                    overscroll-behavior: contain !important;
+                    -webkit-overflow-scrolling: touch !important;
+                }
+                /* 커스텀 스크롤바 가독성 개선 */
+                ::-webkit-scrollbar { width: 8px; height: 8px; }
+                ::-webkit-scrollbar-track { background: #0f172a; }
+                ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+                ::-webkit-scrollbar-thumb:hover { background: #475569; }
+            `;
+            (doc.head || doc.body).appendChild(style);
+        }
+
+        // (C) 본문 어디서든 마우스 휠을 굴리면 클릭 없이도 즉시 스크롤되도록 전용 wheel 리스너 바인딩!
+        if (!doc._bsWheelScrollBoundV29) {
+            doc._bsWheelScrollBoundV29 = true;
+            doc.addEventListener('wheel', (e) => {
+                // 부모 시뮬레이터 캔버스(줌인/줌아웃)로 이벤트가 전파되는 것을 차단
+                e.stopPropagation();
+
+                const deltaY = e.deltaY;
+                if (!deltaY) return;
+
+                // 1순위: 마우스 커서 아래에 있는 스크롤 가능한 내부 컨테이너 탐색
+                let el = e.target;
+                let scrolled = false;
+                const winView = doc.defaultView || window;
+
+                while (el && el !== doc.body && el !== doc.documentElement) {
+                    if (el.nodeType === 1) {
+                        const st = winView.getComputedStyle(el);
+                        const oy = st.overflowY;
+                        const canScroll = (oy === 'auto' || oy === 'scroll' || oy === 'overlay') && (el.scrollHeight > el.clientHeight + 2);
+                        if (canScroll) {
+                            const prevTop = el.scrollTop;
+                            el.scrollTop += deltaY;
+                            if (el.scrollTop !== prevTop) {
+                                scrolled = true;
+                                e.preventDefault();
+                                break;
+                            }
+                        }
+                    }
+                    el = el.parentElement;
+                }
+
+                // 2순위: 커서 아래 요소가 스크롤되지 않았다면 문서 전체(scrollingElement / body) 또는 페이지 내 가장 큰 스크롤 영역을 직접 스크롤!
+                if (!scrolled) {
+                    const rootScroller = doc.scrollingElement || doc.documentElement || doc.body;
+                    if (rootScroller && rootScroller.scrollHeight > rootScroller.clientHeight + 2) {
+                        const prev = rootScroller.scrollTop;
+                        rootScroller.scrollTop += deltaY;
+                        if (rootScroller.scrollTop !== prev) {
+                            scrolled = true;
+                            e.preventDefault();
+                        }
+                    }
+                }
+
+                // 3순위: 만약 내부 레이아웃이 100vh 고정 wrapper로 감싸져 있어 rootScroller가 안 움직인다면, 스크롤 가능한 자식 박스를 찾아 스크롤!
+                if (!scrolled) {
+                    const candidates = Array.from(doc.querySelectorAll('div, main, section, tbody')).filter(box => {
+                        return box.scrollHeight > box.clientHeight + 5;
+                    });
+                    for (const box of candidates) {
+                        const prev = box.scrollTop;
+                        box.scrollTop += deltaY;
+                        if (box.scrollTop !== prev) {
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }
+            }, { passive: false, capture: true });
+        }
+    }
+
+    // 3. window.open 가로채기 ➔ 맥북 스타일 인페이지 모달 생성
+    if (!window._bsNativeWindowOpenV29) {
+        window._bsNativeWindowOpenV29 = window.open.bind(window);
+    }
+
+    window.open = function(url, name, specs) {
+        const strUrl = String(url || '').trim();
+        if (strUrl && strUrl !== 'about:blank' && /^https?:\/\//i.test(strUrl) && !strUrl.includes(window.location.host)) {
+            return window._bsNativeWindowOpenV29(url, name, specs);
+        }
+
+        injectModalManagerStyles();
+
+        let specW = 680, specH = 700;
+        if (specs) {
+            const mW = String(specs).match(/width\s*=\s*(\d+)/i);
+            const mH = String(specs).match(/height\s*=\s*(\d+)/i);
+            if (mW) specW = parseInt(mW[1], 10);
+            if (mH) specH = parseInt(mH[1], 10);
+        }
+
+        let currentTypeKey = resolveModalTypeKey(name, specs, '', '');
+
+        const existingId = 'bs-inpage-modal-' + (name && name !== '_blank' ? name : 'popup-' + Date.now());
+        const oldModal = document.getElementById(existingId);
+        if (oldModal) oldModal.remove();
+
+        const bounds = loadModalBounds(currentTypeKey, specW, specH);
+
+        const wrap = document.createElement('div');
+        wrap.id = existingId;
+        wrap.className = 'bs-inpage-modal-wrap-v29 bs-modal-active-v29';
+        wrap.style.width = `${bounds.width}px`;
+        wrap.style.height = `${bounds.height}px`;
+        wrap.style.left = `${bounds.left}px`;
+        wrap.style.top = `${bounds.top}px`;
+
+        wrap.innerHTML = `
+            <div class="bs-inpage-modal-header-v29">
+                <!-- 맥북(macOS) 신호등 아이콘 (좌측: 빨강 닫기 / 노랑 접기 / 초록 확대) -->
+                <div class="bs-mac-traffic-lights-v29">
+                    <button type="button" class="bs-mac-btn-v29 bs-mac-close-v29" title="창 닫기">✕</button>
+                    <button type="button" class="bs-mac-btn-v29 bs-mac-min-v29" title="창 접기/펼치기">−</button>
+                    <button type="button" class="bs-mac-btn-v29 bs-mac-max-v29" title="최대화/원래 크기">+</button>
+                </div>
+                <!-- 중앙 타이틀 -->
+                <div class="bs-inpage-modal-title-v29">
+                    <span class="bs-modal-title-text">비지니스 모달</span>
+                </div>
+                <!-- 우측 현재 창 크기 표시 배지 -->
+                <span class="bs-inpage-modal-size-badge-v29">${bounds.width} × ${bounds.height}</span>
+            </div>
+            <iframe class="bs-inpage-modal-iframe-v29" src="${strUrl && strUrl !== 'about:blank' ? strUrl : 'about:blank'}"></iframe>
+            <div class="bs-resize-handle-v29 bs-resize-r-v29" data-dir="r"></div>
+            <div class="bs-resize-handle-v29 bs-resize-l-v29" data-dir="l"></div>
+            <div class="bs-resize-handle-v29 bs-resize-b-v29" data-dir="b"></div>
+            <div class="bs-resize-handle-v29 bs-resize-br-v29" data-dir="br" title="드래그하여 창 크기 조절"></div>
+            <div class="bs-resize-handle-v29 bs-resize-bl-v29" data-dir="bl"></div>
+        `;
+
+        document.body.appendChild(wrap);
+
+        const headerEl = wrap.querySelector('.bs-inpage-modal-header-v29');
+        const titleTextEl = wrap.querySelector('.bs-modal-title-text');
+        const sizeBadgeEl = wrap.querySelector('.bs-inpage-modal-size-badge-v29');
+        const closeBtnEl = wrap.querySelector('.bs-mac-close-v29');
+        const minBtnEl = wrap.querySelector('.bs-mac-min-v29');
+        const maxBtnEl = wrap.querySelector('.bs-mac-max-v29');
+        const iframeEl = wrap.querySelector('.bs-inpage-modal-iframe-v29');
+
+        const bringToFront = () => {
+            document.querySelectorAll('.bs-inpage-modal-wrap-v29').forEach(el => el.classList.remove('bs-modal-active-v29'));
+            wrap.classList.add('bs-modal-active-v29');
+        };
+        wrap.addEventListener('mousedown', bringToFront);
+
+        // 🔴 빨간 버튼: 모달 닫기
+        let isModalClosed = false;
+        const closeModal = () => {
+            if (isModalClosed) return;
+            saveModalBounds(currentTypeKey, wrap);
+            isModalClosed = true;
+            wrap.remove();
+        };
+        closeBtnEl.onclick = (e) => {
+            e.stopPropagation();
+            closeModal();
+        };
+
+        // 🟡 노란 버튼: 모달 접기(헤더만 남김) / 펼치기 토글
+        let savedHeightBeforeMin = bounds.height;
+        minBtnEl.onclick = (e) => {
+            e.stopPropagation();
+            if (wrap.dataset.minimized === '1') {
+                wrap.dataset.minimized = '0';
+                wrap.style.height = `${savedHeightBeforeMin}px`;
+                wrap.style.minHeight = '240px';
+                iframeEl.style.display = 'block';
+            } else {
+                savedHeightBeforeMin = wrap.getBoundingClientRect().height;
+                wrap.dataset.minimized = '1';
+                iframeEl.style.display = 'none';
+                wrap.style.minHeight = '38px';
+                wrap.style.height = '38px';
+            }
+        };
+
+        // 🟢 초록 버튼: 화면 꽉 차게 확대 / 원래 크기로 복원 토글
+        let prevRectBeforeMax = null;
+        maxBtnEl.onclick = (e) => {
+            e.stopPropagation();
+            if (wrap.dataset.maximized === '1' && prevRectBeforeMax) {
+                wrap.dataset.maximized = '0';
+                wrap.style.left = `${prevRectBeforeMax.left}px`;
+                wrap.style.top = `${prevRectBeforeMax.top}px`;
+                wrap.style.width = `${prevRectBeforeMax.width}px`;
+                wrap.style.height = `${prevRectBeforeMax.height}px`;
+                sizeBadgeEl.innerText = `${prevRectBeforeMax.width} × ${prevRectBeforeMax.height}`;
+            } else {
+                const r = wrap.getBoundingClientRect();
+                prevRectBeforeMax = { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
+                wrap.dataset.maximized = '1';
+                wrap.dataset.minimized = '0';
+                iframeEl.style.display = 'block';
+                const maxW = window.innerWidth - 40;
+                const maxH = window.innerHeight - 40;
+                wrap.style.left = '20px';
+                wrap.style.top = '20px';
+                wrap.style.width = `${maxW}px`;
+                wrap.style.height = `${maxH}px`;
+                sizeBadgeEl.innerText = `${maxW} × ${maxH}`;
+            }
+        };
+
+        const setIframePointerEvents = (enabled) => {
+            document.querySelectorAll('.bs-inpage-modal-iframe-v29').forEach(ifr => {
+                ifr.style.pointerEvents = enabled ? 'auto' : 'none';
+            });
+        };
+
+        // 상단 헤더 드래그 이동
+        headerEl.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.bs-mac-traffic-lights-v29')) return;
+            e.preventDefault();
+            bringToFront();
+            setIframePointerEvents(false);
+
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const rect = wrap.getBoundingClientRect();
+            const origLeft = rect.left;
+            const origTop = rect.top;
+
+            const onMove = (ev) => {
+                const newLeft = Math.max(0, Math.min(window.innerWidth - 80, origLeft + (ev.clientX - startX)));
+                const newTop = Math.max(0, Math.min(window.innerHeight - 40, origTop + (ev.clientY - startY)));
+                wrap.style.left = `${Math.round(newLeft)}px`;
+                wrap.style.top = `${Math.round(newTop)}px`;
+            };
+
+            const onUp = () => {
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onUp);
+                setIframePointerEvents(true);
+                saveModalBounds(currentTypeKey, wrap);
+            };
+
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+        });
+
+        // 테두리/모서리 드래그 크기 조절
+        wrap.querySelectorAll('.bs-resize-handle-v29').forEach(handle => {
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                bringToFront();
+                setIframePointerEvents(false);
+                wrap.dataset.maximized = '0';
+
+                const dir = handle.getAttribute('data-dir');
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const rect = wrap.getBoundingClientRect();
+                const origW = rect.width;
+                const origH = rect.height;
+                const origL = rect.left;
+
+                const onMove = (ev) => {
+                    const dx = ev.clientX - startX;
+                    const dy = ev.clientY - startY;
+
+                    if (dir.includes('r')) {
+                        const newW = Math.max(360, Math.min(window.innerWidth - origL - 6, origW + dx));
+                        wrap.style.width = `${Math.round(newW)}px`;
+                    }
+                    if (dir.includes('l')) {
+                        const possibleW = origW - dx;
+                        if (possibleW >= 360) {
+                            wrap.style.width = `${Math.round(possibleW)}px`;
+                            wrap.style.left = `${Math.round(origL + dx)}px`;
+                        }
+                    }
+                    if (dir.includes('b')) {
+                        const newH = Math.max(240, Math.min(window.innerHeight - rect.top - 6, origH + dy));
+                        wrap.style.height = `${Math.round(newH)}px`;
+                    }
+
+                    const curRect = wrap.getBoundingClientRect();
+                    sizeBadgeEl.innerText = `${Math.round(curRect.width)} × ${Math.round(curRect.height)}`;
+                };
+
+                const onUp = () => {
+                    window.removeEventListener('mousemove', onMove);
+                    window.removeEventListener('mouseup', onUp);
+                    setIframePointerEvents(true);
+                    saveModalBounds(currentTypeKey, wrap);
+                };
+
+                window.addEventListener('mousemove', onMove);
+                window.addEventListener('mouseup', onUp);
+            });
+        });
+
+        const win = iframeEl.contentWindow;
+        if (win) {
+            win.close = closeModal;
+            Object.defineProperty(win, 'closed', {
+                get: () => isModalClosed,
+                configurable: true
+            });
+            try { win.opener = window; } catch (e) {}
+
+            const syncModalIdentityAndSize = () => {
+                if (isModalClosed || !win.document || !win.document.body) return;
+                const docTitle = (win.document.title || '').trim();
+                const bodyTxt = (win.document.body.innerText || '').slice(0, 300);
+
+                const detectedKey = resolveModalTypeKey(name, specs, docTitle, bodyTxt);
+                if (detectedKey !== 'GENERIC' && detectedKey !== currentTypeKey) {
+                    currentTypeKey = detectedKey;
+                    document.querySelectorAll(`.bs-inpage-modal-wrap-v29[data-modal-type="${currentTypeKey}"]`).forEach(other => {
+                        if (other !== wrap) other.remove();
+                    });
+                    wrap.setAttribute('data-modal-type', currentTypeKey);
+
+                    const savedForType = loadModalBounds(currentTypeKey, specW, specH);
+                    wrap.style.width = `${savedForType.width}px`;
+                    wrap.style.height = `${savedForType.height}px`;
+                    wrap.style.left = `${savedForType.left}px`;
+                    wrap.style.top = `${savedForType.top}px`;
+                    sizeBadgeEl.innerText = `${savedForType.width} × ${savedForType.height}`;
+                } else {
+                    wrap.setAttribute('data-modal-type', currentTypeKey);
+                }
+
+                if (docTitle && !win.document.body.dataset.duplicateHeaderCleanedV29) {
+                    titleTextEl.innerText = docTitle;
+                }
+
+                // 중복 '창 닫기' 헤더 숨김 및 마우스 휠 스크롤 적용
+                enhanceInnerModalDocScrollAndCleanHeader(win.document, titleTextEl);
+
+                inspectAndInjectIntoDoc(win.document, win);
+            };
+
+            [30, 100, 250, 500, 900].forEach(ms => setTimeout(syncModalIdentityAndSize, ms));
+
+            if (!window._bsTrackedPopupsV29.includes(win)) {
+                window._bsTrackedPopupsV29.push(win);
+            }
+        }
+
+        return win;
+    };
+
+    // ========================================================================
+    // 💰 '매출 기간 검색' 모달 내부 기능 (컴팩트 수동 등록 + MMDD + 선택 행 삭제)
+    // ========================================================================
     function formatCommaNumber(val) {
         const numStr = String(val || '').replace(/[^0-9]/g, '');
         if (!numStr) return '';
         return Number(numStr).toLocaleString('en-US');
     }
 
-    // 쉼표가 포함된 문자열을 실제 숫자(Number)로 변환하는 헬퍼
     function parseCommaNumber(val) {
         const numStr = String(val || '').replace(/[^0-9]/g, '');
         return numStr ? parseInt(numStr, 10) : 0;
     }
 
-    // 1. window.open을 가로채어 '매출 기간 검색 (about:blank)' 팝업 창을 실시간 추적
-    if (!window.open._bsPopupWrappedV29) {
-        const origWindowOpen = window.open;
-        const wrappedOpen = function(...args) {
-            const win = origWindowOpen.apply(this, args);
-            if (win) {
-                window._bsTrackedPopupsV29.push(win);
-                [80, 200, 450, 900].forEach(ms => {
-                    setTimeout(() => inspectAndInjectIntoDoc(win.document, win), ms);
-                });
+    function normalizeMmddToDate(rawVal, baseYear) {
+        const str = String(rawVal || '').trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+        const digits = str.replace(/[^0-9]/g, '');
+        const yyyy = baseYear || new Date().getFullYear();
+
+        if (digits.length === 4) {
+            const mm = digits.slice(0, 2);
+            const dd = digits.slice(2, 4);
+            const mNum = parseInt(mm, 10);
+            const dNum = parseInt(dd, 10);
+            if (mNum >= 1 && mNum <= 12 && dNum >= 1 && dNum <= 31) {
+                return `${yyyy}-${mm}-${dd}`;
             }
-            return win;
-        };
-        wrappedOpen._bsPopupWrappedV29 = true;
-        window.open = wrappedOpen;
+        } else if (digits.length === 8) {
+            return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+        }
+        return str;
     }
 
-    // 2. 현재 활성 캔버스(기본 VK / 예비 VJ)의 전체 회원 배열 가져오기
+    function getSelectedRowsInPopup(targetDoc) {
+        if (!targetDoc) return [];
+        const selectedTrs = [];
+        const allTrs = Array.from(targetDoc.querySelectorAll('table tbody tr, table tr'));
+
+        allTrs.forEach(tr => {
+            if (tr.querySelector('th') || tr.querySelector('td[colspan]')) return;
+            if (tr.style.display === 'none') return;
+
+            const tds = tr.querySelectorAll('td');
+            if (tds.length < 5) return;
+
+            const firstTd = tds[0];
+            let isSelected = false;
+
+            const inputCb = tr.querySelector('input[type="checkbox"], input[type="radio"]');
+            if (inputCb && (inputCb.checked || inputCb.getAttribute('checked') !== null || inputCb.getAttribute('aria-checked') === 'true')) {
+                isSelected = true;
+            }
+
+            if (!isSelected) {
+                const classAndAttrStr = [
+                    tr.className || '',
+                    firstTd.className || '',
+                    tr.getAttribute('data-selected') || '',
+                    tr.getAttribute('data-checked') || '',
+                    tr.getAttribute('aria-selected') || '',
+                    firstTd.innerHTML || ''
+                ].join(' ').toLowerCase();
+
+                if (classAndAttrStr.includes('selected') ||
+                    classAndAttrStr.includes('checked') ||
+                    classAndAttrStr.includes('is-active') ||
+                    classAndAttrStr.includes('aria-checked="true"')) {
+                    isSelected = true;
+                }
+            }
+
+            if (!isSelected) {
+                const tdText = (firstTd.innerText || firstTd.textContent || '').trim();
+                if (tdText.includes('✓') || tdText.includes('✔') || tdText.includes('☑') || tdText.includes('v') || tdText.includes('V')) {
+                    isSelected = true;
+                }
+            }
+
+            if (!isSelected && targetDoc.defaultView) {
+                const winView = targetDoc.defaultView;
+                const checkCandidates = [firstTd, ...Array.from(firstTd.querySelectorAll('*'))];
+                for (const el of checkCandidates) {
+                    const bg = (winView.getComputedStyle(el).backgroundColor || '').replace(/\s+/g, '');
+                    if (bg.includes('59,130,246') || bg.includes('37,99,235') || bg.includes('29,78,216') ||
+                        bg.includes('99,102,241') || bg.includes('79,70,229') || bg.includes('16,185,129')) {
+                        isSelected = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isSelected) selectedTrs.push(tr);
+        });
+
+        return selectedTrs;
+    }
+
     function getActiveMemberList() {
         const mapObj = {};
         const sources = [
@@ -15477,7 +16134,7 @@ if (document.readyState === 'loading') {
                     if (id) {
                         mapObj[id] = {
                             id,
-                            name: m.name || m.member_name || id,
+                            name: m.name || m.member_name || '',
                             rank: m.rank || m.rank_name || 'GUEST',
                             line: (m.position === 'B' || m.position === 'RIGHT') ? 'B라인' : 'A라인'
                         };
@@ -15488,58 +16145,132 @@ if (document.readyState === 'loading') {
         return Object.values(mapObj).sort((a, b) => a.id.localeCompare(b.id));
     }
 
-    // 3. 입력된 회원번호(VK-1220934, VJ-001, 숫자) 또는 이름으로 회원 정보 찾기
     function resolveMemberInput(rawVal) {
         if (!rawVal) return null;
         const clean = String(rawVal).trim();
+        if (!clean) return null;
         const upper = clean.toUpperCase();
         const list = getActiveMemberList();
         const isVj = (window.currentCanvasMode === 'vj');
 
-        const prefixMatch = upper.match(/^([A-Z]+-\d+)/);
+        let found = list.find(m => m.id === upper);
+        if (found) return found;
+
+        const prefixMatch = upper.match(/^(V[KJ]-[A-Z0-9]+)/i);
         if (prefixMatch) {
-            const found = list.find(m => m.id === prefixMatch[1]);
+            found = list.find(m => m.id === prefixMatch[1].toUpperCase());
             if (found) return found;
         }
-
-        let found = list.find(m => m.id === upper || m.name === clean);
-        if (found) return found;
 
         if (/^\d+$/.test(clean)) {
             const candidate = isVj ? `VJ-${clean.padStart(3, '0')}` : `VK-${clean}`;
-            found = list.find(m => m.id === candidate || m.id.endsWith(`-${clean}`));
+            found = list.find(m => m.id === candidate || m.id === `VJ-${clean}` || m.id.endsWith(`-${clean}`));
             if (found) return found;
-            return { id: candidate, name: '', line: 'A라인' };
         }
 
-        found = list.find(m => m.name && m.name.includes(clean));
-        if (found) return found;
-
-        return { id: upper, name: '', line: 'A라인' };
+        found = list.find(m => m.name === clean || (clean.length >= 3 && m.id.endsWith(upper)));
+        return found || null;
     }
 
-    // 4. 팝업 창(또는 모달)의 대상 Document 안에 '매출 직접 입력 바' 생성 및 삽입
+    function recalculatePopupSummary(targetDoc) {
+        const allTrs = Array.from(targetDoc.querySelectorAll('table tbody tr, table tr'))
+            .filter(r => !r.querySelector('th') && !r.querySelector('td[colspan]') && r.style.display !== 'none' && r.querySelectorAll('td').length >= 7);
+
+        const selectedTrs = getSelectedRowsInPopup(targetDoc);
+        const selectedSet = new Set(selectedTrs);
+
+        let totalCv = 0;
+        let totalPv = 0;
+        let checkedCv = 0;
+        let checkedPv = 0;
+
+        allTrs.forEach(r => {
+            const tds = r.querySelectorAll('td');
+            const c = parseInt((tds[5].innerText || '0').replace(/[^0-9-]/g, ''), 10) || 0;
+            const p = parseInt((tds[6].innerText || '0').replace(/[^0-9-]/g, ''), 10) || 0;
+            totalCv += c;
+            totalPv += p;
+            if (selectedSet.has(r)) {
+                checkedCv += c;
+                checkedPv += p;
+            }
+        });
+
+        const checkedCount = selectedTrs.length;
+        const showCv = checkedCount > 0 ? checkedCv : totalCv;
+        const showPv = checkedCount > 0 ? checkedPv : totalPv;
+
+        const allSpans = targetDoc.querySelectorAll('span, div, strong');
+        allSpans.forEach(el => {
+            if (el.children.length === 0 && el.innerText) {
+                if (/검색\s*결과\s*:\s*\d+\s*건/.test(el.innerText) || /선택\s*합계\s*:\s*\d+\s*건/.test(el.innerText)) {
+                    el.innerText = checkedCount > 0
+                        ? `선택 합계: ${checkedCount}건 (검색 전체 ${allTrs.length}건)`
+                        : `검색 결과: ${allTrs.length}건`;
+                } else if (/총\s*[\d,]+\s*CV/.test(el.innerText)) {
+                    el.innerText = `총 ${showCv.toLocaleString()} CV`;
+                } else if (/총\s*[\d,]+\s*PV/.test(el.innerText)) {
+                    el.innerText = `총 ${showPv.toLocaleString()} PV`;
+                }
+            }
+        });
+    }
+
+    function removeDeletedFromFrontendMemory(rowDate, rowMemberId, rowCv, rowPv, targetDbId) {
+        const cleanDigits = String(rowMemberId || '').replace(/[^0-9]/g, '');
+        const candidateArrays = [
+            window.salesHistory,
+            window.allSales,
+            window.salesData,
+            window.integratedSales,
+            window.rawSales
+        ];
+        candidateArrays.forEach(arr => {
+            if (!Array.isArray(arr)) return;
+            for (let i = arr.length - 1; i >= 0; i--) {
+                const item = arr[i];
+                if (!item) continue;
+                if (targetDbId && String(item.id || item._dbId) === String(targetDbId)) {
+                    arr.splice(i, 1);
+                    break;
+                }
+                const iDate = String(item.transaction_date || item.date || item.sales_date || '').slice(0, 10);
+                const iMem = String(item.member_id || item.memberId || '').toUpperCase();
+                const iCv = Number(item.cv || 0);
+                const iPv = Number(item.pv || 0);
+                if (iDate === rowDate && (iMem === rowMemberId || (cleanDigits && iMem.endsWith(cleanDigits)) || (iCv === rowCv && iPv === rowPv))) {
+                    if (iCv === rowCv && iPv === rowPv) {
+                        arr.splice(i, 1);
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
     function createPopupSalesEntryBar(targetDoc, targetWin) {
         const wrap = targetDoc.createElement('div');
         wrap.className = 'bs-period-sales-entry-bar-v29';
         wrap.style.cssText = `
-            background: #111827;
-            border: 1.5px solid #3b82f6;
+            background: linear-gradient(180deg, #131c31 0%, #0f172a 100%);
+            border: 1px solid #3b82f6;
             border-radius: 8px;
-            padding: 10px 14px;
-            margin: 10px 16px 6px 16px;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+            padding: 9px 12px 11px 12px;
+            margin: 8px 16px 8px 16px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
             color: #ffffff;
             font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            box-sizing: border-box;
         `;
 
-        // 팝업창 내 날짜 입력칸에서 기본 날짜 가져오기
         let defaultDate = new Date().toISOString().slice(0, 10);
+        let baseYear = new Date().getFullYear();
         const popupInputs = Array.from(targetDoc.querySelectorAll('input'));
         for (const inp of popupInputs) {
             const v = String(inp.value || '').trim().replace(/\//g, '-');
             if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
                 defaultDate = v;
+                baseYear = parseInt(v.slice(0, 4), 10) || baseYear;
                 break;
             }
         }
@@ -15548,59 +16279,104 @@ if (document.readyState === 'loading') {
         const datalistId = 'bs-popup-member-dl-v29';
         const optionsHtml = members.map(m => `<option value="${m.id}">${m.name} (${m.rank})</option>`).join('');
 
+        const labelStyle = `display:block; font-size:10.5px; font-weight:700; color:#94a3b8; margin-bottom:3px; padding-left:2px; white-space:nowrap;`;
+        const inputBaseStyle = `height:29px; padding:0 7px; background:#1e293b; border:1px solid #475569; border-radius:5px; font-size:12px; font-weight:700; outline:none; box-sizing:border-box;`;
+
         wrap.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <span style="font-size:12.5px; font-weight:800; color:#60a5fa;">➕ 매출 수동 입력</span>
-                    <span id="bs-popup-matched-info-v29" style="font-size:11.5px; color:#94a3b8; font-weight:bold;">회원번호/이름과 CV, PV를 수동 입력 후 등록하세요. (천단위 쉼표 자동적용)</span>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; padding-bottom:5px; border-bottom:1px solid rgba(71,85,105,0.4);">
+                <div style="display:flex; align-items:center; gap:8px; min-width:0; overflow:hidden;">
+                    <span style="font-size:12.5px; font-weight:800; color:#60a5fa; white-space:nowrap; flex-shrink:0;">➕ 매출 수동 등록</span>
+                    <span id="bs-popup-matched-info-v29" style="font-size:11px; color:#94a3b8; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        회원번호 입력 시 이름 자동표시 · 날짜 MMDD(4자리) 입력
+                    </span>
                 </div>
+                <button type="button" id="bs-popup-del-checked-v29"
+                        style="height:25px; padding:0 10px; background:#991b1b; border:1px solid #ef4444; border-radius:5px; color:#ffffff; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; gap:4px;">
+                    🗑️ 선택 행 삭제
+                </button>
             </div>
             <datalist id="${datalistId}">${optionsHtml}</datalist>
-            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-                <input type="text" class="bs-se-member" list="${datalistId}" placeholder="회원ID 또는 이름 (예: 정인숙 / VK-...)"
-                       style="flex:1.4; min-width:165px; height:32px; padding:0 10px; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#fff; font-size:12.5px; font-weight:bold; outline:none;">
-                <input type="date" class="bs-se-date" value="${defaultDate}"
-                       style="width:132px; height:32px; padding:0 8px; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#fff; font-size:12.5px; outline:none;">
-                <select class="bs-se-cat"
-                        style="width:86px; height:32px; padding:0 6px; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#fff; font-size:12.5px; outline:none;">
-                    <option value="매출">일반매출</option>
-                    <option value="구독">구독매출</option>
-                </select>
-                <input type="text" inputmode="numeric" class="bs-se-cv" placeholder="CV 수동입력 (예: 700,000)"
-                       style="width:140px; height:32px; padding:0 10px; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#38bdf8; font-size:12.5px; font-weight:bold; text-align:right; outline:none;">
-                <input type="text" inputmode="numeric" class="bs-se-pv" placeholder="PV 수동입력 (예: 700,000)"
-                       style="width:140px; height:32px; padding:0 10px; background:#1e293b; border:1px solid #475569; border-radius:6px; color:#34d399; font-size:12.5px; font-weight:bold; text-align:right; outline:none;">
-                <button type="button" class="bs-se-submit"
-                        style="height:32px; padding:0 16px; background:linear-gradient(135deg, #2563eb, #1d4ed8); border:1px solid #60a5fa; border-radius:6px; color:#fff; font-size:12.5px; font-weight:800; cursor:pointer; white-space:nowrap;">
-                    💾 매출 등록
-                </button>
+
+            <div style="display:flex; flex-wrap:wrap; align-items:flex-end; gap:6px;">
+                <div style="width:112px; flex-shrink:0;">
+                    <label style="${labelStyle}">회원번호</label>
+                    <input type="text" class="bs-se-member" list="${datalistId}" placeholder="VK-1220934"
+                           style="${inputBaseStyle} width:100%; color:#ffffff;">
+                </div>
+                <div style="width:76px; flex-shrink:0;">
+                    <label style="${labelStyle}">회원명</label>
+                    <input type="text" class="bs-se-member-name" placeholder="자동표시" readonly
+                           style="${inputBaseStyle} width:100%; background:#0f172a; border-color:#334155; color:#34d399; text-align:center;">
+                </div>
+                <div style="width:92px; flex-shrink:0;">
+                    <label style="${labelStyle}">매출일(MMDD)</label>
+                    <input type="text" inputmode="numeric" class="bs-se-date" value="${defaultDate}" placeholder="1105" maxlength="10"
+                           style="${inputBaseStyle} width:100%; color:#fbbf24; text-align:center;">
+                </div>
+                <div style="width:72px; flex-shrink:0;">
+                    <label style="${labelStyle}">구분</label>
+                    <select class="bs-se-cat" style="${inputBaseStyle} width:100%; padding:0 3px; color:#e2e8f0;">
+                        <option value="매출">일반매출</option>
+                        <option value="구독">구독매출</option>
+                    </select>
+                </div>
+                <div style="width:94px; flex-shrink:0;">
+                    <label style="${labelStyle}">CV</label>
+                    <input type="text" inputmode="numeric" class="bs-se-cv" placeholder="700,000" maxlength="10"
+                           style="${inputBaseStyle} width:100%; color:#38bdf8; text-align:right;">
+                </div>
+                <div style="width:94px; flex-shrink:0;">
+                    <label style="${labelStyle}">PV</label>
+                    <input type="text" inputmode="numeric" class="bs-se-pv" placeholder="700,000" maxlength="10"
+                           style="${inputBaseStyle} width:100%; color:#34d399; text-align:right;">
+                </div>
+                <div style="flex:1; min-width:78px;">
+                    <button type="button" class="bs-se-submit"
+                            style="width:100%; height:29px; padding:0 10px; background:linear-gradient(135deg, #2563eb, #1d4ed8); border:1px solid #60a5fa; border-radius:5px; color:#fff; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; box-sizing:border-box;">
+                        💾 매출 등록
+                    </button>
+                </div>
             </div>
         `;
 
         const memberInp = wrap.querySelector('.bs-se-member');
+        const memberNameInp = wrap.querySelector('.bs-se-member-name');
         const dateInp = wrap.querySelector('.bs-se-date');
         const catSel = wrap.querySelector('.bs-se-cat');
         const cvInp = wrap.querySelector('.bs-se-cv');
         const pvInp = wrap.querySelector('.bs-se-pv');
         const submitBtn = wrap.querySelector('.bs-se-submit');
+        const delCheckedBtn = wrap.querySelector('#bs-popup-del-checked-v29');
         const matchLabel = wrap.querySelector('#bs-popup-matched-info-v29');
 
         const updateMemberPreview = () => {
-            const resolved = resolveMemberInput(memberInp.value);
+            const raw = memberInp.value.trim();
+            if (!raw) {
+                memberNameInp.value = '';
+                memberNameInp.style.borderColor = '#334155';
+                return;
+            }
+            const resolved = resolveMemberInput(raw);
             if (resolved && resolved.name) {
-                matchLabel.innerText = `✔ 대상 확인: ${resolved.name} (${resolved.id})`;
-                matchLabel.style.color = '#34d399';
-            } else if (resolved && resolved.id) {
-                matchLabel.innerText = `대상 ID: ${resolved.id}`;
-                matchLabel.style.color = '#fbbf24';
+                memberNameInp.value = resolved.name;
+                memberNameInp.style.color = '#34d399';
+                memberNameInp.style.borderColor = '#10b981';
             } else {
-                matchLabel.innerText = '회원번호/이름과 CV, PV를 수동 입력 후 등록하세요. (천단위 쉼표 자동적용)';
-                matchLabel.style.color = '#94a3b8';
+                memberNameInp.value = '미확인';
+                memberNameInp.style.color = '#f87171';
+                memberNameInp.style.borderColor = '#ef4444';
             }
         };
 
         memberInp.addEventListener('input', updateMemberPreview);
         memberInp.addEventListener('change', updateMemberPreview);
+        memberInp.addEventListener('blur', () => {
+            const resolved = resolveMemberInput(memberInp.value);
+            if (resolved && resolved.id) {
+                memberInp.value = resolved.id;
+                updateMemberPreview();
+            }
+        });
         memberInp.addEventListener('focus', () => {
             const dl = wrap.querySelector(`#${datalistId}`);
             if (dl) {
@@ -15610,36 +16386,51 @@ if (document.readyState === 'loading') {
             }
         });
 
-        // 🌟 CV 및 PV 입력창에 실시간 천 단위 쉼표(,) 포맷팅 적용 (자동복사 없이 완전 수동 입력)
+        dateInp.addEventListener('focus', () => dateInp.select());
+        dateInp.addEventListener('input', () => {
+            const val = dateInp.value.trim();
+            if (/^\d{4}$/.test(val)) {
+                const converted = normalizeMmddToDate(val, baseYear);
+                if (/^\d{4}-\d{2}-\d{2}$/.test(converted)) {
+                    dateInp.value = converted;
+                }
+            }
+        });
+        dateInp.addEventListener('blur', () => {
+            const converted = normalizeMmddToDate(dateInp.value, baseYear);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(converted)) {
+                dateInp.value = converted;
+            }
+        });
+
         [cvInp, pvInp].forEach(inp => {
             inp.addEventListener('input', () => {
                 const formatted = formatCommaNumber(inp.value);
-                if (inp.value !== formatted) {
-                    inp.value = formatted;
-                }
+                if (inp.value !== formatted) inp.value = formatted;
             });
         });
 
-        // 매출 등록 실행 함수
         const handleSaveSales = async () => {
             const resolved = resolveMemberInput(memberInp.value);
-            if (!resolved || !resolved.id) {
-                targetWin.alert('매출을 등록할 회원ID 또는 이름을 입력해 주세요.');
+            if (!resolved || !resolved.id || !resolved.name) {
+                window.alert('유효한 회원번호를 입력해 회원명이 표시되는지 확인해 주세요.');
                 memberInp.focus();
                 return;
             }
-            const tDate = dateInp.value;
-            if (!tDate) {
-                targetWin.alert('매출일자를 선택해 주세요.');
+
+            const tDate = normalizeMmddToDate(dateInp.value, baseYear);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(tDate)) {
+                window.alert('매출일을 MMDD(예: 1105) 또는 YYYY-MM-DD 형식으로 입력해 주세요.');
                 dateInp.focus();
                 return;
             }
+            dateInp.value = tDate;
 
             const cvVal = parseCommaNumber(cvInp.value);
             const pvVal = parseCommaNumber(pvInp.value);
 
             if (cvVal <= 0 && pvVal <= 0) {
-                targetWin.alert('CV 또는 PV 금액을 수동으로 입력해 주세요.');
+                window.alert('CV 또는 PV 금액을 수동으로 입력해 주세요.');
                 cvInp.focus();
                 return;
             }
@@ -15666,17 +16457,12 @@ if (document.readyState === 'loading') {
 
                 if (res.ok && data && data.success !== false) {
                     memberInp.value = resolved.id;
+                    memberNameInp.value = resolved.name;
                     cvInp.value = '';
                     pvInp.value = '';
-                    matchLabel.innerText = `✅ [${resolved.name || resolved.id}] CV ${cvVal.toLocaleString()} / PV ${pvVal.toLocaleString()} 등록 완료!`;
+                    matchLabel.innerText = `✅ [${resolved.name}] ${tDate} (${cvVal.toLocaleString()} CV) 등록됨`;
                     matchLabel.style.color = '#60a5fa';
 
-                    // 1) 메인 시뮬레이터 계보도 및 수당 즉시 갱신
-                    if (typeof window.fetchTreeData === 'function') {
-                        await window.fetchTreeData(true);
-                    }
-
-                    // 2) 팝업 창 테이블 및 상단 총 합계 실시간 업데이트
                     appendRowToPopupTable(targetDoc, {
                         id: data.id,
                         date: tDate,
@@ -15687,12 +16473,15 @@ if (document.readyState === 'loading') {
                         pv: pvVal
                     });
 
+                    if (typeof window.fetchTreeData === 'function') {
+                        await window.fetchTreeData(true);
+                    }
                     cvInp.focus();
                 } else {
-                    targetWin.alert('매출 저장 실패: ' + (data.error || '오류가 발생했습니다.'));
+                    window.alert('매출 저장 실패: ' + (data.error || '오류가 발생했습니다.'));
                 }
             } catch (err) {
-                targetWin.alert('매출 저장 중 통신 오류: ' + err.message);
+                window.alert('매출 저장 중 통신 오류: ' + err.message);
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerText = '💾 매출 등록';
@@ -15701,21 +16490,133 @@ if (document.readyState === 'loading') {
 
         submitBtn.onclick = handleSaveSales;
 
-        // 엔터키 이동 편의성: 회원입력(Enter) -> CV입력(Enter) -> PV입력(Enter) -> 즉시 저장
+        delCheckedBtn.onclick = async () => {
+            const selectedRows = getSelectedRowsInPopup(targetDoc);
+
+            if (selectedRows.length === 0) {
+                window.alert('삭제할 매출 행의 좌측 체크박스를 먼저 선택해 주세요.');
+                return;
+            }
+
+            if (!window.confirm(`선택한 ${selectedRows.length}건의 매출 내역을 삭제하시겠습니까?`)) {
+                return;
+            }
+
+            delCheckedBtn.disabled = true;
+            delCheckedBtn.innerText = '삭제중...';
+
+            try {
+                const histRes = await window.fetch(`${window.API_BASE || ''}/api/sales/history?isPopupSearch=1`);
+                const histRows = await histRes.json();
+                const dbList = Array.isArray(histRows) ? histRows : (histRows.data || []);
+                const usedDbIds = new Set();
+
+                for (const tr of selectedRows) {
+                    const tds = tr.querySelectorAll('td');
+                    const rowDate = tds.length >= 2 ? (tds[1].innerText || '').trim().replace(/\//g, '-') : '';
+                    const rowMemberId = tds.length >= 3 ? (tds[2].innerText || '').trim().toUpperCase() : '';
+                    const rowDigits = rowMemberId.replace(/[^0-9]/g, '');
+                    const rowCv = tds.length >= 6 ? (parseInt((tds[5].innerText || '0').replace(/[^0-9-]/g, ''), 10) || 0) : 0;
+                    const rowPv = tds.length >= 7 ? (parseInt((tds[6].innerText || '0').replace(/[^0-9-]/g, ''), 10) || 0) : 0;
+
+                    const cb = tr.querySelector('input[type="checkbox"], [data-sales-id], [data-id]');
+                    let targetDbId = (cb && (cb.getAttribute('data-sales-id') || cb.getAttribute('data-id') || cb.getAttribute('value'))) ||
+                                     tr.getAttribute('data-id') ||
+                                     tr.getAttribute('data-sales-id') ||
+                                     tr.getAttribute('data-key') || '';
+                    if (targetDbId === 'on') targetDbId = '';
+
+                    if (!targetDbId && rowDate) {
+                        let matched = dbList.find(item => {
+                            if (usedDbIds.has(item.id)) return false;
+                            const itemDate = String(item.transaction_date || '').trim().slice(0, 10);
+                            const itemMember = String(item.member_id || '').trim().toUpperCase();
+                            const itemDigits = itemMember.replace(/[^0-9]/g, '');
+                            const memberMatch = (itemMember === rowMemberId) || (rowDigits && itemDigits === rowDigits);
+                            return itemDate === rowDate &&
+                                   memberMatch &&
+                                   Number(item.cv || 0) === rowCv &&
+                                   Number(item.pv || 0) === rowPv;
+                        });
+
+                        if (!matched) {
+                            matched = dbList.find(item => {
+                                if (usedDbIds.has(item.id)) return false;
+                                const itemDate = String(item.transaction_date || '').trim().slice(0, 10);
+                                return itemDate === rowDate &&
+                                       Number(item.cv || 0) === rowCv &&
+                                       Number(item.pv || 0) === rowPv;
+                            });
+                        }
+
+                        if (matched && matched.id) {
+                            targetDbId = matched.id;
+                            usedDbIds.add(matched.id);
+                        }
+                    }
+
+                    if (targetDbId) {
+                        await window.fetch(`${window.API_BASE || ''}/api/sales/history/${encodeURIComponent(targetDbId)}`, {
+                            method: 'DELETE'
+                        });
+                    }
+
+                    await window.fetch(`${window.API_BASE || ''}/api/sales/history/delete-match`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id: targetDbId || null,
+                            transaction_date: rowDate,
+                            member_id: rowMemberId,
+                            cv: rowCv,
+                            pv: rowPv,
+                            _canvasMode: window.currentCanvasMode || 'main'
+                        })
+                    }).catch(() => {});
+
+                    removeDeletedFromFrontendMemory(rowDate, rowMemberId, rowCv, rowPv, targetDbId);
+                    tr.remove();
+                }
+
+                recalculatePopupSummary(targetDoc);
+
+                if (typeof window.fetchTreeData === 'function') {
+                    await window.fetchTreeData(true);
+                }
+
+                matchLabel.innerText = `🗑️ ${selectedRows.length}건 삭제 완료`;
+                matchLabel.style.color = '#f87171';
+            } catch (err) {
+                window.alert('삭제 중 오류가 발생했습니다: ' + err.message);
+            } finally {
+                delCheckedBtn.disabled = false;
+                delCheckedBtn.innerText = '🗑️ 선택 행 삭제';
+            }
+        };
+
         memberInp.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
+                const resolved = resolveMemberInput(memberInp.value);
+                if (resolved && resolved.id) {
+                    memberInp.value = resolved.id;
+                    updateMemberPreview();
+                }
+                dateInp.focus();
+            }
+        });
+        dateInp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                dateInp.value = normalizeMmddToDate(dateInp.value, baseYear);
                 cvInp.focus();
             }
         });
         cvInp.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                if (!pvInp.value) {
-                    pvInp.focus();
-                } else {
-                    handleSaveSales();
-                }
+                if (!pvInp.value) pvInp.focus();
+                else handleSaveSales();
             }
         });
         pvInp.addEventListener('keydown', (e) => {
@@ -15728,9 +16629,9 @@ if (document.readyState === 'loading') {
         return wrap;
     }
 
-    // 5. 팝업 창 테이블에 방금 입력한 매출 행을 추가하고 건수/총합계를 실시간 업데이트
     function appendRowToPopupTable(targetDoc, rowInfo) {
-        const table = targetDoc.querySelector('table');
+        const tables = Array.from(targetDoc.querySelectorAll('table'));
+        const table = tables.find(t => (t.innerText || '').includes('회원ID') || (t.innerText || '').includes('일자')) || tables[tables.length - 1];
         if (!table) return;
         const tbody = table.querySelector('tbody') || table;
 
@@ -15740,9 +16641,10 @@ if (document.readyState === 'loading') {
         }
 
         const tr = targetDoc.createElement('tr');
-        tr.style.cssText = 'border-bottom: 1px solid #1e293b; background: rgba(37, 99, 235, 0.12);';
+        tr.setAttribute('data-sales-id', rowInfo.id || '');
+        tr.style.cssText = 'border-bottom: 1px solid #1e293b; background: rgba(37, 99, 235, 0.12); cursor: pointer;';
         tr.innerHTML = `
-            <td style="padding:10px 8px; text-align:center;"><input type="checkbox" data-sales-id="${rowInfo.id || ''}"></td>
+            <td style="padding:10px 8px; text-align:center;"><input type="checkbox" data-sales-id="${rowInfo.id || ''}" style="width:15px; height:15px; cursor:pointer;"></td>
             <td style="padding:10px 8px; color:#e2e8f0;">${rowInfo.date}</td>
             <td style="padding:10px 8px; color:#60a5fa; font-weight:bold;">${rowInfo.memberId}</td>
             <td style="padding:10px 8px; color:#ffffff; font-weight:bold;">${rowInfo.memberName}</td>
@@ -15752,70 +16654,52 @@ if (document.readyState === 'loading') {
         `;
         tbody.insertBefore(tr, tbody.firstChild);
 
-        const allTrs = Array.from(tbody.querySelectorAll('tr'));
-        let totalCv = 0;
-        let totalPv = 0;
-        allTrs.forEach(r => {
-            const tds = r.querySelectorAll('td');
-            if (tds.length >= 7) {
-                const c = parseInt((tds[5].innerText || '0').replace(/[^0-9-]/g, ''), 10) || 0;
-                const p = parseInt((tds[6].innerText || '0').replace(/[^0-9-]/g, ''), 10) || 0;
-                totalCv += c;
-                totalPv += p;
-            }
-        });
-
-        const allSpans = targetDoc.querySelectorAll('span, div, strong');
-        allSpans.forEach(el => {
-            if (el.children.length === 0 && el.innerText) {
-                if (/검색\s*결과\s*:\s*\d+\s*건/.test(el.innerText)) {
-                    el.innerText = `검색 결과: ${allTrs.length}건`;
-                } else if (/총\s*[\d,]+\s*CV/.test(el.innerText)) {
-                    el.innerText = `총 ${totalCv.toLocaleString()} CV`;
-                } else if (/총\s*[\d,]+\s*PV/.test(el.innerText)) {
-                    el.innerText = `총 ${totalPv.toLocaleString()} PV`;
-                }
-            }
-        });
+        recalculatePopupSummary(targetDoc);
     }
 
-    // 6. 특정 Document(팝업 창 또는 메인 창)를 검사하여 '매출 기간 검색' 화면이면 입력 바 장착
     function inspectAndInjectIntoDoc(targetDoc, targetWin) {
         if (!targetDoc || !targetDoc.body) return;
-        if (targetDoc.querySelector('.bs-period-sales-entry-bar-v29')) return;
+
+        // 모달 내부 문서의 중복 헤더 숨김 & 마우스 휠 스크롤 보장 상시 체크
+        enhanceInnerModalDocScrollAndCleanHeader(targetDoc, null);
+
+        const existingBar = targetDoc.querySelector('.bs-period-sales-entry-bar-v29');
+        if (existingBar) {
+            const delBtn = existingBar.querySelector('#bs-popup-del-checked-v29');
+            if (delBtn && !delBtn.disabled) {
+                const selectedRows = getSelectedRowsInPopup(targetDoc);
+                const checkedCount = selectedRows.length;
+                delBtn.innerText = checkedCount > 0 ? `🗑️ 선택 행 삭제 (${checkedCount}건)` : '🗑️ 선택 행 삭제';
+                delBtn.style.background = checkedCount > 0 ? '#dc2626' : '#991b1b';
+            }
+            return;
+        }
 
         const bodyText = targetDoc.body.innerText || '';
         const isSalesPeriodWindow = (
             (targetDoc.title && targetDoc.title.includes('매출 기간 검색')) ||
-            (bodyText.includes('매출 기간 검색') && bodyText.includes('검색 결과'))
+            (bodyText.includes('매출 기간 검색') && (bodyText.includes('검색 결과') || bodyText.includes('선택 합계')))
         );
 
         if (!isSalesPeriodWindow) return;
 
         const entryBar = createPopupSalesEntryBar(targetDoc, targetWin || window);
 
-        const tableEl = targetDoc.querySelector('table');
-        let inserted = false;
-
         const summaryBar = Array.from(targetDoc.querySelectorAll('div, section')).find(el => {
             const txt = (el.innerText || '').trim();
-            return txt.startsWith('검색 결과:') && txt.includes('CV') && el.children.length <= 5;
+            return (txt.startsWith('검색 결과:') || txt.startsWith('선택 합계:')) && txt.includes('CV') && el.children.length <= 5;
         });
 
+        const tableEl = targetDoc.querySelector('table');
         if (summaryBar && summaryBar.parentElement) {
             summaryBar.parentElement.insertBefore(entryBar, summaryBar);
-            inserted = true;
         } else if (tableEl && tableEl.parentElement) {
             tableEl.parentElement.insertBefore(entryBar, tableEl);
-            inserted = true;
-        }
-
-        if (!inserted) {
+        } else {
             targetDoc.body.insertBefore(entryBar, targetDoc.body.firstChild);
         }
     }
 
-    // 7. 상시 모니터링
     setInterval(() => {
         inspectAndInjectIntoDoc(document, window);
 
@@ -15828,7 +16712,7 @@ if (document.readyState === 'loading') {
                 return false;
             }
         });
-    }, 400);
+    }, 250);
 })();
 // ============================================================================
 // [30] ⏳ 헤더 기간 설정 '타임머신' 완벽 연동 (당시 계보도 + 당시 직급 DOM 강제 동기화)
@@ -16076,4 +16960,88 @@ if (document.readyState === 'loading') {
     setInterval(() => {
         triggerTimeMachineRefresh(false);
     }, 450);
+})();
+// ============================================================================
+// [31] 🕒 GitHub 업로드 작업메모 기본값을 'YYYY-MM-DD_HHMM' (24시간제)으로 자동 세팅
+// ============================================================================
+(function initGitPushDefaultMemoFormatV31() {
+    // 현재 로컬 시간 기준 YYYY-MM-DD_HHMM 문자열 반환
+    window.getGitDefaultMemoTimeStr = function() {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}_${hh}${min}`;
+    };
+
+    // 1. window.prompt로 작업메모를 입력받는 경우 기본값을 YYYY-MM-DD_HHMM으로 자동 교체
+    if (!window.prompt._bsGitMemoWrappedV31) {
+        const origPrompt = window.prompt.bind(window);
+        const wrappedPrompt = function(message, defaultValue) {
+            const msgStr = String(message || '');
+            if (msgStr.includes('메모') || msgStr.includes('커밋') || msgStr.includes('GitHub') || msgStr.includes('깃허브') || msgStr.includes('업로드')) {
+                return origPrompt(message, window.getGitDefaultMemoTimeStr());
+            }
+            return origPrompt(message, defaultValue);
+        };
+        wrappedPrompt._bsGitMemoWrappedV31 = true;
+        window.prompt = wrappedPrompt;
+    }
+
+    // 2. 화면 내 커스텀 모달/입력창(input)으로 작업메모를 입력받는 경우 자동 세팅
+    function syncGitMemoInputs() {
+        const inputs = document.querySelectorAll('input[type="text"], textarea');
+        inputs.forEach(inp => {
+            const placeholder = String(inp.placeholder || '');
+            const idOrName = `${inp.id || ''} ${inp.name || ''} ${inp.className || ''}`.toLowerCase();
+            const isGitMemoInput = (
+                placeholder.includes('작업메모') ||
+                placeholder.includes('작업 메모') ||
+                placeholder.includes('커밋') ||
+                idOrName.includes('git') ||
+                idOrName.includes('commit')
+            );
+
+            if (isGitMemoInput) {
+                const currentVal = String(inp.value || '').trim();
+                // 비어있거나 기존 Auto-sync 기본값이 들어있는 경우 새 포맷으로 즉시 교체
+                if (!currentVal || currentVal.startsWith('Auto-sync') || /^\d{4}-\d{2}-\d{2}$/.test(currentVal)) {
+                    inp.value = window.getGitDefaultMemoTimeStr();
+                }
+            }
+        });
+    }
+
+    // GitHub 업로드 버튼 클릭 시 최신 시각(YYYY-MM-DD_HHMM)으로 갱신
+    document.addEventListener('click', (e) => {
+        const btn = e.target && e.target.closest('button, a');
+        if (!btn) return;
+        const txt = (btn.innerText || btn.title || '').toLowerCase();
+        if (txt.includes('git') || txt.includes('깃허브') || txt.includes('업로드') || txt.includes('백업')) {
+            setTimeout(syncGitMemoInputs, 30);
+            setTimeout(syncGitMemoInputs, 150);
+        }
+    }, true);
+
+    // 3. /api/git-push 호출 시 메시지가 비어있거나 기존 포맷이면 YYYY-MM-DD_HHMM으로 보정
+    const prevFetchV31 = window.fetch;
+    if (typeof prevFetchV31 === 'function' && !prevFetchV31._gitMemoWrappedV31) {
+        const gitFetch = function(input, init = {}) {
+            const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+            if (urlStr.includes('/api/git-push') && init && init.body) {
+                try {
+                    const bodyObj = JSON.parse(init.body);
+                    if (!bodyObj.message || String(bodyObj.message).startsWith('Auto-sync')) {
+                        bodyObj.message = window.getGitDefaultMemoTimeStr();
+                        init.body = JSON.stringify(bodyObj);
+                    }
+                } catch (e) {}
+            }
+            return prevFetchV31.call(this, input, init);
+        };
+        gitFetch._gitMemoWrappedV31 = true;
+        window.fetch = gitFetch;
+    }
 })();
