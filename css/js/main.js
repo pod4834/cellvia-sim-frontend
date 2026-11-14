@@ -17045,3 +17045,227 @@ if (document.readyState === 'loading') {
         window.fetch = gitFetch;
     }
 })();
+// ============================================================================
+// [32] 🎢 계보도 캔버스 60fps 초저지연 부드러운 마우스 휠(Smooth Wheel) 패닝 엔진
+//      - 휠 이동 시 뚝뚝 끊기는 CSS transition 간섭 제거 및 관성(Lerp) 보간 적용
+//      - 일반 휠: 상하 부드러운 이동 / Shift+휠: 좌우 이동 / Ctrl+휠: 확대·축소
+// ============================================================================
+(function initSmoothTreeCanvasWheelPanV32() {
+    let targetX = 0, targetY = 0;
+    let currentX = 0, currentY = 0;
+    let isAnimating = false;
+    let activeCanvasEl = null;
+    let activeScrollContainer = null;
+    let useTransformMode = false;
+
+    // 1. 계보도 캔버스 및 뷰포트 컨테이너 자동 탐색
+    function findTreeViewportAndCanvas() {
+        const canvasCandidates = [
+            document.getElementById('tree-canvas'),
+            document.getElementById('treeContainer'),
+            document.getElementById('tree-container'),
+            document.querySelector('.tree-canvas'),
+            document.querySelector('.canvas-inner'),
+            document.querySelector('.org-tree'),
+            document.querySelector('#canvas')
+        ].filter(Boolean);
+
+        // 파트너 카드(.node-card 등)들의 공통 부모(움직이는 판)를 직접 역추적
+        const sampleCard = document.querySelector('.node-card, .member-card, .tree-node-card, [data-member-id]');
+        if (sampleCard) {
+            let p = sampleCard.parentElement;
+            while (p && p !== document.body) {
+                const st = window.getComputedStyle(p);
+                if (st.transform && st.transform !== 'none') {
+                    canvasCandidates.unshift(p);
+                    break;
+                }
+                p = p.parentElement;
+            }
+        }
+
+        const canvas = canvasCandidates[0] || null;
+        if (!canvas) return { viewport: null, canvas: null };
+
+        // 스크롤 또는 오버플로우를 감싸고 있는 메인 중앙 영역 탐색
+        let viewport = canvas.parentElement;
+        while (viewport && viewport !== document.body) {
+            const st = window.getComputedStyle(viewport);
+            if (st.overflow === 'hidden' || st.overflow === 'auto' || st.overflowY === 'auto' || st.overflowY === 'scroll' || viewport.tagName === 'MAIN') {
+                break;
+            }
+            viewport = viewport.parentElement;
+        }
+
+        return { viewport: viewport || canvas.parentElement, canvas };
+    }
+
+    // 2. 현재 transform(translate, scale) 값 파싱 헬퍼
+    function parseTransform(el) {
+        const st = window.getComputedStyle(el);
+        const tr = st.transform || el.style.transform || '';
+        let x = 0, y = 0, scale = 1;
+
+        if (tr && tr !== 'none') {
+            const m2d = tr.match(/matrix\(([^)]+)\)/);
+            if (m2d) {
+                const vals = m2d[1].split(',').map(v => parseFloat(v.trim()));
+                if (vals.length >= 6) {
+                    scale = vals[0] || 1;
+                    x = vals[4] || 0;
+                    y = vals[5] || 0;
+                    return { x, y, scale };
+                }
+            }
+        }
+
+        // inline style 파싱 폴백
+        const inlineTr = el.style.transform || '';
+        const tMatch = inlineTr.match(/translate(?:3d)?\(\s*([-\d.]+)px\s*,\s*([-\d.]+)px/i);
+        if (tMatch) {
+            x = parseFloat(tMatch[1]) || 0;
+            y = parseFloat(tMatch[2]) || 0;
+        }
+        const sMatch = inlineTr.match(/scale\(\s*([-\d.]+)\s*\)/i);
+        if (sMatch) {
+            scale = parseFloat(sMatch[1]) || 1;
+        }
+        return { x, y, scale };
+    }
+
+    // 3. 메인 앱의 전역 좌표 변수(panX, panY, pointX, pointY 등)가 있다면 함께 동기화하여 마우스 드래그 시 튀는 현상 방지
+    function syncGlobalPanVariables(x, y) {
+        if (typeof window.panX === 'number') window.panX = x;
+        if (typeof window.panY === 'number') window.panY = y;
+        if (typeof window.pointX === 'number') window.pointX = x;
+        if (typeof window.pointY === 'number') window.pointY = y;
+        if (typeof window.translateX === 'number') window.translateX = x;
+        if (typeof window.translateY === 'number') window.translateY = y;
+        if (typeof window.treeOffsetX === 'number') window.treeOffsetX = x;
+        if (typeof window.treeOffsetY === 'number') window.treeOffsetY = y;
+    }
+
+    // 4. 60fps requestAnimationFrame 보간 애니메이션 루프
+    function smoothWheelStep() {
+        if (!isAnimating) return;
+
+        // 부드러운 감속 계수 (0.28: 지연 없이 빠르면서도 매끄럽게 감속)
+        const ease = 0.28;
+        const dx = targetX - currentX;
+        const dy = targetY - currentY;
+
+        if (Math.abs(dx) < 0.4 && Math.abs(dy) < 0.4) {
+            currentX = targetX;
+            currentY = targetY;
+            isAnimating = false;
+        } else {
+            currentX += dx * ease;
+            currentY += dy * ease;
+        }
+
+        if (useTransformMode && activeCanvasEl) {
+            const { scale } = parseTransform(activeCanvasEl);
+            // 휠 이동 중 버벅임을 유발하는 CSS transition 강제 해제
+            activeCanvasEl.style.transition = 'none';
+            activeCanvasEl.style.transform = `translate(${currentX.toFixed(1)}px, ${currentY.toFixed(1)}px) scale(${scale})`;
+            syncGlobalPanVariables(currentX, currentY);
+        } else if (activeScrollContainer) {
+            activeScrollContainer.scrollLeft = Math.round(currentX);
+            activeScrollContainer.scrollTop = Math.round(currentY);
+        }
+
+        if (isAnimating) {
+            requestAnimationFrame(smoothWheelStep);
+        }
+    }
+
+    // 5. 마우스 드래그(Panning) 시작 시에는 현재 위치를 즉시 동기화
+    window.addEventListener('mousedown', (e) => {
+        if (e.target.closest('aside, .left-panel, .side-panel, header, .header, .top-bar, #bottom-panel, .bottom-panel, .bs-inpage-modal-wrap-v29')) {
+            return;
+        }
+        isAnimating = false;
+    }, { capture: true });
+
+    // 6. 계보도 영역 마우스 휠 이벤트 가로채기 (캡처 단계에서 기존 뚝뚝 끊기는 휠 이벤트를 대체)
+    window.addEventListener('wheel', (e) => {
+        // 좌측 매출 패널, 하단 실적 집계 패널, 상단 헤더, 플로팅 모달창 내부는 자체 스크롤 유지
+        if (e.target.closest('aside, .left-panel, .side-panel, header, .header, .top-bar, .bs-inpage-modal-wrap-v29, .modal, .popup, table')) {
+            return;
+        }
+
+        const { viewport, canvas } = findTreeViewportAndCanvas();
+        if (!canvas && !viewport) return;
+
+        // 계보도 영역 밖이면 무시
+        if (viewport && !viewport.contains(e.target) && canvas && !canvas.contains(e.target)) {
+            return;
+        }
+
+        // Ctrl + 휠은 확대/축소(Zoom)로 동작
+        if (e.ctrlKey || e.metaKey) {
+            return;
+        }
+
+        // 기존의 부자연스러운 기본 휠 이벤트/줌 이벤트 차단
+        e.preventDefault();
+        e.stopPropagation();
+
+        // deltaMode 보정 (라인 단위 스크롤 마우스 대응)
+        const multiplier = (e.deltaMode === 1) ? 32 : (e.deltaMode === 2 ? 300 : 1);
+        let rawDeltaX = e.deltaX * multiplier;
+        let rawDeltaY = e.deltaY * multiplier;
+
+        // Shift 키를 누르고 휠을 굴리면 좌우 이동으로 전환
+        if (e.shiftKey && Math.abs(rawDeltaX) < Math.abs(rawDeltaY)) {
+            rawDeltaX = rawDeltaY;
+            rawDeltaY = 0;
+        }
+
+        // 휠 감도 조절 (적당히 시원하고 자연스러운 이동 폭)
+        const speed = 1.15;
+
+        const st = canvas ? window.getComputedStyle(canvas) : null;
+        const hasTransform = st && ((st.transform && st.transform !== 'none') || (canvas.style && canvas.style.transform));
+
+        if (hasTransform || (viewport && window.getComputedStyle(viewport).overflow === 'hidden')) {
+            // (A) Transform(translate) 기반 캔버스 이동 모드
+            useTransformMode = true;
+            activeCanvasEl = canvas;
+
+            if (!isAnimating) {
+                const cur = parseTransform(canvas);
+                currentX = cur.x;
+                currentY = cur.y;
+                targetX = cur.x;
+                targetY = cur.y;
+            }
+
+            // 휠을 아래로 굴리면(deltaY > 0) 아래쪽 파트너가 보이도록 캔버스를 위로(-Y) 이동
+            targetX -= rawDeltaX * speed;
+            targetY -= rawDeltaY * speed;
+        } else if (viewport) {
+            // (B) 네이티브 scrollTop/scrollLeft 기반 컨테이너 모드
+            useTransformMode = false;
+            activeScrollContainer = viewport;
+
+            if (!isAnimating) {
+                currentX = viewport.scrollLeft;
+                currentY = viewport.scrollTop;
+                targetX = currentX;
+                targetY = currentY;
+            }
+
+            const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+            const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+
+            targetX = Math.max(0, Math.min(maxScrollLeft, targetX + rawDeltaX * speed));
+            targetY = Math.max(0, Math.min(maxScrollTop, targetY + rawDeltaY * speed));
+        }
+
+        if (!isAnimating) {
+            isAnimating = true;
+            requestAnimationFrame(smoothWheelStep);
+        }
+    }, { passive: false, capture: true });
+})();
