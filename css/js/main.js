@@ -9426,16 +9426,16 @@ else initApp();
     setTimeout(ensureVjScreenRestoredOnBoot, 400);
 })();
 // ============================================================================
-// [41]~[45] 통합 패치 블록 [Version-3.5] (VK/VJ 모드별 독립 기간설정 & 최상위 파트너 가입일 기준 VJ 기본기수 엔진)
-// - Update: Version-3.5
-// - 1) VK 모드와 VJ 모드의 헤더 기간설정이 서로 동기화되지 않도록 모드별 독립 기간 저장소(modePeriodStoreV35) 분리!
-// - 2) VK 모드 기본기수: 실제 현재 날짜(new Date())에 해당하는 반월 기수(01~15일 / 16~말일) 자동 표시
-// - 3) VJ 모드 기본기수: 최상위 파트너의 가입일(join_date / 카드 가입일) 기준 반월 기수를 기본 표시하되,
-//      실제 현재 날짜가 최상위 파트너의 가입일을 지났다면 VK 모드와 동일하게 현재 날짜 기준 기수로 표시!
-// - 4) [42] 최상위 파트너 위쪽 드래그·휠 스크롤 차단, 디렉터 클릭 깜빡임 0ms 제거, 품위유지 상향/하향 표기 유지
+// [41]~[45] 통합 패치 블록 [Version-3.7] (하위내역 상단 전체 누적 PV 좌/우 표시 & 누적 PV 기준 소실적 판별·부족 PV 보정)
+// - Update: Version-3.7
+// - 1) 하위내역 표 최상단 표기를 '전체 누적 PV (좌측 / 우측)'로 정정
+// - 2) 소실적 라인 판별 기준을 전체 누적 PV(accAPV vs accBPV)로 통일하여, 4기수 합계 기준 부족 PV·달성률 및
+//      소실적 라인 붉은 강조 테두리·'★ 소실적' 마킹이 실제 소실적 라인에 정확히 표시되도록 보정
+// - 3) VK/VJ 모드별 독립 기간설정, 최상위 파트너 위쪽 드래그·휠 스크롤 차단, 디렉터 클릭 깜빡임 0ms 제거 유지
+// - 4) 품위유지 상향/하향 달성 표시 규정 및 비지네스 내비게이터 드래그 이동, [닫기 X], [내용 맞춤], ESC 키 유지
 // ============================================================================
-(function initUnifiedSimulatorPatchesVersion3_5() {
-    var PATCH_VERSION = 'Version-3.5';
+(function initUnifiedSimulatorPatchesVersion3_7() {
+    var PATCH_VERSION = 'Version-3.7';
     var isClampingTransform = false;
     var isProgrammaticDateUpdate = false;
     var isEnforcingDomSync = false;
@@ -9450,10 +9450,9 @@ else initApp();
     var indexedPeriodKey = '';
     var indexedMode = '';
 
-    // 🌟 VK / VJ 모드별 독립 기간 상태 및 사용자 수동 변경 여부 추적
-    var modePeriodStoreV35 = { vk: null, vj: null };
-    var userManuallyChangedPeriodV35 = { vk: false, vj: false };
-    var lastAppliedCanvasModeV35 = '';
+    var modePeriodStoreV37 = { vk: null, vj: null };
+    var userManuallyChangedPeriodV37 = { vk: false, vj: false };
+    var lastAppliedCanvasModeV37 = '';
 
     var salesByMemberNormMap = new Map();
     var memberNodeByNormMap = new Map();
@@ -9514,7 +9513,7 @@ else initApp();
         { rank: 'DIRECTOR', level: 4, cv: 2100000 }
     ];
 
-    function detectActiveCanvasModeV35() {
+    function detectActiveCanvasModeV37() {
         var firstCard = document.querySelector('.node-card');
         if (firstCard) {
             var cardTxt = String(firstCard.innerText ? firstCard.innerText : '');
@@ -9543,7 +9542,7 @@ else initApp();
         var prefix = '';
         if (cleaned.indexOf('vj') === 0) prefix = 'vj_';
         else if (cleaned.indexOf('vk') === 0) prefix = 'vk_';
-        else prefix = detectActiveCanvasModeV35() + '_';
+        else prefix = detectActiveCanvasModeV37() + '_';
 
         var numPart = cleaned.replace(/^v[kj]-?0*/, '');
         if (!numPart) numPart = '0';
@@ -9561,7 +9560,7 @@ else initApp();
         if (!val) return '';
         var s = String(val).trim().replace(/[./]/g, '-');
         if (/^\d{4}$/.test(s)) {
-            var defaultYear = (detectActiveCanvasModeV35() === 'vj') ? '2027-' : '2026-';
+            var defaultYear = (detectActiveCanvasModeV37() === 'vj') ? '2027-' : '2026-';
             return defaultYear + s.substring(0, 2) + '-' + s.substring(2, 4);
         }
         if (/^\d{8}$/.test(s)) {
@@ -9575,12 +9574,11 @@ else initApp();
         return '';
     }
 
-    function getLastDayOfMonthV35(year, month) {
+    function getLastDayOfMonthV37(year, month) {
         return new Date(year, month, 0).getDate();
     }
 
-    // 🌟 임의의 날짜(YYYY-MM-DD)가 속한 반월 기수({ startDate, endDate }) 반환
-    function dateStrToHalfMonthPeriodV35(dateStr) {
+    function dateStrToHalfMonthPeriodV37(dateStr) {
         var cleaned = cleanDate(dateStr);
         if (!cleaned) return null;
         var p = cleaned.split('-');
@@ -9594,7 +9592,7 @@ else initApp();
                 endDate: y + '-' + mPad + '-15'
             };
         } else {
-            var lastD = getLastDayOfMonthV35(y, m);
+            var lastD = getLastDayOfMonthV37(y, m);
             return {
                 startDate: y + '-' + mPad + '-16',
                 endDate: y + '-' + mPad + '-' + String(lastD).padStart(2, '0')
@@ -9602,8 +9600,7 @@ else initApp();
         }
     }
 
-    // 🌟 실제 현재 날짜(new Date()) 문자열 및 해당 반월 기수 산출
-    function getTodayRealDateStrV35() {
+    function getTodayRealDateStrV37() {
         var now = new Date();
         var y = now.getFullYear();
         var m = String(now.getMonth() + 1).padStart(2, '0');
@@ -9611,12 +9608,11 @@ else initApp();
         return y + '-' + m + '-' + d;
     }
 
-    function getCurrentRealDatePeriodV35() {
-        return dateStrToHalfMonthPeriodV35(getTodayRealDateStrV35());
+    function getCurrentRealDatePeriodV37() {
+        return dateStrToHalfMonthPeriodV37(getTodayRealDateStrV37());
     }
 
-    // 🌟 최상위 파트너의 가입일(YYYY-MM-DD) 추출 (VJ 모드 등)
-    function extractJoinDateFromNodeObjV35(node) {
+    function extractJoinDateFromNodeObjV37(node) {
         if (!node ? true : typeof node !== 'object') return '';
         var raw = node.join_date ? node.join_date
             : (node.joinDate ? node.joinDate
@@ -9628,28 +9624,26 @@ else initApp();
         return cleanDate(raw);
     }
 
-    function getTopMostPartnerJoinDateV35(mode) {
-        var targetMode = mode ? mode : detectActiveCanvasModeV35();
+    function getTopMostPartnerJoinDateV37(mode) {
+        var targetMode = mode ? mode : detectActiveCanvasModeV37();
 
-        // 1순위: 현재 화면에 렌더링된 최상위 파트너 카드(.node-card)가 해당 모드와 일치하면 카드/노드에서 추출
         var topCard = findTopMostPartnerCard();
         if (topCard) {
             var topCardId = extractMemberIdFromCardEl(topCard);
             var isCardMatchingMode = (targetMode === 'vj') ? (topCardId.indexOf('VJ-') === 0) : (topCardId.indexOf('VK-') === 0);
             if (isCardMatchingMode) {
                 var nObj = memberNodeByNormMap.get(normNumStr(topCardId));
-                var dFromNode = extractJoinDateFromNodeObjV35(nObj);
+                var dFromNode = extractJoinDateFromNodeObjV37(nObj);
                 if (dFromNode) return dFromNode;
 
                 if (typeof window.findMemberNode === 'function') {
                     try {
                         var foundN = window.findMemberNode(topCardId);
-                        var dFromFound = extractJoinDateFromNodeObjV35(foundN);
+                        var dFromFound = extractJoinDateFromNodeObjV37(foundN);
                         if (dFromFound) return dFromFound;
                     } catch (e) {}
                 }
 
-                // 카드 DOM 내부의 첫 번째 YYYY-MM-DD 날짜(가입일) 추출
                 var cardTxt = String(topCard.innerText ? topCard.innerText : '');
                 var dateMatches = cardTxt.match(/\d{4}-\d{2}-\d{2}/g);
                 if (dateMatches && dateMatches.length > 0) {
@@ -9658,18 +9652,16 @@ else initApp();
             }
         }
 
-        // 2순위: 전역 트리 데이터(vjTreeData / treeData) 루트 노드에서 추출
         var treeRoot = (targetMode === 'vj' && window.vjTreeData) ? window.vjTreeData : window.treeData;
         if (treeRoot) {
             var rootId = String(treeRoot.id ? treeRoot.id : (treeRoot.member_id ? treeRoot.member_id : '')).trim().toUpperCase();
             var rootMatchesMode = (targetMode === 'vj') ? (rootId.indexOf('VJ-') === 0) : (rootId.indexOf('VK-') === 0);
             if (rootMatchesMode) {
-                var dFromRoot = extractJoinDateFromNodeObjV35(treeRoot);
+                var dFromRoot = extractJoinDateFromNodeObjV37(treeRoot);
                 if (dFromRoot) return dFromRoot;
             }
         }
 
-        // 3순위: 플랫 회원 배열(vjFlatMembersData / flatMembersData / membersData)의 최상위(루트) 회원에서 추출
         var flatLists = [window.vjFlatMembersData, window.flatMembersData, window.membersData];
         for (var i = 0; i < flatLists.length; i++) {
             var arr = flatLists[i];
@@ -9680,12 +9672,11 @@ else initApp();
                 return (targetMode === 'vj') ? (mid.indexOf('VJ-') === 0) : (mid.indexOf('VK-') === 0);
             });
             if (modeMembers.length > 0) {
-                // 부모/후원인이 없거나 가장 첫 번째 등록된 최상위 멤버 탐색
                 var rootMember = modeMembers.find(function(m) {
                     var p = m.parent_id ? m.parent_id : (m.sponsor_id ? m.sponsor_id : '');
                     return !p || String(p).trim() === '' || String(p).trim() === '-';
                 }) || modeMembers[0];
-                var dFromFlat = extractJoinDateFromNodeObjV35(rootMember);
+                var dFromFlat = extractJoinDateFromNodeObjV37(rootMember);
                 if (dFromFlat) return dFromFlat;
             }
         }
@@ -9693,36 +9684,32 @@ else initApp();
         return '';
     }
 
-    // 🌟 모드별 기본 기간 결정 규칙:
-    // - VK 모드: 현재 날짜(new Date())에 해당하는 반월 기수
-    // - VJ 모드: 최상위 파트너의 가입일 기준 반월 기수. 단, 실제 현재 날짜가 최상위 파트너의 가입일을 지났다면 VK 모드와 동일하게 현재 날짜 기준 기수!
-    function getDefaultPeriodForModeV35(mode) {
-        var activeMode = mode ? mode : detectActiveCanvasModeV35();
-        var currentRealPeriod = getCurrentRealDatePeriodV35();
+    function getDefaultPeriodForModeV37(mode) {
+        var activeMode = mode ? mode : detectActiveCanvasModeV37();
+        var currentRealPeriod = getCurrentRealDatePeriodV37();
 
         if (activeMode !== 'vj') {
             return currentRealPeriod;
         }
 
-        var topJoinDate = getTopMostPartnerJoinDateV35('vj');
+        var topJoinDate = getTopMostPartnerJoinDateV37('vj');
         if (!topJoinDate) {
             return currentRealPeriod;
         }
 
-        var todayStr = getTodayRealDateStrV35();
-        // 실제 날짜가 최상위 파트너의 가입일을 지났다면 현재 날짜에 해당하는 기수로 표시
+        var todayStr = getTodayRealDateStrV37();
         if (todayStr > topJoinDate) {
             return currentRealPeriod;
         }
 
-        var joinPeriod = dateStrToHalfMonthPeriodV35(topJoinDate);
+        var joinPeriod = dateStrToHalfMonthPeriodV37(topJoinDate);
         return joinPeriod ? joinPeriod : currentRealPeriod;
     }
 
     function isEntryMatchingCurrentMode(rawId) {
         var up = String(rawId ? rawId : '').trim().toUpperCase();
         if (!up) return false;
-        var activeMode = detectActiveCanvasModeV35();
+        var activeMode = detectActiveCanvasModeV37();
         if (activeMode === 'vj') {
             if (up.indexOf('VK-') === 0) return false;
             return true;
@@ -9733,7 +9720,7 @@ else initApp();
     }
 
     function getAllActiveSalesArray() {
-        var activeMode = detectActiveCanvasModeV35();
+        var activeMode = detectActiveCanvasModeV37();
         var primaryArr = null;
 
         if (activeMode === 'vj') {
@@ -9834,7 +9821,7 @@ else initApp();
         return fallbackRank ? String(fallbackRank).trim().toUpperCase() : 'GUEST';
     }
 
-    function enforceCardDOMRankTitleV35(cardEl, mNorm, targetRankName, sortKeyNum) {
+    function enforceCardDOMRankTitleV37(cardEl, mNorm, targetRankName, sortKeyNum) {
         if (!cardEl ? true : !targetRankName) return;
         var finalRank = String(targetRankName).trim().toUpperCase();
         if (mNorm && sortKeyNum) {
@@ -9863,7 +9850,7 @@ else initApp();
         }
     }
 
-    function fastApplyCachedRanksAndBadgesToAllCardsV35() {
+    function fastApplyCachedRanksAndBadgesToAllCardsV37() {
         if (isEnforcingDomSync) return;
         var cards = document.querySelectorAll('.node-card');
         if (!cards ? true : cards.length === 0) return;
@@ -9883,7 +9870,7 @@ else initApp();
 
                 if (periodRankByNormMap.has(pKey)) {
                     var cachedRank = periodRankByNormMap.get(pKey);
-                    enforceCardDOMRankTitleV35(card, mNorm, cachedRank, pKeys.sortKeyNum);
+                    enforceCardDOMRankTitleV37(card, mNorm, cachedRank, pKeys.sortKeyNum);
                 }
 
                 var oldBadges = card.querySelectorAll('.bs-card-top-badges');
@@ -10069,7 +10056,7 @@ else initApp();
         }
     };
 
-    function ensureTreeContainerMutationObserverV35() {
+    function ensureTreeContainerMutationObserverV37() {
         var container = document.getElementById('treeContainer') || document.body;
         if (activeTreeObserver && observedTreeContainerEl === container) return;
 
@@ -10098,7 +10085,7 @@ else initApp();
             }
 
             if (needsRankRestore) {
-                fastApplyCachedRanksAndBadgesToAllCardsV35();
+                fastApplyCachedRanksAndBadgesToAllCardsV37();
             }
             if (needsCeilingClamp) {
                 window.clampCanvasTopPartnerBoundaryV42();
@@ -10115,9 +10102,9 @@ else initApp();
     }
 
     // ========================================================================
-    // 🌟 [Version-3.5 핵심] VK / VJ 모드별 독립 기간 동기화 및 기본 기수 적용 컨트롤러
+    // 🌟 VK / VJ 모드별 독립 기간 동기화 및 기본 기수 적용 컨트롤러
     // ========================================================================
-    function getHeaderDateInputPairV35() {
+    function getHeaderDateInputPairV37() {
         var allInputs = Array.from(document.querySelectorAll('input'));
         var topCandidates = [];
 
@@ -10162,18 +10149,18 @@ else initApp();
         return { startInput: topCandidates[0].el, endInput: topCandidates[1].el };
     }
 
-    function normalizeUserDateTextV35(rawStr, referenceYearStr) {
+    function normalizeUserDateTextV37(rawStr, referenceYearStr) {
         var s = String(rawStr ? rawStr : '').trim();
         if (!s) return '';
         var refYear = (referenceYearStr && /^\d{4}$/.test(referenceYearStr))
             ? referenceYearStr
-            : ((detectActiveCanvasModeV35() === 'vj') ? '2027' : '2026');
+            : ((detectActiveCanvasModeV37() === 'vj') ? '2027' : '2026');
 
         if (/^\d{4}$/.test(s)) {
             var mm = parseInt(s.substring(0, 2), 10);
             var dd = parseInt(s.substring(2, 4), 10);
             if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
-                var maxD = getLastDayOfMonthV35(parseInt(refYear, 10), mm);
+                var maxD = getLastDayOfMonthV37(parseInt(refYear, 10), mm);
                 if (dd > maxD) dd = maxD;
                 return refYear + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0');
             }
@@ -10181,10 +10168,10 @@ else initApp();
         return cleanDate(s);
     }
 
-    function shiftHalfMonthPeriodV35(currStartStr, currEndStr, deltaHalfMonths) {
+    function shiftHalfMonthPeriodV37(currStartStr, currEndStr, deltaHalfMonths) {
         var baseStr = cleanDate(currEndStr) ? cleanDate(currEndStr) : cleanDate(currStartStr);
         if (!baseStr) {
-            var defP = getDefaultPeriodForModeV35(detectActiveCanvasModeV35());
+            var defP = getDefaultPeriodForModeV37(detectActiveCanvasModeV37());
             baseStr = defP.endDate;
         }
         var parts = baseStr.split('-');
@@ -10202,13 +10189,13 @@ else initApp();
 
         var mPadded = String(newM).padStart(2, '0');
         var newStart = newY + '-' + mPadded + '-' + (newHalf === 0 ? '01' : '16');
-        var endDay = (newHalf === 0) ? '15' : String(getLastDayOfMonthV35(newY, newM)).padStart(2, '0');
+        var endDay = (newHalf === 0) ? '15' : String(getLastDayOfMonthV37(newY, newM)).padStart(2, '0');
         var newEnd = newY + '-' + mPadded + '-' + endDay;
 
         return { startDate: newStart, endDate: newEnd };
     }
 
-    function setNativeInputValueSafelyV35(inpEl, newVal) {
+    function setNativeInputValueSafelyV37(inpEl, newVal) {
         if (!inpEl ? true : !newVal) return;
         isProgrammaticDateUpdate = true;
         try {
@@ -10228,41 +10215,37 @@ else initApp();
         }
     }
 
-    // 🌟 현재 활성 모드(VK 또는 VJ)에 맞는 기간이 헤더에 설정되어 있는지 확인하고,
-    //    모드가 전환되었거나 초기 로드 시 각 모드의 기본 기간을 독립적으로 적용!
-    function syncHeaderPeriodForActiveModeV35(forceResetToDefault) {
-        var activeMode = detectActiveCanvasModeV35();
-        var pair = getHeaderDateInputPairV35();
+    function syncHeaderPeriodForActiveModeV37(forceResetToDefault) {
+        var activeMode = detectActiveCanvasModeV37();
+        var pair = getHeaderDateInputPairV37();
         if (!pair) return;
 
-        var modeChanged = (activeMode !== lastAppliedCanvasModeV35);
+        var modeChanged = (activeMode !== lastAppliedCanvasModeV37);
         if (!forceResetToDefault && !modeChanged) {
-            // 비동기 로드 직후 VJ 최상위 파트너 가입일이 뒤늦게 확보된 경우, 사용자가 수동 변경하지 않았다면 기본 기수로 보정
-            if (activeMode === 'vj' && !userManuallyChangedPeriodV35.vj) {
-                var freshDefVj = getDefaultPeriodForModeV35('vj');
-                var storedVj = modePeriodStoreV35.vj;
+            if (activeMode === 'vj' && !userManuallyChangedPeriodV37.vj) {
+                var freshDefVj = getDefaultPeriodForModeV37('vj');
+                var storedVj = modePeriodStoreV37.vj;
                 if (!storedVj ? true : (storedVj.startDate !== freshDefVj.startDate ? true : (storedVj.endDate !== freshDefVj.endDate))) {
-                    modePeriodStoreV35.vj = freshDefVj;
-                    window.applyTimeSlipPeriodChangeV35(freshDefVj.startDate, freshDefVj.endDate, false);
+                    modePeriodStoreV37.vj = freshDefVj;
+                    window.applyTimeSlipPeriodChangeV37(freshDefVj.startDate, freshDefVj.endDate, false);
                 }
             }
             return;
         }
 
-        lastAppliedCanvasModeV35 = activeMode;
+        lastAppliedCanvasModeV37 = activeMode;
 
-        // 해당 모드에서 사용자가 수동으로 변경해둔 기간이 있으면 그 값을 복원하고, 없으면 해당 모드의 기본 기간 계산
-        var targetPeriod = (!forceResetToDefault && userManuallyChangedPeriodV35[activeMode] && modePeriodStoreV35[activeMode])
-            ? modePeriodStoreV35[activeMode]
-            : getDefaultPeriodForModeV35(activeMode);
+        var targetPeriod = (!forceResetToDefault && userManuallyChangedPeriodV37[activeMode] && modePeriodStoreV37[activeMode])
+            ? modePeriodStoreV37[activeMode]
+            : getDefaultPeriodForModeV37(activeMode);
 
-        modePeriodStoreV35[activeMode] = targetPeriod;
-        window.applyTimeSlipPeriodChangeV35(targetPeriod.startDate, targetPeriod.endDate, false);
+        modePeriodStoreV37[activeMode] = targetPeriod;
+        window.applyTimeSlipPeriodChangeV37(targetPeriod.startDate, targetPeriod.endDate, false);
     }
 
-    window.applyTimeSlipPeriodChangeV35 = function(newStartDate, newEndDate, isManualUserAction) {
-        var activeMode = detectActiveCanvasModeV35();
-        var pair = getHeaderDateInputPairV35();
+    window.applyTimeSlipPeriodChangeV37 = function(newStartDate, newEndDate, isManualUserAction) {
+        var activeMode = detectActiveCanvasModeV37();
+        var pair = getHeaderDateInputPairV37();
         var refYear = '';
         if (pair && pair.startInput && /^\d{4}-/.test(pair.startInput.value)) {
             refYear = pair.startInput.value.substring(0, 4);
@@ -10270,13 +10253,13 @@ else initApp();
             refYear = (activeMode === 'vj') ? '2027' : '2026';
         }
 
-        var normStart = normalizeUserDateTextV35(newStartDate, refYear);
-        var normEnd = normalizeUserDateTextV35(newEndDate, normStart ? normStart.substring(0, 4) : refYear);
+        var normStart = normalizeUserDateTextV37(newStartDate, refYear);
+        var normEnd = normalizeUserDateTextV37(newEndDate, normStart ? normStart.substring(0, 4) : refYear);
 
         if (normStart && !normEnd) {
             var sp = normStart.split('-');
             var isFH = parseInt(sp[2], 10) <= 15;
-            normEnd = sp[0] + '-' + sp[1] + '-' + (isFH ? '15' : String(getLastDayOfMonthV35(parseInt(sp[0], 10), parseInt(sp[1], 10))).padStart(2, '0'));
+            normEnd = sp[0] + '-' + sp[1] + '-' + (isFH ? '15' : String(getLastDayOfMonthV37(parseInt(sp[0], 10), parseInt(sp[1], 10))).padStart(2, '0'));
         } else if (!normStart && normEnd) {
             var ep = normEnd.split('-');
             var isFH2 = parseInt(ep[2], 10) <= 15;
@@ -10284,17 +10267,17 @@ else initApp();
         }
 
         if (pair && normStart && normEnd) {
-            if (pair.startInput.value !== normStart) setNativeInputValueSafelyV35(pair.startInput, normStart);
-            if (pair.endInput.value !== normEnd) setNativeInputValueSafelyV35(pair.endInput, normEnd);
+            if (pair.startInput.value !== normStart) setNativeInputValueSafelyV37(pair.startInput, normStart);
+            if (pair.endInput.value !== normEnd) setNativeInputValueSafelyV37(pair.endInput, normEnd);
         }
 
         var activeStart = normStart ? normStart : (pair ? cleanDate(pair.startInput.value) : '');
         var activeEnd = normEnd ? normEnd : (pair ? cleanDate(pair.endInput.value) : '');
 
         if (activeStart && activeEnd) {
-            modePeriodStoreV35[activeMode] = { startDate: activeStart, endDate: activeEnd };
+            modePeriodStoreV37[activeMode] = { startDate: activeStart, endDate: activeEnd };
             if (isManualUserAction !== false) {
-                userManuallyChangedPeriodV35[activeMode] = true;
+                userManuallyChangedPeriodV37[activeMode] = true;
             }
         }
 
@@ -10321,16 +10304,16 @@ else initApp();
             } else if (typeof window.updatePerformanceTable === 'function') {
                 try { window.updatePerformanceTable(window.currentSelectedId); } catch (e) {}
             }
-            fastApplyCachedRanksAndBadgesToAllCardsV35();
+            fastApplyCachedRanksAndBadgesToAllCardsV37();
         }
 
         var navModal = document.getElementById('bizNavModal');
         if (navModal && navModal.style.display !== 'none' && window.currentSelectedId) {
-            window.openInstantNavigatorV35(window.currentSelectedId);
+            window.openInstantNavigatorV37(window.currentSelectedId);
         }
     };
 
-    function isHeaderPeriodNavButtonV35(targetEl) {
+    function isHeaderPeriodNavButtonV37(targetEl) {
         if (!targetEl ? true : !targetEl.closest) return null;
         var btn = targetEl.closest('button, a, span[role="button"], div[role="button"]');
         if (!btn) return null;
@@ -10352,16 +10335,16 @@ else initApp();
         if (e.key === 'Escape' ? true : (e.keyCode === 27)) {
             var navModal = document.getElementById('bizNavModal');
             if (navModal && navModal.style.display !== 'none') {
-                window.closeInstantNavigatorV35();
+                window.closeInstantNavigatorV37();
             }
             return;
         }
         if (e.key === 'Enter' ? true : (e.keyCode === 13)) {
-            var pair = getHeaderDateInputPairV35();
+            var pair = getHeaderDateInputPairV37();
             if (pair && (e.target === pair.startInput ? true : (e.target === pair.endInput))) {
                 e.preventDefault();
                 e.stopPropagation();
-                window.applyTimeSlipPeriodChangeV35(pair.startInput.value, pair.endInput.value, true);
+                window.applyTimeSlipPeriodChangeV37(pair.startInput.value, pair.endInput.value, true);
             }
         }
     }, true);
@@ -10371,9 +10354,9 @@ else initApp();
         var t = e.target;
         if (!t) return;
 
-        var pair = getHeaderDateInputPairV35();
+        var pair = getHeaderDateInputPairV37();
         if (pair && (t === pair.startInput ? true : (t === pair.endInput))) {
-            window.applyTimeSlipPeriodChangeV35(pair.startInput.value, pair.endInput.value, true);
+            window.applyTimeSlipPeriodChangeV37(pair.startInput.value, pair.endInput.value, true);
             return;
         }
 
@@ -10385,25 +10368,25 @@ else initApp();
                 var optTxt = opt ? String(opt.text ? opt.text : '') : '';
 
                 setTimeout(function() {
-                    var pNow = getHeaderDateInputPairV35();
-                    var activeMode = detectActiveCanvasModeV35();
+                    var pNow = getHeaderDateInputPairV37();
+                    var activeMode = detectActiveCanvasModeV37();
 
                     var rangeMatches = (optVal + ' ' + optTxt).match(/\d{4}-\d{2}-\d{2}/g);
                     if (rangeMatches && rangeMatches.length >= 2) {
-                        window.applyTimeSlipPeriodChangeV35(rangeMatches[0], rangeMatches[1], true);
+                        window.applyTimeSlipPeriodChangeV37(rangeMatches[0], rangeMatches[1], true);
                         return;
                     }
 
                     if (optTxt.indexOf('이번') !== -1) {
-                        userManuallyChangedPeriodV35[activeMode] = false;
-                        var defP = getDefaultPeriodForModeV35(activeMode);
-                        window.applyTimeSlipPeriodChangeV35(defP.startDate, defP.endDate, false);
+                        userManuallyChangedPeriodV37[activeMode] = false;
+                        var defP = getDefaultPeriodForModeV37(activeMode);
+                        window.applyTimeSlipPeriodChangeV37(defP.startDate, defP.endDate, false);
                     } else if (optTxt.indexOf('지난') !== -1 ? true : (optTxt.indexOf('전월') !== -1 ? true : (optTxt.indexOf('이전') !== -1))) {
-                        var curModeStore = modePeriodStoreV35[activeMode] ? modePeriodStoreV35[activeMode] : getDefaultPeriodForModeV35(activeMode);
-                        var shifted = shiftHalfMonthPeriodV35(curModeStore.startDate, curModeStore.endDate, -1);
-                        window.applyTimeSlipPeriodChangeV35(shifted.startDate, shifted.endDate, true);
+                        var curModeStore = modePeriodStoreV37[activeMode] ? modePeriodStoreV37[activeMode] : getDefaultPeriodForModeV37(activeMode);
+                        var shifted = shiftHalfMonthPeriodV37(curModeStore.startDate, curModeStore.endDate, -1);
+                        window.applyTimeSlipPeriodChangeV37(shifted.startDate, shifted.endDate, true);
                     } else if (pNow) {
-                        window.applyTimeSlipPeriodChangeV35(pNow.startInput.value, pNow.endInput.value, true);
+                        window.applyTimeSlipPeriodChangeV37(pNow.startInput.value, pNow.endInput.value, true);
                     }
                 }, 25);
             }
@@ -10514,25 +10497,25 @@ else initApp();
             '<div style="width:450px; max-width:95vw; background:#111827; border:1.5px solid #3b82f6; border-radius:12px; box-shadow:0 25px 60px rgba(0,0,0,0.9); overflow:hidden;">',
             '  <div style="height:44px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; justify-content:space-between; padding:0 16px; color:#f8fafc; font-size:13.5px; font-weight:800;">',
             '    <span>🔀 파트너 산하 라인 이동 배치</span>',
-            '    <button type="button" id="bs-line-x-v35" style="background:transparent;border:none;color:#94a3b8;font-size:15px;cursor:pointer;">✕</button>',
+            '    <button type="button" id="bs-line-x-v37" style="background:transparent;border:none;color:#94a3b8;font-size:15px;cursor:pointer;">✕</button>',
             '  </div>',
             '  <div style="padding:16px 18px;">',
             '    <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px; margin-bottom:14px; color:#e2e8f0; font-size:13px; text-align:center; font-weight:700;">' + msg + '</div>',
             '    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">',
-            '      <button type="button" id="bs-btn-line-a-v35" style="padding:12px; border-radius:8px; border:2px solid #60a5fa; background:rgba(37,99,235,0.28); color:#fff; font-weight:800; cursor:pointer;">👈 A 라인 (좌측)</button>',
-            '      <button type="button" id="bs-btn-line-b-v35" style="padding:12px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#94a3b8; font-weight:800; cursor:pointer;">👉 B 라인 (우측)</button>',
+            '      <button type="button" id="bs-btn-line-a-v37" style="padding:12px; border-radius:8px; border:2px solid #60a5fa; background:rgba(37,99,235,0.28); color:#fff; font-weight:800; cursor:pointer;">👈 A 라인 (좌측)</button>',
+            '      <button type="button" id="bs-btn-line-b-v37" style="padding:12px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#94a3b8; font-weight:800; cursor:pointer;">👉 B 라인 (우측)</button>',
             '    </div>',
             '  </div>',
             '  <div style="display:flex; justify-content:flex-end; gap:8px; padding:10px 18px 14px; background:#0f172a; border-top:1px solid #1e293b;">',
-            '    <button type="button" id="bs-line-cancel-v35" style="padding:8px 16px; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; font-size:12.5px; font-weight:700; cursor:pointer;">취소</button>',
-            '    <button type="button" id="bs-line-ok-v35" style="padding:8px 18px; background:#2563eb; border:1px solid #60a5fa; color:#fff; border-radius:6px; font-size:12.5px; font-weight:800; cursor:pointer;">이동 실행</button>',
+            '    <button type="button" id="bs-line-cancel-v37" style="padding:8px 16px; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:6px; font-size:12.5px; font-weight:700; cursor:pointer;">취소</button>',
+            '    <button type="button" id="bs-line-ok-v37" style="padding:8px 18px; background:#2563eb; border:1px solid #60a5fa; color:#fff; border-radius:6px; font-size:12.5px; font-weight:800; cursor:pointer;">이동 실행</button>',
             '  </div>',
             '</div>'
         ].join('');
         document.body.appendChild(overlay);
 
-        var btnA = document.getElementById('bs-btn-line-a-v35');
-        var btnB = document.getElementById('bs-btn-line-b-v35');
+        var btnA = document.getElementById('bs-btn-line-a-v37');
+        var btnB = document.getElementById('bs-btn-line-b-v37');
         btnA.onclick = function() {
             selectedLine = 'A';
             btnA.style.border = '2px solid #60a5fa'; btnA.style.background = 'rgba(37,99,235,0.28)'; btnA.style.color = '#fff';
@@ -10547,13 +10530,13 @@ else initApp();
             overlay.remove();
             if (onSelectCallback) onSelectCallback(val, sourceId, targetSponsorId);
         }
-        document.getElementById('bs-line-ok-v35').onclick = function() { close(selectedLine); };
-        document.getElementById('bs-line-cancel-v35').onclick = function() { close(null); };
-        document.getElementById('bs-line-x-v35').onclick = function() { close(null); };
+        document.getElementById('bs-line-ok-v37').onclick = function() { close(selectedLine); };
+        document.getElementById('bs-line-cancel-v37').onclick = function() { close(null); };
+        document.getElementById('bs-line-x-v37').onclick = function() { close(null); };
     };
 
     var origPrompt = window.prompt;
-    if (typeof origPrompt === 'function' && !origPrompt._v35Wrapped) {
+    if (typeof origPrompt === 'function' && !origPrompt._v37Wrapped) {
         var wrappedPrompt = function(message, defaultVal) {
             var msgStr = String(message ? message : '').trim();
             if (msgStr.indexOf('이동') === -1 && msgStr.indexOf('라인') === -1) {
@@ -10574,31 +10557,30 @@ else initApp();
             });
             return null;
         };
-        wrappedPrompt._v35Wrapped = true;
+        wrappedPrompt._v37Wrapped = true;
         window.prompt = wrappedPrompt;
     }
 
     // ========================================================================
-    // 🌟 다단계 하위 라인(A/B) 완전 추적 & 시점별 직급 정밀 산출
+    // 🌟 다단계 하위 라인(A/B) 완전 추적 & 시점별 직급·누적 PV 정밀 산출
     // ========================================================================
     function getActiveHeaderPeriodKeysV44() {
-        var activeMode = detectActiveCanvasModeV35();
+        var activeMode = detectActiveCanvasModeV37();
         var endD = '';
         var startD = '';
 
-        // 1순위: 현재 활성 모드 전용 기간 저장소(modePeriodStoreV35) 값 우선 사용 (VK/VJ 간 기간 오염 차단)
-        if (modePeriodStoreV35[activeMode]) {
-            startD = modePeriodStoreV35[activeMode].startDate;
-            endD = modePeriodStoreV35[activeMode].endDate;
+        if (modePeriodStoreV37[activeMode]) {
+            startD = modePeriodStoreV37[activeMode].startDate;
+            endD = modePeriodStoreV37[activeMode].endDate;
         } else {
-            var pair = getHeaderDateInputPairV35();
+            var pair = getHeaderDateInputPairV37();
             if (pair) {
                 var refY = (activeMode === 'vj') ? '2027' : '2026';
-                startD = normalizeUserDateTextV35(pair.startInput.value, refY);
-                endD = normalizeUserDateTextV35(pair.endInput.value, startD ? startD.substring(0, 4) : refY);
+                startD = normalizeUserDateTextV37(pair.startInput.value, refY);
+                endD = normalizeUserDateTextV37(pair.endInput.value, startD ? startD.substring(0, 4) : refY);
             }
             if (!endD) {
-                var defP = getDefaultPeriodForModeV35(activeMode);
+                var defP = getDefaultPeriodForModeV37(activeMode);
                 startD = defP.startDate;
                 endD = defP.endDate;
             }
@@ -10648,7 +10630,7 @@ else initApp();
         return mNum + '월 ' + halfIdx + '(' + parts[1] + '-' + halfKor + ')';
     }
 
-    function setBinarySlotChildV35(parentNorm, childNorm, side) {
+    function setBinarySlotChildV37(parentNorm, childNorm, side) {
         if (!parentNorm ? true : (!childNorm ? true : (parentNorm === childNorm))) return;
         var slot = binaryChildrenByParentNormMap.get(parentNorm);
         if (!slot) {
@@ -10667,7 +10649,7 @@ else initApp();
         }
     }
 
-    function reconstructBinarySlotsFromDOMGeometryV35() {
+    function reconstructBinarySlotsFromDOMGeometryV37() {
         var cards = Array.from(document.querySelectorAll('.node-card'));
         if (cards.length < 2) return;
 
@@ -10745,11 +10727,11 @@ else initApp();
                 if (pr.side === 'A' && !parentLeftTaken.has(pr.pNorm)) {
                     parentLeftTaken.add(pr.pNorm);
                     assignedChildren.add(pr.cNorm);
-                    setBinarySlotChildV35(pr.pNorm, pr.cNorm, 'A');
+                    setBinarySlotChildV37(pr.pNorm, pr.cNorm, 'A');
                 } else if (pr.side === 'B' && !parentRightTaken.has(pr.pNorm)) {
                     parentRightTaken.add(pr.pNorm);
                     assignedChildren.add(pr.cNorm);
-                    setBinarySlotChildV35(pr.pNorm, pr.cNorm, 'B');
+                    setBinarySlotChildV37(pr.pNorm, pr.cNorm, 'B');
                 }
             }
 
@@ -10785,14 +10767,14 @@ else initApp();
                     assignedChildren.add(remChild.norm);
                     if (bestSlotSide === 'A') parentLeftTaken.add(bestP.norm);
                     else parentRightTaken.add(bestP.norm);
-                    setBinarySlotChildV35(bestP.norm, remChild.norm, bestSlotSide);
+                    setBinarySlotChildV37(bestP.norm, remChild.norm, bestSlotSide);
                 }
             }
         }
     }
 
-    function ensureGlobalSalesAndTreeIndexedV35() {
-        var activeMode = detectActiveCanvasModeV35();
+    function ensureGlobalSalesAndTreeIndexedV37() {
+        var activeMode = detectActiveCanvasModeV37();
         var allSales = getAllActiveSalesArray();
         var domCards = document.querySelectorAll('.node-card');
         var domCardCount = domCards ? domCards.length : 0;
@@ -10843,7 +10825,7 @@ else initApp();
                     memberNormByNameMap.set(String(node.name).trim(), nId);
                 }
                 if (parentNorm && parentNorm !== nId && branchSide) {
-                    setBinarySlotChildV35(parentNorm, nId, branchSide);
+                    setBinarySlotChildV37(parentNorm, nId, branchSide);
                 }
             }
             if (node.left) indexTreeNodes(node.left, nId, 'A');
@@ -10906,7 +10888,7 @@ else initApp();
             }
         }
 
-        reconstructBinarySlotsFromDOMGeometryV35();
+        reconstructBinarySlotsFromDOMGeometryV37();
 
         for (var sIdx = 0; sIdx < allSales.length; sIdx++) {
             var s = allSales[sIdx];
@@ -10943,7 +10925,7 @@ else initApp();
         }
     }
 
-    function getSublineSetsFastV35(mNorm, cleanId) {
+    function getSublineSetsFastV37(mNorm, cleanId) {
         if (sublineSetsByNormMap.has(mNorm)) return sublineSetsByNormMap.get(mNorm);
 
         var setA = new Set();
@@ -11017,7 +10999,7 @@ else initApp();
         return pair;
     }
 
-    function lookupBonusMapForMemberV35(memberId, mNorm) {
+    function lookupBonusMapForMemberV37(memberId, mNorm) {
         if (!(window.lastAllMembersTeamBonusMap instanceof Map)) return null;
         var map = window.lastAllMembersTeamBonusMap;
         var rawUp = String(memberId ? memberId : '').trim().toUpperCase();
@@ -11036,7 +11018,7 @@ else initApp();
         return null;
     }
 
-    function computeHistoricalRankAtPeriodV35(mNorm, cleanId, selfAccPVAtPeriod, maxRecent4MinorPVAtPeriod, accMinorPVAtPeriod, bonusBucketAtPeriod) {
+    function computeHistoricalRankAtPeriodV37(mNorm, cleanId, selfAccPVAtPeriod, maxRecent4MinorPVAtPeriod, accMinorPVAtPeriod, bonusBucketAtPeriod) {
         var histRankFromMap = (bonusBucketAtPeriod && bonusBucketAtPeriod.historicalRank)
             ? String(bonusBucketAtPeriod.historicalRank).trim().toUpperCase()
             : '';
@@ -11089,7 +11071,7 @@ else initApp();
             }
         }
 
-        var subSets = getSublineSetsFastV35(mNorm, cleanId);
+        var subSets = getSublineSetsFastV37(mNorm, cleanId);
         if (subSets.setA.size === 0 && subSets.setB.size === 0 && initialRawLvl >= 4) {
             effLevel = initialRawLvl;
         }
@@ -11097,7 +11079,7 @@ else initApp();
         return LEVEL_TO_RANK_NAME[effLevel] ? LEVEL_TO_RANK_NAME[effLevel] : 'GUEST';
     }
 
-    function syncInMemoryNodeRankV35(cleanId, mNorm, effectiveRank) {
+    function syncInMemoryNodeRankV37(cleanId, mNorm, effectiveRank) {
         var mNode = memberNodeByNormMap.get(mNorm);
         if (mNode) {
             mNode.rank = effectiveRank;
@@ -11126,8 +11108,8 @@ else initApp();
         }
     }
 
-    function getFastComputedMemberMetricsV35(memberId, optCardEl) {
-        ensureGlobalSalesAndTreeIndexedV35();
+    function getFastComputedMemberMetricsV37(memberId, optCardEl) {
+        ensureGlobalSalesAndTreeIndexedV37();
         var cleanId = String(memberId ? memberId : '').trim().toUpperCase();
         var mNorm = normNumStr(cleanId);
         if (!mNorm) return null;
@@ -11137,9 +11119,9 @@ else initApp();
         if (computedMetricsByNormMap.has(mNorm)) {
             var cached = computedMetricsByNormMap.get(mNorm);
             if (cached.effectiveRank) {
-                syncInMemoryNodeRankV35(cleanId, mNorm, cached.effectiveRank);
+                syncInMemoryNodeRankV37(cleanId, mNorm, cached.effectiveRank);
                 if (optCardEl) {
-                    enforceCardDOMRankTitleV35(optCardEl, mNorm, cached.effectiveRank, pKeys.sortKeyNum);
+                    enforceCardDOMRankTitleV37(optCardEl, mNorm, cached.effectiveRank, pKeys.sortKeyNum);
                 }
             }
             return cached;
@@ -11162,11 +11144,13 @@ else initApp();
             }
         }
 
-        var subSets = getSublineSetsFastV35(mNorm, cleanId);
+        var subSets = getSublineSetsFastV37(mNorm, cleanId);
         var buckets = {};
         var minKey = pKeys.sortKeyNum;
         var accAPV = 0;
         var accBPV = 0;
+        var accACV = 0;
+        var accBCV = 0;
 
         subSets.setA.forEach(function(aNorm) {
             var aList = salesByMemberNormMap.get(aNorm);
@@ -11175,6 +11159,7 @@ else initApp();
                 var item = aList[j];
                 if (item.dStr > pKeys.endDate ? true : (item.sk > pKeys.sortKeyNum)) continue;
                 accAPV += item.pv;
+                accACV += item.cv;
                 if (item.sk < minKey) minKey = item.sk;
                 if (!buckets[item.sk]) buckets[item.sk] = { a_pv: 0, b_pv: 0, a_cv: 0, b_cv: 0 };
                 buckets[item.sk].a_pv += item.pv;
@@ -11189,6 +11174,7 @@ else initApp();
                 var item = bList[k];
                 if (item.dStr > pKeys.endDate ? true : (item.sk > pKeys.sortKeyNum)) continue;
                 accBPV += item.pv;
+                accBCV += item.cv;
                 if (item.sk < minKey) minKey = item.sk;
                 if (!buckets[item.sk]) buckets[item.sk] = { a_pv: 0, b_pv: 0, a_cv: 0, b_cv: 0 };
                 buckets[item.sk].b_pv += item.pv;
@@ -11196,7 +11182,7 @@ else initApp();
             }
         });
 
-        var bonusMapEntry = lookupBonusMapForMemberV35(cleanId, mNorm);
+        var bonusMapEntry = lookupBonusMapForMemberV37(cleanId, mNorm);
         var bonusBucketAtTarget = null;
         if (bonusMapEntry && typeof bonusMapEntry === 'object') {
             var bKeys = Object.keys(bonusMapEntry).sort();
@@ -11228,6 +11214,8 @@ else initApp();
         var maxRecent4MinorPVUpToTarget = 0;
         var sumAllAPV = 0;
         var sumAllBPV = 0;
+        var sumAllACV = 0;
+        var sumAllBCV = 0;
 
         for (var cIdx = 0; cIdx < continuousKeys.length; cIdx++) {
             var key = continuousKeys[cIdx];
@@ -11235,6 +11223,8 @@ else initApp();
             var b = buckets[key] ? buckets[key] : { a_pv: 0, b_pv: 0, a_cv: 0, b_cv: 0 };
             sumAllAPV += b.a_pv;
             sumAllBPV += b.b_pv;
+            sumAllACV += b.a_cv;
+            sumAllBCV += b.b_cv;
 
             var sA = cA + b.a_cv;
             var sB = cB + b.b_cv;
@@ -11255,6 +11245,8 @@ else initApp();
 
         accAPV = Math.max(accAPV, sumAllAPV);
         accBPV = Math.max(accBPV, sumAllBPV);
+        accACV = Math.max(accACV, sumAllACV);
+        accBCV = Math.max(accBCV, sumAllBCV);
 
         var recent4Keys = continuousKeys.slice(-4).reverse();
         while (recent4Keys.length < 4) {
@@ -11289,6 +11281,8 @@ else initApp();
             if (parseNum(exactB.recent4BPV) > recent4BPV) recent4BPV = parseNum(exactB.recent4BPV);
             if (parseNum(exactB.accAPV) > accAPV) accAPV = parseNum(exactB.accAPV);
             if (parseNum(exactB.accBPV) > accBPV) accBPV = parseNum(exactB.accBPV);
+            if (parseNum(exactB.accACV) > accACV) accACV = parseNum(exactB.accACV);
+            if (parseNum(exactB.accBCV) > accBCV) accBCV = parseNum(exactB.accBCV);
             if (parseNum(exactB.matchedCV) > minorSubTermCV) minorSubTermCV = parseNum(exactB.matchedCV);
         }
 
@@ -11296,11 +11290,11 @@ else initApp();
         if (currMinorR4 > maxRecent4MinorPVUpToTarget) maxRecent4MinorPVUpToTarget = currMinorR4;
         var accMinorPV = Math.min(accAPV, accBPV);
 
-        var effectiveRank = computeHistoricalRankAtPeriodV35(mNorm, cleanId, selfAccPV, maxRecent4MinorPVUpToTarget, accMinorPV, bonusBucketAtTarget);
+        var effectiveRank = computeHistoricalRankAtPeriodV37(mNorm, cleanId, selfAccPV, maxRecent4MinorPVUpToTarget, accMinorPV, bonusBucketAtTarget);
 
-        syncInMemoryNodeRankV35(cleanId, mNorm, effectiveRank);
+        syncInMemoryNodeRankV37(cleanId, mNorm, effectiveRank);
         if (optCardEl) {
-            enforceCardDOMRankTitleV35(optCardEl, mNorm, effectiveRank, pKeys.sortKeyNum);
+            enforceCardDOMRankTitleV37(optCardEl, mNorm, effectiveRank, pKeys.sortKeyNum);
         }
 
         var result = {
@@ -11314,6 +11308,8 @@ else initApp();
             recent4Rows: recent4Rows,
             accAPV: accAPV,
             accBPV: accBPV,
+            accACV: accACV,
+            accBCV: accBCV,
             pKeys: pKeys
         };
 
@@ -11351,7 +11347,7 @@ else initApp();
         return table[rUpper] ? table[rUpper] : 0;
     }
 
-    function evaluateMaintStatusAndDisplayLabelV35(currRankName, totalRecognizedCV, reqMaintCV) {
+    function evaluateMaintStatusAndDisplayLabelV37(currRankName, totalRecognizedCV, reqMaintCV) {
         var rUpper = String(currRankName ? currRankName : 'GUEST').trim().toUpperCase();
         var currLevel = RANK_LEVEL_MAP[rUpper] ? RANK_LEVEL_MAP[rUpper] : 0;
 
@@ -11400,7 +11396,7 @@ else initApp();
         var res = { showPromoBadge: false, showMaintBadge: false, promoPct: 0, maintPct: 0, currRank: 'GUEST' };
         if (!memberId) return res;
 
-        var metrics = getFastComputedMemberMetricsV35(memberId, cardEl);
+        var metrics = getFastComputedMemberMetricsV37(memberId, cardEl);
         if (!metrics) return res;
 
         var currRank = metrics.effectiveRank;
@@ -11421,8 +11417,11 @@ else initApp();
             };
             var tInfo = rankTargets[currRank];
             if (tInfo) {
+                var isLeftMinorBadge = (metrics.accAPV < metrics.accBPV)
+                    ? true
+                    : (metrics.accBPV < metrics.accAPV ? false : (metrics.recent4APV <= metrics.recent4BPV));
                 var minorPV = tInfo.r4
-                    ? Math.min(metrics.recent4APV, metrics.recent4BPV)
+                    ? (isLeftMinorBadge ? metrics.recent4APV : metrics.recent4BPV)
                     : Math.min(metrics.accAPV, metrics.accBPV);
                 res.promoPct = Math.floor((minorPV / tInfo.pv) * 100);
                 res.showPromoBadge = (res.promoPct >= thObj.promoThreshold);
@@ -11439,9 +11438,9 @@ else initApp();
     };
 
     // ========================================================================
-    // [45] 비지네스 내비게이터 드래그 이동 & 렌더러
+    // [45] 🌟 [Version-3.7] 비지네스 내비게이터 (하위내역 최상단 누적 PV & 소실적 라인 강조 테두리·마킹)
     // ========================================================================
-    function findNavigatorBoxAndHeaderFromTargetV35(targetEl) {
+    function findNavigatorBoxAndHeaderFromTargetV37(targetEl) {
         if (!targetEl ? true : !targetEl.closest) return null;
         var modalRoot = targetEl.closest('#bizNavModal');
         if (!modalRoot) return null;
@@ -11468,7 +11467,7 @@ else initApp();
         };
     }
 
-    window.closeInstantNavigatorV35 = function() {
+    window.closeInstantNavigatorV37 = function() {
         var modal = document.getElementById('bizNavModal');
         if (modal) {
             modal.style.setProperty('display', 'none', 'important');
@@ -11481,10 +11480,10 @@ else initApp();
         }
     };
 
-    window.closeBusinessNavigatorModal = window.closeInstantNavigatorV35;
-    window.hideBusinessNavigatorModal = window.closeInstantNavigatorV35;
+    window.closeBusinessNavigatorModal = window.closeInstantNavigatorV37;
+    window.hideBusinessNavigatorModal = window.closeInstantNavigatorV37;
 
-    function fitInstantNavigatorHeightV35() {
+    function fitInstantNavigatorHeightV37() {
         var body = document.getElementById('bizNavBody');
         if (!body) return;
         body.style.maxHeight = 'none';
@@ -11495,7 +11494,7 @@ else initApp();
         }
     }
 
-    function ensureBizNavModalContainerExistsV35() {
+    function ensureBizNavModalContainerExistsV37() {
         var existingModal = document.getElementById('bizNavModal');
         var existingBody = document.getElementById('bizNavBody');
         if (existingModal && existingBody) {
@@ -11511,19 +11510,19 @@ else initApp();
         modalWrap.id = 'bizNavModal';
         modalWrap.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:2147483645; display:none; align-items:center; justify-content:center; padding:16px;';
         modalWrap.innerHTML = [
-            '<div id="bizNavDialogBox" style="width:610px; max-width:96vw; background:#0f172a; border:1.5px solid #3b82f6; border-radius:10px; box-shadow:0 25px 60px rgba(0,0,0,0.92); overflow:hidden; display:flex; flex-direction:column;">',
+            '<div id="bizNavDialogBox" style="width:620px; max-width:96vw; background:#0f172a; border:1.5px solid #3b82f6; border-radius:10px; box-shadow:0 25px 60px rgba(0,0,0,0.92); overflow:hidden; display:flex; flex-direction:column;">',
             '  <div id="bizNavHeaderBar" style="height:42px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; justify-content:space-between; padding:0 14px; user-select:none; cursor:move;" title="마우스로 잡고 드래그하여 창 위치를 이동할 수 있습니다">',
             '    <div style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:800; color:#f8fafc; pointer-events:none;">',
             '      <span>🧭 비지네스 내비게이터</span>',
             '      <span id="bizNavTargetBadge" style="color:#60a5fa;"></span>',
             '    </div>',
             '    <div style="display:flex; align-items:center; gap:6px;">',
-            '      <span style="background:#0f172a; border:1px solid #334155; color:#64748b; padding:2px 7px; border-radius:4px; font-size:10.5px; font-family:monospace;">610 × 625</span>',
-            '      <button type="button" id="bizNavFitBtnV35" style="background:#1e3a8a; border:1px solid #3b82f6; color:#bfdbfe; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer;">내용 맞춤</button>',
-            '      <button type="button" id="bizNavCloseBtnV35" style="background:#7f1d1d; border:1px solid #ef4444; color:#fecaca; padding:3px 9px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer;">닫기 ✕</button>',
+            '      <span style="background:#0f172a; border:1px solid #334155; color:#64748b; padding:2px 7px; border-radius:4px; font-size:10.5px; font-family:monospace;">620 × 640</span>',
+            '      <button type="button" id="bizNavFitBtnV37" style="background:#1e3a8a; border:1px solid #3b82f6; color:#bfdbfe; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer;">내용 맞춤</button>',
+            '      <button type="button" id="bizNavCloseBtnV37" style="background:#7f1d1d; border:1px solid #ef4444; color:#fecaca; padding:3px 9px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer;">닫기 ✕</button>',
             '    </div>',
             '  </div>',
-            '  <div id="bizNavBody" style="padding:14px 16px; max-height:82vh; overflow-y:auto; color:#f8fafc;"></div>',
+            '  <div id="bizNavBody" style="padding:14px 16px; max-height:84vh; overflow-y:auto; color:#f8fafc;"></div>',
             '</div>'
         ].join('');
 
@@ -11535,14 +11534,14 @@ else initApp();
         };
     }
 
-    function buildInstantNavigatorHtmlV35(memberId) {
+    function buildInstantNavigatorHtmlV37(memberId) {
         var cleanId = String(memberId).trim().toUpperCase();
         var mNorm = normNumStr(cleanId);
         var cards = Array.from(document.querySelectorAll('.node-card'));
         var cardEl = cards.find(function(c) { return extractMemberIdFromCardEl(c) === cleanId; });
 
         computedMetricsByNormMap.delete(mNorm);
-        var metrics = getFastComputedMemberMetricsV35(cleanId, cardEl);
+        var metrics = getFastComputedMemberMetricsV37(cleanId, cardEl);
         if (!metrics) return { title: cleanId, html: '' };
 
         var mNode = memberNodeByNormMap.get(mNorm);
@@ -11642,59 +11641,117 @@ else initApp();
         var tObj = rankTargets[currRank] ? rankTargets[currRank] : rankTargets['MANIA'];
         var evalAPV = tObj.r4 ? metrics.recent4APV : metrics.accAPV;
         var evalBPV = tObj.r4 ? metrics.recent4BPV : metrics.accBPV;
-        var minorPV = Math.min(evalAPV, evalBPV);
+
+        // 🌟 전체 누적 PV 기준으로 현재 소실적 라인 판별 (좌측 누적 PV < 우측 누적 PV 이면 좌측이 소실적)
+        var isLeftMinor = (metrics.accAPV < metrics.accBPV)
+            ? true
+            : (metrics.accBPV < metrics.accAPV ? false : (evalAPV <= evalBPV));
+        var minorPV = tObj.r4
+            ? (isLeftMinor ? evalAPV : evalBPV)
+            : Math.min(evalAPV, evalBPV);
         var promoShortage = Math.max(0, tObj.pv - minorPV);
         var promoPct = tObj.pv > 0 ? Math.min(100, Math.floor((minorPV / tObj.pv) * 100)) : 0;
 
+        var minorBadgeHtml = '<span style="display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:800;background:#7f1d1d;border:1px solid #f87171;color:#fecaca;margin-left:5px;">★ 소실적</span>';
+        var majorBadgeHtml = '<span style="display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;background:#1e3a8a;border:1px solid #3b82f6;color:#93c5fd;margin-left:5px;">대실적</span>';
+
+        var leftColFrameStyle = isLeftMinor
+            ? 'border:1.5px solid #f87171; border-radius:6px; background:rgba(127,29,29,0.16); box-shadow:inset 0 0 12px rgba(248,113,113,0.12); overflow:hidden;'
+            : 'border:1px solid #28354e; border-radius:6px; background:#111827; overflow:hidden;';
+        var rightColFrameStyle = !isLeftMinor
+            ? 'border:1.5px solid #f87171; border-radius:6px; background:rgba(127,29,29,0.16); box-shadow:inset 0 0 12px rgba(248,113,113,0.12); overflow:hidden;'
+            : 'border:1px solid #28354e; border-radius:6px; background:#111827; overflow:hidden;';
+
         var subTableSectionHtml = '';
         if (tObj.r4) {
-            var rRowsHtml = metrics.recent4Rows.map(function(r) {
+            var leftRowsHtml = metrics.recent4Rows.map(function(r) {
                 return [
-                    '<div style="display:grid; grid-template-columns:1.1fr 1.1fr 1.1fr 1.1fr; border-top:1px solid #1e293b; font-size:11.5px;">',
-                    '  <div style="padding:7px 10px; color:#94a3b8; background:#111827;">' + r.label + ' (좌)</div>',
-                    '  <div style="padding:7px 10px; text-align:right; font-weight:700; color:#e2e8f0; font-family:monospace;">' + r.aPV.toLocaleString('ko-KR') + ' PV</div>',
-                    '  <div style="padding:7px 10px; color:#94a3b8; background:#111827; border-left:1px solid #1e293b;">' + r.label + ' (우)</div>',
-                    '  <div style="padding:7px 10px; text-align:right; font-weight:700; color:#e2e8f0; font-family:monospace;">' + r.bPV.toLocaleString('ko-KR') + ' PV</div>',
+                    '<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; border-top:1px solid ' + (isLeftMinor ? 'rgba(248,113,113,0.22)' : '#1e293b') + '; font-size:11.5px;">',
+                    '  <span style="color:#94a3b8;">' + r.label + ' (좌)</span>',
+                    '  <span style="font-weight:700; color:' + (isLeftMinor ? '#fecaca' : '#e2e8f0') + '; font-family:monospace;">' + r.aPV.toLocaleString('ko-KR') + ' PV</span>',
+                    '</div>'
+                ].join('');
+            }).join('');
+
+            var rightRowsHtml = metrics.recent4Rows.map(function(r) {
+                return [
+                    '<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; border-top:1px solid ' + (!isLeftMinor ? 'rgba(248,113,113,0.22)' : '#1e293b') + '; font-size:11.5px;">',
+                    '  <span style="color:#94a3b8;">' + r.label + ' (우)</span>',
+                    '  <span style="font-weight:700; color:' + (!isLeftMinor ? '#fecaca' : '#e2e8f0') + '; font-family:monospace;">' + r.bPV.toLocaleString('ko-KR') + ' PV</span>',
                     '</div>'
                 ].join('');
             }).join('');
 
             subTableSectionHtml = [
                 '<div style="background:#151d2e; border:1px solid #28354e; border-radius:8px; overflow:hidden; margin-bottom:12px;">',
-                '  <div style="background:#1e293b; padding:7px 12px; text-align:center; font-size:12px; font-weight:800; color:#e2e8f0; border-bottom:1px solid #28354e;">하위내역 (최근 4기수 제한 실적 합산)</div>',
-                '  <div style="display:grid; grid-template-columns:1.1fr 1.1fr 1.1fr 1.1fr; font-size:12px; background:#162032;">',
-                '    <div style="padding:8px 10px; color:#38bdf8; font-weight:800;">4기수 합계 (좌측)</div>',
-                '    <div style="padding:8px 10px; text-align:right; font-weight:800; color:#38bdf8; font-family:monospace;">' + evalAPV.toLocaleString('ko-KR') + ' PV</div>',
-                '    <div style="padding:8px 10px; color:#34d399; font-weight:800; border-left:1px solid #1e293b;">4기수 합계 (우측)</div>',
-                '    <div style="padding:8px 10px; text-align:right; font-weight:800; color:#34d399; font-family:monospace;">' + evalBPV.toLocaleString('ko-KR') + ' PV</div>',
+                '  <div style="background:#1e293b; padding:7px 12px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #28354e;">',
+                '    <span style="font-size:11px; color:#94a3b8;">기준: ' + (isLeftMinor ? '좌(A) 소실적' : '우(B) 소실적') + ' (' + minorPV.toLocaleString('ko-KR') + ' PV)</span>',
+                '    <span style="font-size:12px; font-weight:800; color:#e2e8f0;">하위내역 (최근 4기수 제한 실적 합산)</span>',
+                '    <span style="font-size:11px; color:#f87171; font-weight:700;">붉은 테두리 = 소실적 라인</span>',
                 '  </div>',
-                rRowsHtml,
+                '  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:8px;">',
+                '    <div style="' + leftColFrameStyle + '">',
+                '      <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:' + (isLeftMinor ? 'rgba(127,29,29,0.45)' : '#1a2436') + '; border-bottom:1px solid ' + (isLeftMinor ? 'rgba(248,113,113,0.4)' : '#28354e') + '; font-size:11.5px;">',
+                '        <span style="color:#cbd5e1; font-weight:800;">전체 누적 PV (좌측)' + (isLeftMinor ? minorBadgeHtml : majorBadgeHtml) + '</span>',
+                '        <span style="font-weight:800; color:#fbbf24; font-family:monospace;">' + metrics.accAPV.toLocaleString('ko-KR') + ' PV</span>',
+                '      </div>',
+                '      <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:#162032; font-size:12px;">',
+                '        <span style="color:#38bdf8; font-weight:800;">4기수 합계 (좌측)</span>',
+                '        <span style="font-weight:800; color:' + (isLeftMinor ? '#f87171' : '#38bdf8') + '; font-family:monospace;">' + evalAPV.toLocaleString('ko-KR') + ' PV</span>',
+                '      </div>',
+                leftRowsHtml,
+                '    </div>',
+                '    <div style="' + rightColFrameStyle + '">',
+                '      <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:' + (!isLeftMinor ? 'rgba(127,29,29,0.45)' : '#1a2436') + '; border-bottom:1px solid ' + (!isLeftMinor ? 'rgba(248,113,113,0.4)' : '#28354e') + '; font-size:11.5px;">',
+                '        <span style="color:#cbd5e1; font-weight:800;">전체 누적 PV (우측)' + (!isLeftMinor ? minorBadgeHtml : majorBadgeHtml) + '</span>',
+                '        <span style="font-weight:800; color:#fbbf24; font-family:monospace;">' + metrics.accBPV.toLocaleString('ko-KR') + ' PV</span>',
+                '      </div>',
+                '      <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:#162032; font-size:12px;">',
+                '        <span style="color:#34d399; font-weight:800;">4기수 합계 (우측)</span>',
+                '        <span style="font-weight:800; color:' + (!isLeftMinor ? '#f87171' : '#34d399') + '; font-family:monospace;">' + evalBPV.toLocaleString('ko-KR') + ' PV</span>',
+                '      </div>',
+                rightRowsHtml,
+                '    </div>',
+                '  </div>',
                 '</div>'
             ].join('');
         } else {
-            var isALarger = (evalAPV >= evalBPV);
-            var tagA = isALarger
-                ? '<span style="background:#1e3a8a;color:#93c5fd;padding:1px 6px;border-radius:4px;font-size:10px;margin-right:6px;">대실적</span>'
-                : '<span style="background:#7f1d1d;color:#fca5a5;padding:1px 6px;border-radius:4px;font-size:10px;margin-right:6px;">★ 소실적</span>';
-            var tagB = !isALarger
-                ? '<span style="background:#1e3a8a;color:#93c5fd;padding:1px 6px;border-radius:4px;font-size:10px;margin-right:6px;">대실적</span>'
-                : '<span style="background:#7f1d1d;color:#fca5a5;padding:1px 6px;border-radius:4px;font-size:10px;margin-right:6px;">★ 소실적</span>';
-
             subTableSectionHtml = [
                 '<div style="background:#151d2e; border:1px solid #28354e; border-radius:8px; overflow:hidden; margin-bottom:12px;">',
-                '  <div style="background:#1e293b; padding:7px 12px; text-align:center; font-size:12px; font-weight:800; color:#e2e8f0; border-bottom:1px solid #28354e;">전체누적 PV (무한 누적 기준)</div>',
-                '  <div style="display:grid; grid-template-columns:0.7fr 1.5fr 0.7fr 1.5fr; border-bottom:1px solid #1e293b; font-size:12px;">',
-                '    <div style="padding:10px 12px; color:#94a3b8; background:#111827;">좌(A)</div>',
-                '    <div style="padding:10px 12px; text-align:right; font-weight:800; color:#60a5fa; font-family:monospace;">' + tagA + evalAPV.toLocaleString('ko-KR') + ' PV</div>',
-                '    <div style="padding:10px 12px; color:#94a3b8; background:#111827; border-left:1px solid #1e293b;">우(B)</div>',
-                '    <div style="padding:10px 12px; text-align:right; font-weight:800; color:#fbbf24; font-family:monospace;">' + tagB + evalBPV.toLocaleString('ko-KR') + ' PV</div>',
+                '  <div style="background:#1e293b; padding:7px 12px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #28354e;">',
+                '    <span style="font-size:11px; color:#94a3b8;">기준: ' + (isLeftMinor ? '좌(A) 소실적' : '우(B) 소실적') + '</span>',
+                '    <span style="font-size:12px; font-weight:800; color:#e2e8f0;">전체누적 실적 (무한 누적 기준)</span>',
+                '    <span style="font-size:11px; color:#f87171; font-weight:700;">붉은 테두리 = 소실적 라인</span>',
                 '  </div>',
-                '  <div style="background:#1e293b; padding:6px 12px; text-align:center; font-size:11.5px; font-weight:800; color:#cbd5e1; border-bottom:1px solid #28354e;">' + tObj.next + ' 승급까지 부족 PV</div>',
-                '  <div style="display:grid; grid-template-columns:0.7fr 1.5fr 0.7fr 1.5fr; font-size:12px;">',
-                '    <div style="padding:9px 12px; color:#94a3b8; background:#111827;">좌(A)</div>',
-                '    <div style="padding:9px 12px; text-align:right; font-weight:700; color:#f87171; font-family:monospace;">-' + Math.max(0, tObj.pv - evalAPV).toLocaleString('ko-KR') + ' PV</div>',
-                '    <div style="padding:9px 12px; color:#94a3b8; background:#111827; border-left:1px solid #1e293b;">우(B)</div>',
-                '    <div style="padding:9px 12px; text-align:right; font-weight:700; color:#f87171; font-family:monospace;">-' + Math.max(0, tObj.pv - evalBPV).toLocaleString('ko-KR') + ' PV</div>',
+                '  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:8px;">',
+                '    <div style="' + leftColFrameStyle + '">',
+                '      <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:' + (isLeftMinor ? 'rgba(127,29,29,0.45)' : '#1a2436') + '; border-bottom:1px solid ' + (isLeftMinor ? 'rgba(248,113,113,0.4)' : '#28354e') + '; font-size:11.5px;">',
+                '        <span style="color:#cbd5e1; font-weight:800;">전체 누적 PV (좌측)' + (isLeftMinor ? minorBadgeHtml : majorBadgeHtml) + '</span>',
+                '        <span style="font-weight:800; color:#fbbf24; font-family:monospace;">' + metrics.accAPV.toLocaleString('ko-KR') + ' PV</span>',
+                '      </div>',
+                '      <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:1px solid #1e293b; font-size:12px;">',
+                '        <span style="color:#94a3b8;">전체 누적 PV (좌)</span>',
+                '        <span style="font-weight:800; color:#60a5fa; font-family:monospace;">' + evalAPV.toLocaleString('ko-KR') + ' PV</span>',
+                '      </div>',
+                '      <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; font-size:12px;">',
+                '        <span style="color:#94a3b8;">' + tObj.next + ' 부족 PV</span>',
+                '        <span style="font-weight:700; color:#f87171; font-family:monospace;">-' + Math.max(0, tObj.pv - evalAPV).toLocaleString('ko-KR') + ' PV</span>',
+                '      </div>',
+                '    </div>',
+                '    <div style="' + rightColFrameStyle + '">',
+                '      <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:' + (!isLeftMinor ? 'rgba(127,29,29,0.45)' : '#1a2436') + '; border-bottom:1px solid ' + (!isLeftMinor ? 'rgba(248,113,113,0.4)' : '#28354e') + '; font-size:11.5px;">',
+                '        <span style="color:#cbd5e1; font-weight:800;">전체 누적 PV (우측)' + (!isLeftMinor ? minorBadgeHtml : majorBadgeHtml) + '</span>',
+                '        <span style="font-weight:800; color:#fbbf24; font-family:monospace;">' + metrics.accBPV.toLocaleString('ko-KR') + ' PV</span>',
+                '      </div>',
+                '      <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:1px solid #1e293b; font-size:12px;">',
+                '        <span style="color:#94a3b8;">전체 누적 PV (우)</span>',
+                '        <span style="font-weight:800; color:#fbbf24; font-family:monospace;">' + evalBPV.toLocaleString('ko-KR') + ' PV</span>',
+                '      </div>',
+                '      <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; font-size:12px;">',
+                '        <span style="color:#94a3b8;">' + tObj.next + ' 부족 PV</span>',
+                '        <span style="font-weight:700; color:#f87171; font-family:monospace;">-' + Math.max(0, tObj.pv - evalBPV).toLocaleString('ko-KR') + ' PV</span>',
+                '      </div>',
+                '    </div>',
                 '  </div>',
                 '</div>'
             ].join('');
@@ -11731,7 +11788,7 @@ else initApp();
                 '</div>'
             ].join('');
         } else {
-            var maintEval = evaluateMaintStatusAndDisplayLabelV35(currRank, totalRecognizedCV, reqMaintCV);
+            var maintEval = evaluateMaintStatusAndDisplayLabelV37(currRank, totalRecognizedCV, reqMaintCV);
 
             maintSectionHtml = [
                 '<div style="background:#151d2e; border:1px solid #28354e; border-radius:8px; padding:12px 14px;">',
@@ -11802,7 +11859,7 @@ else initApp();
         return { title: '[' + mName + ' (' + cleanId + ')]', html: fullHtml };
     }
 
-    window.openInstantNavigatorV35 = function(optMemberId) {
+    window.openInstantNavigatorV37 = function(optMemberId) {
         var targetId = optMemberId ? String(optMemberId).trim().toUpperCase() : '';
 
         if (!targetId && window.currentSelectedId) {
@@ -11821,8 +11878,8 @@ else initApp();
 
         window.currentSelectedId = targetId;
 
-        var modalRefs = ensureBizNavModalContainerExistsV35();
-        var built = buildInstantNavigatorHtmlV35(targetId);
+        var modalRefs = ensureBizNavModalContainerExistsV37();
+        var built = buildInstantNavigatorHtmlV37(targetId);
 
         if (modalRefs.badge) modalRefs.badge.innerText = built.title;
         modalRefs.body.innerHTML = built.html;
@@ -11834,17 +11891,17 @@ else initApp();
         window.renderTreeCardStatusBadgesV44(true);
     };
 
-    window.openBusinessNavigatorModal = window.openInstantNavigatorV35;
-    window.renderBusinessNavigator = window.openInstantNavigatorV35;
+    window.openBusinessNavigatorModal = window.openInstantNavigatorV37;
+    window.renderBusinessNavigator = window.openInstantNavigatorV37;
 
     window.renderTreeCardStatusBadgesV44 = function(forceRebuild) {
-        ensureTreeContainerMutationObserverV35();
-        syncHeaderPeriodForActiveModeV35(false);
+        ensureTreeContainerMutationObserverV37();
+        syncHeaderPeriodForActiveModeV37(false);
 
         var cards = document.querySelectorAll('.node-card');
         if (!cards ? true : cards.length === 0) return;
 
-        ensureGlobalSalesAndTreeIndexedV35();
+        ensureGlobalSalesAndTreeIndexedV37();
 
         var pKeys = getActiveHeaderPeriodKeysV44();
 
@@ -11869,7 +11926,7 @@ else initApp();
         var allSales = getAllActiveSalesArray();
         var thObj = window.getBadgeThresholdSettingsV44();
         var firstCardId = extractMemberIdFromCardEl(cards[0]);
-        var activeMode = detectActiveCanvasModeV35();
+        var activeMode = detectActiveCanvasModeV37();
         var mapSize = (window.lastAllMembersTeamBonusMap instanceof Map) ? window.lastAllMembersTeamBonusMap.size : 0;
 
         var globalStateSig = activeMode + '_' + cards.length + '_' + firstCardId + '_' + allSales.length + '_' + memberNodeByNormMap.size + '_' + binaryChildrenByParentNormMap.size + '_' + mapSize + '_' + pKeys.startDate + '_' + pKeys.endDate + '_' + thObj.promoThreshold;
@@ -11920,10 +11977,10 @@ else initApp();
 
                 var htmlParts = [];
                 if (status.showMaintBadge) {
-                    htmlParts.push('<span class="bs-v35-badge-btn" data-badge-member-id="' + memberId + '" style="display:inline-flex;align-items:center;height:16px;padding:0 5px;background:#34966b;color:#fff;border:1px solid #86efac;border-radius:6px;font-size:10px;font-weight:800;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.7);cursor:pointer;" title="클릭 시 비지네스 내비게이터 즉시 열기">유지 ' + status.maintPct + '%</span>');
+                    htmlParts.push('<span class="bs-v37-badge-btn" data-badge-member-id="' + memberId + '" style="display:inline-flex;align-items:center;height:16px;padding:0 5px;background:#34966b;color:#fff;border:1px solid #86efac;border-radius:6px;font-size:10px;font-weight:800;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.7);cursor:pointer;" title="클릭 시 비지네스 내비게이터 즉시 열기">유지 ' + status.maintPct + '%</span>');
                 }
                 if (status.showPromoBadge) {
-                    htmlParts.push('<span class="bs-v35-badge-btn" data-badge-member-id="' + memberId + '" style="display:inline-flex;align-items:center;height:16px;padding:0 5px;background:#c88a2e;color:#fff;border:1px solid #fcd34d;border-radius:2px;font-size:10px;font-weight:800;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.7);cursor:pointer;" title="클릭 시 비지네스 내비게이터 즉시 열기">승급 ' + status.promoPct + '%</span>');
+                    htmlParts.push('<span class="bs-v37-badge-btn" data-badge-member-id="' + memberId + '" style="display:inline-flex;align-items:center;height:16px;padding:0 5px;background:#c88a2e;color:#fff;border:1px solid #fcd34d;border-radius:2px;font-size:10px;font-weight:800;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.7);cursor:pointer;" title="클릭 시 비지네스 내비게이터 즉시 열기">승급 ' + status.promoPct + '%</span>');
                 }
                 var builtHtml = htmlParts.join('');
                 cachedBadgeHtmlByPeriodAndNormMap.set(pKey, { html: builtHtml, justify: justify });
@@ -12000,12 +12057,12 @@ else initApp();
         return Boolean(txt.indexOf('내용 맞춤') !== -1 ? true : (bId.indexOf('fit') !== -1));
     }
 
-    function handleFastInterceptV35(e) {
+    function handleFastInterceptV37(e) {
         if (isNavigatorCloseButtonOrBackdrop(e.target)) {
             e.preventDefault();
             e.stopPropagation();
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-            window.closeInstantNavigatorV35();
+            window.closeInstantNavigatorV37();
             return;
         }
 
@@ -12014,27 +12071,27 @@ else initApp();
             e.stopPropagation();
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
             if (e.type === 'mousedown') {
-                fitInstantNavigatorHeightV35();
+                fitInstantNavigatorHeightV37();
             }
             return;
         }
 
-        var navBtnInfo = isHeaderPeriodNavButtonV35(e.target);
+        var navBtnInfo = isHeaderPeriodNavButtonV37(e.target);
         if (navBtnInfo) {
             e.preventDefault();
             e.stopPropagation();
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
             if (e.type === 'mousedown') {
-                var activeMode = detectActiveCanvasModeV35();
-                var curStore = modePeriodStoreV35[activeMode] ? modePeriodStoreV35[activeMode] : getDefaultPeriodForModeV35(activeMode);
-                var nextPeriod = shiftHalfMonthPeriodV35(curStore.startDate, curStore.endDate, navBtnInfo.dir);
-                window.applyTimeSlipPeriodChangeV35(nextPeriod.startDate, nextPeriod.endDate, true);
+                var activeMode = detectActiveCanvasModeV37();
+                var curStore = modePeriodStoreV37[activeMode] ? modePeriodStoreV37[activeMode] : getDefaultPeriodForModeV37(activeMode);
+                var nextPeriod = shiftHalfMonthPeriodV37(curStore.startDate, curStore.endDate, navBtnInfo.dir);
+                window.applyTimeSlipPeriodChangeV37(nextPeriod.startDate, nextPeriod.endDate, true);
             }
             return;
         }
 
         if (e.type === 'mousedown' && e.button === 0) {
-            var dragInfo = findNavigatorBoxAndHeaderFromTargetV35(e.target);
+            var dragInfo = findNavigatorBoxAndHeaderFromTargetV37(e.target);
             if (dragInfo && dragInfo.box) {
                 var isBtn = e.target.closest && e.target.closest('button, a, input, select');
                 if (!isBtn) {
@@ -12063,7 +12120,7 @@ else initApp();
             }
         }
 
-        var badgeTarget = e.target && e.target.closest ? e.target.closest('.bs-custom-badge-layer-v44, .bs-v35-badge-btn') : null;
+        var badgeTarget = e.target && e.target.closest ? e.target.closest('.bs-custom-badge-layer-v44, .bs-v37-badge-btn') : null;
         if (badgeTarget) {
             e.preventDefault();
             e.stopPropagation();
@@ -12075,7 +12132,7 @@ else initApp();
                     mId = extractMemberIdFromCardEl(parentCard);
                 }
                 if (mId) {
-                    window.openInstantNavigatorV35(mId);
+                    window.openInstantNavigatorV37(mId);
                 }
             }
             return;
@@ -12087,7 +12144,7 @@ else initApp();
             e.stopPropagation();
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
             if (e.type === 'mousedown') {
-                window.openInstantNavigatorV35();
+                window.openInstantNavigatorV37();
             }
             return;
         }
@@ -12103,11 +12160,11 @@ else initApp();
                     cachedBadgeHtmlByPeriodAndNormMap.clear();
                     lastDomBadgeRenderSig = '';
                     setTimeout(function() {
-                        syncHeaderPeriodForActiveModeV35(false);
+                        syncHeaderPeriodForActiveModeV37(false);
                         window.renderTreeCardStatusBadgesV44(true);
                     }, 60);
                     setTimeout(function() {
-                        syncHeaderPeriodForActiveModeV35(false);
+                        syncHeaderPeriodForActiveModeV37(false);
                         window.renderTreeCardStatusBadgesV44(true);
                     }, 250);
                 }
@@ -12120,17 +12177,17 @@ else initApp();
                 var cId = extractMemberIdFromCardEl(cardTarget);
                 if (cId) {
                     window.currentSelectedId = cId;
-                    fastApplyCachedRanksAndBadgesToAllCardsV35();
-                    Promise.resolve().then(fastApplyCachedRanksAndBadgesToAllCardsV35);
+                    fastApplyCachedRanksAndBadgesToAllCardsV37();
+                    Promise.resolve().then(fastApplyCachedRanksAndBadgesToAllCardsV37);
                 }
             }
         }
     }
 
-    window.addEventListener('mousedown', handleFastInterceptV35, true);
-    window.addEventListener('click', handleFastInterceptV35, true);
+    window.addEventListener('mousedown', handleFastInterceptV37, true);
+    window.addEventListener('click', handleFastInterceptV37, true);
 
-    function handleCanvasDragClampV35(e) {
+    function handleCanvasDragClampV37(e) {
         if (navDragState.isDragging && navDragState.targetEl) {
             e.preventDefault();
             e.stopPropagation();
@@ -12163,7 +12220,7 @@ else initApp();
         }
     }
 
-    window.addEventListener('mousemove', handleCanvasDragClampV35, true);
+    window.addEventListener('mousemove', handleCanvasDragClampV37, true);
     window.addEventListener('mousemove', function(e) {
         if (!navDragState.isDragging && (e.buttons === 1 ? true : (e.which === 1))) {
             window.clampCanvasTopPartnerBoundaryV42();
@@ -12186,7 +12243,7 @@ else initApp();
         if (!navDragState.isDragging) window.clampCanvasTopPartnerBoundaryV42();
     }, false);
 
-    function handleCanvasWheelAndScrollClampV35(e) {
+    function handleCanvasWheelAndScrollClampV37(e) {
         if (e.target && e.target.closest && (e.target.closest('#bizNavModal') ? true : e.target.closest('#bs-line-move-custom-modal-v43'))) {
             return;
         }
@@ -12195,42 +12252,42 @@ else initApp();
         setTimeout(window.clampCanvasTopPartnerBoundaryV42, 20);
     }
 
-    window.addEventListener('wheel', handleCanvasWheelAndScrollClampV35, { passive: true, capture: false });
-    window.addEventListener('scroll', handleCanvasWheelAndScrollClampV35, { passive: true, capture: true });
-    window.addEventListener('touchmove', handleCanvasWheelAndScrollClampV35, { passive: true, capture: false });
+    window.addEventListener('wheel', handleCanvasWheelAndScrollClampV37, { passive: true, capture: false });
+    window.addEventListener('scroll', handleCanvasWheelAndScrollClampV37, { passive: true, capture: true });
+    window.addEventListener('touchmove', handleCanvasWheelAndScrollClampV37, { passive: true, capture: false });
 
-    function wrapSyncPostGuardV35(fnName) {
-        if (typeof window[fnName] === 'function' && !window[fnName]._v35Wrapped) {
+    function wrapSyncPostGuardV37(fnName) {
+        if (typeof window[fnName] === 'function' && !window[fnName]._v37Wrapped) {
             var origFn = window[fnName];
             var wrappedFn = function() {
                 var r = origFn.apply(this, arguments);
-                syncHeaderPeriodForActiveModeV35(false);
-                fastApplyCachedRanksAndBadgesToAllCardsV35();
+                syncHeaderPeriodForActiveModeV37(false);
+                fastApplyCachedRanksAndBadgesToAllCardsV37();
                 window.clampCanvasTopPartnerBoundaryV42();
                 return r;
             };
-            wrappedFn._v35Wrapped = true;
+            wrappedFn._v37Wrapped = true;
             window[fnName] = wrappedFn;
         }
     }
 
-    wrapSyncPostGuardV35('renderTree');
-    wrapSyncPostGuardV35('executeNodeSingleClick');
-    wrapSyncPostGuardV35('calculateLocalPerformance');
+    wrapSyncPostGuardV37('renderTree');
+    wrapSyncPostGuardV37('executeNodeSingleClick');
+    wrapSyncPostGuardV37('calculateLocalPerformance');
 
-    ensureTreeContainerMutationObserverV35();
+    ensureTreeContainerMutationObserverV37();
     setTimeout(function() {
-        syncHeaderPeriodForActiveModeV35(false);
+        syncHeaderPeriodForActiveModeV37(false);
         window.renderTreeCardStatusBadgesV44(true);
         window.clampCanvasTopPartnerBoundaryV42();
     }, 100);
     setTimeout(function() {
-        syncHeaderPeriodForActiveModeV35(false);
+        syncHeaderPeriodForActiveModeV37(false);
         window.renderTreeCardStatusBadgesV44(true);
         window.clampCanvasTopPartnerBoundaryV42();
     }, 350);
     setTimeout(function() {
-        syncHeaderPeriodForActiveModeV35(false);
+        syncHeaderPeriodForActiveModeV37(false);
         window.renderTreeCardStatusBadgesV44(true);
         window.clampCanvasTopPartnerBoundaryV42();
     }, 800);
@@ -12239,5 +12296,5 @@ else initApp();
         window.renderTreeCardStatusBadgesV44(false);
     }, 250);
 
-    console.log('[Cellvia Sim] Independent Mode Period & Top-Join-Date Default Patch Loaded:', PATCH_VERSION);
+    console.log('[Cellvia Sim] Subline Total PV & Accurate Minor-Leg Patch Loaded:', PATCH_VERSION);
 })();

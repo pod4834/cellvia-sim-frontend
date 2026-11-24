@@ -1,4 +1,4 @@
-// frontend/css/js/api.js
+// frontend/js/api.js
 // 백엔드 API 비동기 통신 및 보안 인증 모듈 (로컬 개발 & 클라우드 웹 배포 자동 감지 지원)
 
 (function initApiBaseAndSecurityGate() {
@@ -12,15 +12,14 @@
     window.IS_LOCAL_DEV = isLocal;
 
     // 💡 프론트엔드와 백엔드를 별도 도메인으로 분리 배포할 경우에만 아래 문자열에 백엔드 주소를 입력하세요.
-    // (예: 'https://cellvia-sim-backend.onrender.com')
-    // server.js가 프론트엔드 정적 파일까지 통합 서빙할 때는 비워두면 현재 도메인(window.location.origin)을 자동 사용합니다.
     const SEPARATE_PROD_BACKEND_URL = '';
 
+    // 로컬 개발 환경에서는 타 스크립트의 구형 포트(3001 등) 간섭을 막기 위해 3005 포트로 고정
     const resolvedBase = isLocal
-        ? 'http://127.0.0.1:3001'
+        ? 'http://127.0.0.1:3005'
         : (SEPARATE_PROD_BACKEND_URL || window.location.origin);
 
-    window.API_BASE = (window.API_BASE || resolvedBase).replace(/\/+$/, '');
+    window.API_BASE = (isLocal ? resolvedBase : (window.API_BASE || resolvedBase)).replace(/\/+$/, '');
     window.API_BASE_URL = window.API_BASE; // main.js 등 타 스크립트 호환용 별칭
 
     // ========================================================================
@@ -93,7 +92,7 @@
     // 4) 전체화면 로그인 오버레이 모달 생성 및 검증
     window.showSimulatorLoginModal = function() {
         setTimeout(mountLogoutBtn, 600);
-        if (sessionStorage.getItem(TOKEN_KEY)) return;
+        if (sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY)) return;
 
         let overlay = document.getElementById('bs-auth-login-overlay');
         if (!overlay) {
@@ -108,7 +107,7 @@
                     <form id="bs-login-form" style="display:flex; flex-direction:column; gap:12px; text-align:left;">
                         <div>
                             <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">관리자 아이디 (ID)</label>
-                            <input type="text" id="bs-login-id" placeholder="admin" autocomplete="username" required style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
+                            <input type="text" id="bs-login-id" placeholder="admin" value="admin" autocomplete="username" required style="width:100%; box-sizing:border-box; padding:10px 12px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:13px; outline:none;">
                         </div>
                         <div>
                             <label style="display:block; font-size:11.5px; color:#d1d5db; margin-bottom:4px; font-weight:bold;">비밀번호 (Password)</label>
@@ -130,7 +129,7 @@
         const errEl = document.getElementById('bs-login-error');
         const submitBtn = document.getElementById('bs-login-submit');
 
-        setTimeout(() => { if (idInp) idInp.focus(); }, 100);
+        setTimeout(() => { if (pwInp) pwInp.focus(); }, 100);
 
         if (form && !form.dataset.bound) {
             form.dataset.bound = 'true';
@@ -158,9 +157,11 @@
                             tokenToSave = data.token;
                         }
                     }
-                } catch (err) {}
+                } catch (err) {
+                    console.warn('백엔드 로그인 API 호출 실패, 로컬 검증으로 전환:', err);
+                }
 
-                // 백엔드 미배포 상태에서도 프론트엔드 자체 검증(admin / tourism9**) 지원
+                // 백엔드 미응답 시 프론트엔드 자체 검증(admin / tourism9**) 지원
                 if (!tokenToSave && uid === EXPECTED_ID && upw === EXPECTED_PW) {
                     tokenToSave = LOCAL_VALID_TOKEN;
                 }
@@ -231,7 +232,6 @@ if (typeof window.fetchTreeData === 'function' && window.fetchTreeData.toString(
 }
 
 window.fetchTreeData = async function(recenter = false) {
-    // main.js의 전용 fetchTreeData_MAIN이 있으면 위임
     if (typeof window.fetchTreeData_MAIN === 'function' && window.fetchTreeData_MAIN !== window.fetchTreeData) {
         return window.fetchTreeData_MAIN(recenter);
     }
@@ -249,7 +249,6 @@ window.fetchTreeData = async function(recenter = false) {
             window.treeData = data.tree;
             window.flatMembersData = data.flatMembers || {};
 
-            // 서버에서 함께 전달된 보상플랜 정책(compRules) 전역 동기화
             if (data.compRules) window.compRules = data.compRules;
             if (data.policiesByRankName) window.policiesByRankName = data.policiesByRankName;
             
@@ -329,7 +328,6 @@ window.fetchSalesHistory = async function(startDate = '', endDate = '') {
     }
 };
 
-// 매출 행 저장 시 서버에서 수신한 DB PK ID(_dbId)를 객체에 즉시 할당 (중복 INSERT 차단)
 window.saveSalesHistoryRow = async function(rowObj) {
     if (!rowObj || rowObj._isSaving) return null;
     try {
@@ -354,7 +352,6 @@ window.saveSalesHistoryRow = async function(rowObj) {
     }
 };
 
-// 숫자 DB ID만 정제하여 안전 삭제
 window.deleteSalesHistoryRow = async function(id) {
     if (!id) return;
     try {
