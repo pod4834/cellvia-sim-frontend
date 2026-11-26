@@ -4013,6 +4013,45 @@ window.resetZoomAndPan = window.centerRootNode;
 let isDraggingCanvas = false;
 let canvasDragStartX = 0, canvasDragStartY = 0;
 
+// 🌟 최상위 파트너 상단 한계선 계산 공용 함수 (드래그 & 휠 공통 사용)
+window.clampPanYToTopBoundary = function(candidatePanY) {
+    const wrapper = document.getElementById('tree-wrapper') || document.querySelector('.tree-wrapper');
+    if (!wrapper) return candidatePanY;
+
+    const cards = wrapper.querySelectorAll('.node-card');
+    if (!cards || cards.length === 0) return candidatePanY;
+
+    let minCardTop = Infinity;
+    for (let i = 0; i < cards.length; i++) {
+        const c = cards[i];
+        if (c.offsetParent === null) continue;
+        const r = c.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;
+        if (r.top < minCardTop) minCardTop = r.top;
+    }
+    if (minCardTop === Infinity) return candidatePanY;
+
+    // 현재 실제 적용된 translateY 값 추출
+    let currentTy = (typeof window.panY === 'number') ? window.panY : 0;
+    const tr = window.getComputedStyle(wrapper).transform;
+    if (tr && tr !== 'none') {
+        const m = tr.match(/matrix\(([^)]+)\)/);
+        if (m && m[1]) {
+            const parts = m[1].split(',').map(v => parseFloat(v.trim()));
+            if (parts.length >= 6 && !isNaN(parts[5])) currentTy = parts[5];
+        }
+    }
+
+    // 상단 헤더 바로 아래 + 28px 여백을 상단 한계선으로 설정
+    const headerEl = document.querySelector('header, .header, .top-bar, .top-header-bar');
+    const ceilingY = (headerEl && headerEl.getBoundingClientRect().bottom > 0)
+        ? headerEl.getBoundingClientRect().bottom + 28
+        : 84;
+
+    const maxPanY = currentTy + (ceilingY - minCardTop);
+    return Math.min(candidatePanY, maxPanY);
+};
+
 function initCanvasDrag() {
     const canvas = document.getElementById('canvas-container') || document.querySelector('.canvas-container') || document.querySelector('main') || document.body;
     let isClickCandidate = false, startX = 0, startY = 0;
@@ -4032,7 +4071,12 @@ function initCanvasDrag() {
         if (Math.abs(e.clientX - startX) > 5 || Math.abs(e.clientY - startY) > 5) isClickCandidate = false;
         e.preventDefault();
         window.panX = e.clientX - canvasDragStartX;
-        window.panY = e.clientY - canvasDragStartY;
+        const rawPanY = e.clientY - canvasDragStartY;
+        window.panY = window.clampPanYToTopBoundary(rawPanY);
+        // 상단 한계선에 닿았을 때 기준점 보정 (다시 위로 드래그 시 즉시 반응)
+        if (window.panY !== rawPanY) {
+            canvasDragStartY = e.clientY - window.panY;
+        }
         const wrapper = document.getElementById('tree-wrapper');
         if (wrapper) wrapper.style.setProperty('transform', `translate(${window.panX}px, ${window.panY}px) scale(${window.scale})`, 'important');
     });
@@ -6171,11 +6215,52 @@ else initApp();
 // ============================================================================
 (function initCompensationPlanHelpAndStableRowV31() {
     window.openCompensationPlanPopup = function() {
-        const win = window.open('', 'COMP_PLAN_HELP', 'width=1100,height=760,resizable=yes,scrollbars=yes');
+        const win = window.open('', 'COMP_PLAN_HELP', 'width=1120,height=860,resizable=yes,scrollbars=yes');
         if (!win) return;
         const html = [
-            '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>Compensation Plan (マーケティングプラン要約)</title>',
-            '<style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#fff;color:#1e293b;font-family:Meiryo,sans-serif}.cp-header{text-align:center;margin-bottom:18px}.cp-title{display:inline-block;font-family:Georgia,serif;font-size:28px;font-weight:700;color:#1e3a8a;border-bottom:2.5px solid #2563eb;padding-bottom:4px;margin:0 0 8px 0}.cp-subtitle{font-size:15px;font-weight:700;color:#334155;margin:0}table{width:100%;border-collapse:collapse;border:1.5px solid #94a3b8;font-size:12px}th{background:#8e9aaf;color:#0f172a;font-weight:700;padding:8px 6px;border:1px solid #cbd5e1}td{border:1px solid #e2e8f0;padding:8px;text-align:center}td.col-title{font-weight:800;width:90px}td.col-pv{text-align:left;width:220px}td.col-fp{text-align:left;width:250px;line-height:1.5}</style></head><body>',
+            '<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>Compensation Plan (マーケティングプラン要約)</title>',
+            '<style>',
+            '*{box-sizing:border-box}',
+            'body{margin:0;padding:22px 24px 28px;background:#fff;color:#1e293b;font-family:"Pretendard",Meiryo,-apple-system,sans-serif}',
+            '.cp-header{text-align:center;margin-bottom:16px}',
+            '.cp-title{display:inline-block;font-family:Georgia,serif;font-size:26px;font-weight:700;color:#1e3a8a;border-bottom:2.5px solid #2563eb;padding-bottom:4px;margin:0 0 6px 0}',
+            '.cp-subtitle{font-size:14px;font-weight:700;color:#334155;margin:0}',
+            'table{width:100%;border-collapse:collapse;border:1.5px solid #94a3b8;font-size:12px}',
+            'th{background:#8e9aaf;color:#0f172a;font-weight:700;padding:7px 6px;border:1px solid #cbd5e1}',
+            'td{border:1px solid #e2e8f0;padding:7px 6px;text-align:center}',
+            'td.col-title{font-weight:800;width:90px}',
+            'td.col-pv{text-align:left;width:220px}',
+            'td.col-fp{text-align:left;width:250px;line-height:1.5}',
+            '.promo-wrap{margin-top:24px;padding-top:18px;border-top:2px solid #e2e8f0}',
+            '.promo-section{margin-bottom:18px}',
+            '.promo-section:last-child{margin-bottom:0}',
+            '.promo-sec-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}',
+            '.promo-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;color:#fff}',
+            '.promo-badge.upgrade{background:#1d4ed8}',
+            '.promo-badge.maint{background:#047857}',
+            '.promo-sec-title{font-size:14px;font-weight:800;color:#0f172a}',
+            '.promo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}',
+            '.promo-card{background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 2px 6px rgba(15,23,42,0.06)}',
+            '.promo-card-top{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #e2e8f0}',
+            '.promo-card.upgrade .promo-card-top{background:#eff6ff}',
+            '.promo-card.maint .promo-card-top{background:#ecfdf5}',
+            '.promo-rank{font-size:13.5px;font-weight:800;letter-spacing:0.3px}',
+            '.promo-card.upgrade .promo-rank{color:#1e40af}',
+            '.promo-card.maint .promo-rank{color:#065f46}',
+            '.promo-tag{font-size:10.5px;font-weight:700;color:#64748b}',
+            '.promo-items{padding:10px 12px;flex:1;display:flex;flex-direction:column;gap:6px}',
+            '.promo-item{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding-bottom:5px;border-bottom:1px dashed #e2e8f0}',
+            '.promo-item:last-child{border-bottom:none;padding-bottom:0}',
+            '.promo-item-left{display:flex;align-items:center;gap:6px}',
+            '.promo-item-name{font-weight:700;color:#1e293b}',
+            '.promo-item-qty{font-size:10.5px;font-weight:700;color:#475569;background:#e2e8f0;padding:1px 6px;border-radius:4px}',
+            '.promo-item-price{font-family:monospace;font-weight:600;color:#475569}',
+            '.promo-card-foot{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#fff;border-top:1.5px solid #e2e8f0}',
+            '.promo-total-label{font-size:11px;font-weight:700;color:#64748b}',
+            '.promo-total-val{font-size:14px;font-weight:800;font-family:monospace;color:#0f172a}',
+            '.promo-card.upgrade .promo-total-val{color:#1d4ed8}',
+            '.promo-card.maint .promo-total-val{color:#047857}',
+            '</style></head><body>',
             '<div class="cp-header"><h1 class="cp-title">Compensation Plan</h1><p class="cp-subtitle">マーケティングプラン要約</p></div>',
             '<table><thead><tr><th rowspan="3">タイトル</th><th rowspan="3">タイトル獲得PV<br>(無限累積)</th><th rowspan="3">購読基準CV</th><th colspan="10">手当支給基準CV</th></tr>',
             '<tr><th rowspan="2">紹介手当</th><th rowspan="2">支援手当</th><th colspan="5">紹介マッチング手当</th><th rowspan="2">維持ボリュームCV</th><th rowspan="2">タイトル維持手当</th><th rowspan="2">ファストパワー手当</th></tr>',
@@ -6192,7 +6277,72 @@ else initApp();
             '<tr><td class="col-title">Blue Diamond</td><td class="col-pv">小実績10億PV / DM 1:1 & GDM 2期維持</td><td>10%</td><td>5%</td><td>5%</td><td>3%</td><td>-</td><td>3,400万 CV</td><td>230万ウォン</td></tr>',
             '<tr><td class="col-title">Red Diamond</td><td class="col-pv">小実績30億PV / GDM 1:1 & BDM 2期維持</td><td rowspan="2">7万 CV</td><td rowspan="2">10%</td><td>10%</td><td>5%</td><td>5%</td><td>3%</td><td>2%</td><td>6,500万 CV</td><td>400万ウォン</td></tr>',
             '<tr><td class="col-title">Crown</td><td class="col-pv">小実績100億PV / BDM 1:1</td><td>10%</td><td>5%</td><td>5%</td><td>3%</td><td>3%</td><td>13,500万 CV</td><td>600万ウォン</td></tr>',
-            '</tbody></table></body></html>'
+            '</tbody></table>',
+
+            '<div class="promo-wrap">',
+            '  <div class="promo-section">',
+            '    <div class="promo-sec-head"><span class="promo-badge upgrade">승급</span><span class="promo-sec-title">직급 승급 프로모션</span></div>',
+            '    <div class="promo-grid">',
+            '      <div class="promo-card upgrade">',
+            '        <div class="promo-card-top"><span class="promo-rank">DIRECTOR</span><span class="promo-tag">승급 프로모션</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">앰플</span><span class="promo-item-qty">1BOX</span></div><span class="promo-item-price">220,000원</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">미스트</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">36,300원</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">세럼</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">38,500원</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">회원가 합계</span><span class="promo-total-val">294,800원</span></div>',
+            '      </div>',
+            '      <div class="promo-card upgrade">',
+            '        <div class="promo-card-top"><span class="promo-rank">EMERALD</span><span class="promo-tag">승급 프로모션</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">스칼피아앰플</span><span class="promo-item-qty">2BOX</span></div><span class="promo-item-price">143,000원</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">크로마디바이스</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">275,000원</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">회원가 합계</span><span class="promo-total-val">561,000원</span></div>',
+            '      </div>',
+            '      <div class="promo-card upgrade">',
+            '        <div class="promo-card-top"><span class="promo-rank">DIAMOND</span><span class="promo-tag">승급 프로모션</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">궁애</span><span class="promo-item-qty">4BOX</span></div><span class="promo-item-price">242,000원</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">컨피던스오일</span><span class="promo-item-qty">2EA</span></div><span class="promo-item-price">121,000원</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">회원가 합계</span><span class="promo-total-val">1,210,000원</span></div>',
+            '      </div>',
+            '    </div>',
+            '  </div>',
+            '  <div class="promo-section">',
+            '    <div class="promo-sec-head"><span class="promo-badge maint">품위유지</span><span class="promo-sec-title">직급 품위유지 프로모션</span></div>',
+            '    <div class="promo-grid">',
+            '      <div class="promo-card maint">',
+            '        <div class="promo-card-top"><span class="promo-rank">DIRECTOR</span><span class="promo-tag">품위유지 프로모션</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">앰플(20%)</span><span class="promo-item-qty">1BOX</span></div><span class="promo-item-price">220,000원</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">미스트</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">36,300원</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">회원가 합계</span><span class="promo-total-val">256,300원</span></div>',
+            '      </div>',
+            '      <div class="promo-card maint">',
+            '        <div class="promo-card-top"><span class="promo-rank">EMERALD</span><span class="promo-tag">품위유지 프로모션</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">프리미엄앰플</span><span class="promo-item-qty">1BOX</span></div><span class="promo-item-price">396,000원</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">스칼피아앰플</span><span class="promo-item-qty">1BOX</span></div><span class="promo-item-price">143,000원</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">미스트</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">36,300원</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">회원가 합계</span><span class="promo-total-val">575,300원</span></div>',
+            '      </div>',
+            '      <div class="promo-card maint">',
+            '        <div class="promo-card-top"><span class="promo-rank">DIAMOND</span><span class="promo-tag">품위유지 프로모션</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">프리미엄앰플</span><span class="promo-item-qty">2BOX</span></div><span class="promo-item-price">396,000원</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">스칼피아앰플</span><span class="promo-item-qty">1BOX</span></div><span class="promo-item-price">143,000원</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">미스트</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">36,300원</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">회원가 합계</span><span class="promo-total-val">971,300원</span></div>',
+            '      </div>',
+            '    </div>',
+            '  </div>',
+            '</div>',
+            '</body></html>'
         ].join('');
         win.document.open();
         win.document.write(html);
@@ -6381,6 +6531,10 @@ else initApp();
             currentY += dy * ease;
         }
 
+if (typeof window.clampPanYToTopBoundary === 'function') {
+            currentY = window.clampPanYToTopBoundary(currentY);
+            targetY = window.clampPanYToTopBoundary(targetY);
+        }
         const curScale = typeof window.scale === 'number' ? window.scale : 0.85;
         applyCanvasTransform(wrapper, currentX, currentY, curScale);
 
@@ -6451,7 +6605,10 @@ else initApp();
         const speed = 1.25;
         targetX -= deltaX * speed;
         targetY -= deltaY * speed;
-
+        if (typeof window.clampPanYToTopBoundary === 'function') {
+            targetY = window.clampPanYToTopBoundary(targetY);
+        }
+        
         if (!isAnimating) {
             isAnimating = true;
             requestAnimationFrame(smoothWheelStep);
@@ -11977,7 +12134,8 @@ else initApp();
 
                 var htmlParts = [];
                 if (status.showMaintBadge) {
-                    htmlParts.push('<span class="bs-v37-badge-btn" data-badge-member-id="' + memberId + '" style="display:inline-flex;align-items:center;height:16px;padding:0 5px;background:#34966b;color:#fff;border:1px solid #86efac;border-radius:6px;font-size:10px;font-weight:800;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.7);cursor:pointer;" title="클릭 시 비지네스 내비게이터 즉시 열기">유지 ' + status.maintPct + '%</span>');
+                    var maintBadgeText = (status.maintPct >= 100) ? '유지달성' : ('유지 ' + status.maintPct + '%');
+                    htmlParts.push('<span class="bs-v37-badge-btn" data-badge-member-id="' + memberId + '" style="display:inline-flex;align-items:center;height:16px;padding:0 5px;background:#34966b;color:#fff;border:1px solid #86efac;border-radius:6px;font-size:10px;font-weight:800;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.7);cursor:pointer;" title="클릭 시 비지네스 내비게이터 즉시 열기">' + maintBadgeText + '</span>');
                 }
                 if (status.showPromoBadge) {
                     htmlParts.push('<span class="bs-v37-badge-btn" data-badge-member-id="' + memberId + '" style="display:inline-flex;align-items:center;height:16px;padding:0 5px;background:#c88a2e;color:#fff;border:1px solid #fcd34d;border-radius:2px;font-size:10px;font-weight:800;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.7);cursor:pointer;" title="클릭 시 비지네스 내비게이터 즉시 열기">승급 ' + status.promoPct + '%</span>');
@@ -12297,4 +12455,2162 @@ else initApp();
     }, 250);
 
     console.log('[Cellvia Sim] Subline Total PV & Accurate Minor-Leg Patch Loaded:', PATCH_VERSION);
+})();
+// ============================================================================
+// [46] 매출기간검색 수정·저장 DB 직접 반영(토큰 쿼리 보정) + 삭제 복구 + 좌측 선택 마킹 + 이중 스크롤 제거 + 좌/우 라인 필터링 [Version-4.7]
+// - 1) GET/POST 요청 URL에 token 쿼리 파라미터를 포함해 main.js XHR 래퍼의 GET 헤더 누락 해결 -> DB UPDATE 100% 반영
+// - 2) 저장 성공 시 iframe 내 [조회] 버튼을 자동 클릭해 목록·합계 및 메인 계보도 즉시 동기화
+// - 3) 표 제일 좌측에 [선택] 체크박스 열 추가, 선택 시 해당 행 강조 마킹(배경 + 좌측 표시선)으로 비교·대조 지원
+// - 4) 이중 스크롤바 제거 및 [전체 / 좌(A) / 우(B)] 라인 필터링·실시간 건수·합계 CV/PV 갱신 유지
+// ============================================================================
+(function initSalesIframeLineFilterAndMarkPatchV4_7() {
+    var activeLineFilter = 'ALL'; // 'ALL' | 'A' | 'B'
+    var isApplyingFilter = false;
+    var TOKEN_KEY = 'BS_AUTH_TOKEN_V3';
+
+    function getApiBase() {
+        return (window.API_BASE || 'http://127.0.0.1:3005').replace(/\/+$/, '');
+    }
+
+    function getAuthToken() {
+        return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
+    }
+
+    function getActiveCanvasMode() {
+        var firstCard = document.querySelector('.node-card');
+        if (firstCard && /VJ-\d+/i.test(firstCard.innerText || '')) return 'vj';
+        return (String(window.currentCanvasMode || '').toLowerCase() === 'vj') ? 'vj' : 'main';
+    }
+
+    function normId(val) {
+        if (!val) return '';
+        var s = String(val).trim().toLowerCase();
+        if (!s || s === '-') return '';
+        var prefix = '';
+        if (s.indexOf('vj') === 0) prefix = 'vj_';
+        else if (s.indexOf('vk') === 0) prefix = 'vk_';
+        else prefix = (getActiveCanvasMode() === 'vj') ? 'vj_' : 'vk_';
+        var num = s.replace(/^v[kj]-?0*/, '');
+        return prefix + (num || '0');
+    }
+
+    function parseNum(str) {
+        var n = Number(String(str || '').replace(/[^0-9.-]/g, ''));
+        return isNaN(n) ? 0 : n;
+    }
+
+    function getSelectedPartnerSublineSets() {
+        var setA = new Set();
+        var setB = new Set();
+        var nameToNorm = new Map();
+
+        document.querySelectorAll('.node-card').forEach(function(card) {
+            var txt = String(card.innerText || '');
+            var m = txt.match(/V[KJ]-\d+/i);
+            if (!m) return;
+            var id = m[0].toUpperCase();
+            var nId = normId(id);
+            var lines = txt.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].toUpperCase() === id && i + 1 < lines.length) {
+                    nameToNorm.set(lines[i + 1], nId);
+                    break;
+                }
+            }
+        });
+
+        var targetId = window.currentSelectedId;
+        if (!targetId) {
+            var sel = document.querySelector('.node-card.selected, .node-card.active') || document.querySelector('.node-card');
+            if (sel) {
+                var sm = String(sel.innerText || '').match(/V[KJ]-\d+/i);
+                if (sm) targetId = sm[0].toUpperCase();
+            }
+        }
+        if (!targetId) return { targetId: '', setA: setA, setB: setB, nameToNorm: nameToNorm };
+
+        var node = (typeof window.findMemberNode === 'function') ? window.findMemberNode(targetId) : null;
+
+        function walk(n, outSet) {
+            if (!n) return;
+            var rawId = n.id || n.member_id || n.memberId || '';
+            var nid = normId(rawId);
+            if (nid && !outSet.has(nid)) {
+                outSet.add(nid);
+                if (n.name) nameToNorm.set(String(n.name).trim(), nid);
+            }
+            if (n.left) walk(n.left, outSet);
+            if (n.right) walk(n.right, outSet);
+            if (Array.isArray(n.children)) {
+                n.children.forEach(function(ch) { walk(ch, outSet); });
+            }
+        }
+
+        if (node) {
+            if (typeof window.getSublinePartnerSets === 'function') {
+                try {
+                    var sub = window.getSublinePartnerSets(node);
+                    if (sub && sub.setA && sub.setB) {
+                        sub.setA.forEach(function(id) { setA.add(normId(id)); });
+                        sub.setB.forEach(function(id) { setB.add(normId(id)); });
+                    }
+                } catch (e) {}
+            }
+            if (setA.size === 0 && node.left) walk(node.left, setA);
+            if (setB.size === 0 && node.right) walk(node.right, setB);
+        }
+
+        var selfNorm = normId(targetId);
+        setA.delete(selfNorm);
+        setB.delete(selfNorm);
+
+        return { targetId: targetId, setA: setA, setB: setB, nameToNorm: nameToNorm };
+    }
+
+    function findSalesIframeContext() {
+        var iframes = document.querySelectorAll('iframe');
+        for (var i = 0; i < iframes.length; i++) {
+            var ifr = iframes[i];
+            var rect = ifr.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) continue;
+            try {
+                var doc = ifr.contentDocument || (ifr.contentWindow && ifr.contentWindow.document);
+                if (!doc || !doc.body) continue;
+                var bodyTxt = String(doc.body.innerText || '');
+                if (bodyTxt.indexOf('전체기간') !== -1 || bodyTxt.indexOf('조회 건수') !== -1) {
+                    return { iframe: ifr, win: ifr.contentWindow, doc: doc };
+                }
+            } catch (e) {}
+        }
+        return null;
+    }
+
+    function readRowValues(rowEl) {
+        var memberId = rowEl.getAttribute('data-member-id') || '';
+        if (!memberId) {
+            var m = String(rowEl.innerText || '').match(/V[KJ]-\d+/i);
+            if (m) memberId = m[0].toUpperCase();
+        }
+        var sel = rowEl.querySelector('select');
+        var category = sel ? String(sel.value || '매출').trim() : '매출';
+
+        var inputs = Array.from(rowEl.querySelectorAll('input:not([type="checkbox"])'));
+        var dateVal = '';
+        var numVals = [];
+
+        inputs.forEach(function(inp) {
+            var v = String(inp.value || '').trim();
+            if (/^\d{4}[-./]\d{1,2}[-./]\d{1,2}$/.test(v) || inp.type === 'date') {
+                dateVal = v.replace(/[./]/g, '-');
+            } else {
+                numVals.push(parseNum(v));
+            }
+        });
+
+        var cv = numVals.length >= 2 ? numVals[numVals.length - 2] : (numVals[0] || 0);
+        var pv = numVals.length >= 2 ? numVals[numVals.length - 1] : cv;
+
+        return { memberId: memberId, category: category, date: dateVal, cv: cv, pv: pv };
+    }
+
+    // 🌟 [핵심] '저장' 버튼 클릭 시 token 쿼리를 포함해 실제 DB id를 조회하고 직접 UPDATE 실행
+    function bindDirectDbSaveHandler(doc) {
+        if (!doc || doc._bsDirectSaveBoundV47) return;
+        doc._bsDirectSaveBoundV47 = true;
+
+        doc.addEventListener('click', async function(e) {
+            var saveBtn = e.target && e.target.closest ? e.target.closest('button') : null;
+            if (!saveBtn || String(saveBtn.innerText || '').trim() !== '저장') return;
+
+            var row = saveBtn.closest('tr');
+            if (!row) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+            var cur = readRowValues(row);
+            var origMember = row.dataset.bsOrigMember || cur.memberId;
+            var origDate = row.dataset.bsOrigDate || cur.date;
+            var origCv = Number(row.dataset.bsOrigCv || 0);
+            var origPv = Number(row.dataset.bsOrigPv || 0);
+
+            if (!cur.memberId || !cur.date) {
+                alert('회원번호 또는 매출일자가 올바르지 않습니다.');
+                return;
+            }
+
+            var origBtnText = saveBtn.innerText;
+            saveBtn.disabled = true;
+            saveBtn.innerText = '저장중...';
+
+            try {
+                var apiBase = getApiBase();
+                var token = getAuthToken();
+                var mode = getActiveCanvasMode();
+                var headers = {
+                    'Content-Type': 'application/json',
+                    'x-auth-token': token,
+                    'x-canvas-mode': mode
+                };
+
+                // 1) token 쿼리 포함하여 해당 회원의 실제 DB 매출 목록 조회
+                var listUrl = apiBase + '/api/sales/history?member_id=' + encodeURIComponent(origMember) +
+                    '&canvasMode=' + encodeURIComponent(mode) +
+                    '&token=' + encodeURIComponent(token);
+
+                var listRes = await fetch(listUrl, { method: 'GET', headers: headers });
+                if (!listRes.ok) throw new Error('매출 조회 실패 (HTTP ' + listRes.status + ')');
+
+                var listRows = await listRes.json();
+                var matched = null;
+
+                if (Array.isArray(listRows)) {
+                    matched = listRows.find(function(r) {
+                        var rDate = String(r.transaction_date || '').slice(0, 10);
+                        return rDate === origDate && Number(r.cv || 0) === origCv && Number(r.pv || 0) === origPv;
+                    });
+                    if (!matched) {
+                        matched = listRows.find(function(r) {
+                            return String(r.transaction_date || '').slice(0, 10) === origDate;
+                        });
+                    }
+                }
+
+                // 2) 찾은 DB id로 UPDATE 요청
+                var payload = {
+                    id: matched ? matched.id : undefined,
+                    _dbId: matched ? matched.id : undefined,
+                    member_id: cur.memberId,
+                    category: cur.category,
+                    transaction_date: cur.date,
+                    cv: cur.cv,
+                    pv: cur.pv,
+                    _canvasMode: mode
+                };
+
+                var saveUrl = apiBase + '/api/sales/history?canvasMode=' + encodeURIComponent(mode) +
+                    '&token=' + encodeURIComponent(token);
+
+                var saveRes = await fetch(saveUrl, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(payload)
+                });
+
+                if (!saveRes.ok) throw new Error('매출 저장 실패 (HTTP ' + saveRes.status + ')');
+                var saveData = await saveRes.json();
+
+                console.log('[Version-4.7] 매출 DB 수정 완료:', { matchedId: matched ? matched.id : null, payload: payload, res: saveData });
+
+                row.dataset.bsOrigMember = cur.memberId;
+                row.dataset.bsOrigDate = cur.date;
+                row.dataset.bsOrigCv = String(cur.cv);
+                row.dataset.bsOrigPv = String(cur.pv);
+
+                saveBtn.innerText = '저장됨 ✓';
+                saveBtn.style.background = '#059669';
+                saveBtn.style.color = '#ffffff';
+
+                // 메인 계보도 및 하단 실적 집계 즉시 동기화
+                if (typeof window.fetchSalesHistory === 'function') {
+                    await window.fetchSalesHistory();
+                }
+                if (typeof window.renderTreeCardStatusBadgesV44 === 'function') {
+                    window.renderTreeCardStatusBadgesV44(true);
+                }
+                if (window.currentSelectedId && typeof window.calculateLocalPerformance === 'function') {
+                    try { window.calculateLocalPerformance(window.currentSelectedId); } catch (ex) {}
+                }
+
+                // 0.6초 후 iframe 내 '조회' 버튼 자동 클릭하여 DB 최신 목록으로 즉시 갱신
+                setTimeout(function() {
+                    var searchBtn = Array.from(doc.querySelectorAll('button')).find(function(b) {
+                        return String(b.innerText || '').trim() === '조회';
+                    });
+                    if (searchBtn) {
+                        searchBtn.click();
+                    } else {
+                        saveBtn.innerText = origBtnText;
+                        saveBtn.style.background = '';
+                        saveBtn.style.color = '';
+                        saveBtn.disabled = false;
+                    }
+                }, 600);
+            } catch (err) {
+                console.error('[Version-4.7] 매출 저장 실패:', err);
+                alert('매출 저장 중 오류가 발생했습니다: ' + err.message);
+                saveBtn.innerText = origBtnText;
+                saveBtn.disabled = false;
+            }
+        }, true);
+    }
+
+    function patchIframeFetchAndAuth(win) {
+        if (!win || win._bsFetchPatchedV47) return;
+        win._bsFetchPatchedV47 = true;
+
+        var apiBase = getApiBase();
+        win.API_BASE = apiBase;
+        win.API_BASE_URL = apiBase;
+
+        var origIframeFetch = win.fetch;
+        if (typeof origIframeFetch === 'function') {
+            win.fetch = async function(input, init) {
+                init = init || {};
+                var token = getAuthToken();
+                var urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+                var method = String(init.method || 'GET').toUpperCase();
+
+                var fixedUrl = urlStr;
+                if (typeof input === 'string') {
+                    if (/^https?:\/\/(127\.0\.0\.1|localhost):(3000|3001)\//i.test(fixedUrl)) {
+                        fixedUrl = fixedUrl.replace(/^https?:\/\/(127\.0\.0\.1|localhost):(3000|3001)/i, apiBase);
+                    } else if (fixedUrl.indexOf('/api/') === 0) {
+                        fixedUrl = apiBase + fixedUrl;
+                    }
+                    if ((fixedUrl.indexOf('/api/') !== -1 || fixedUrl.indexOf(apiBase) === 0) && fixedUrl.indexOf('token=') === -1 && token) {
+                        fixedUrl += (fixedUrl.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(token);
+                    }
+                    input = fixedUrl;
+                }
+
+                if (fixedUrl.indexOf('/api/') !== -1 || fixedUrl.indexOf(apiBase) === 0) {
+                    init.headers = Object.assign({}, init.headers || {}, {
+                        'x-auth-token': token
+                    });
+                }
+
+                var res = await origIframeFetch.call(win, input, init);
+
+                if (res && res.ok && (method === 'DELETE' || method === 'POST' || method === 'PUT')) {
+                    setTimeout(async function() {
+                        try {
+                            if (typeof window.fetchSalesHistory === 'function') await window.fetchSalesHistory();
+                            if (typeof window.renderTreeCardStatusBadgesV44 === 'function') window.renderTreeCardStatusBadgesV44(true);
+                        } catch (e) {}
+                    }, 150);
+                }
+                return res;
+            };
+        }
+    }
+
+    function ensureMarkStyleInjected(doc) {
+        if (!doc || !doc.head || doc.getElementById('bs-v44-mark-style')) return;
+        var style = doc.createElement('style');
+        style.id = 'bs-v44-mark-style';
+        style.textContent = [
+            '.bs-row-marked-v44, .bs-row-marked-v44 > td, .bs-row-marked-v44 > div {',
+            '  background-color: rgba(245, 158, 11, 0.24) !important;',
+            '}',
+            '.bs-row-marked-v44 > td:first-child, .bs-row-marked-v44 > div:first-child {',
+            '  box-shadow: inset 4px 0 0 #fbbf24 !important;',
+            '}',
+            '.bs-chk-cell-v44 {',
+            '  width: 38px !important; min-width: 38px !important; max-width: 42px !important;',
+            '  text-align: center !important; vertical-align: middle !important; padding: 4px !important;',
+            '}',
+            '.bs-chk-input-v44 {',
+            '  width: 15px; height: 15px; cursor: pointer; accent-color: #f59e0b; vertical-align: middle;',
+            '}'
+        ].join('\n');
+        doc.head.appendChild(style);
+    }
+
+    function findInnermostTextEl(doc, predicate) {
+        var candidates = doc.querySelectorAll('div, span, p');
+        var found = null;
+        for (var i = 0; i < candidates.length; i++) {
+            var el = candidates[i];
+            if (el.closest('.bs-sales-line-filter-bar-v44')) continue;
+            var t = String(el.innerText || '').trim();
+            if (predicate(t)) {
+                if (!found || found.contains(el)) {
+                    found = el;
+                }
+            }
+        }
+        return found;
+    }
+
+    function findSalesRowsInDoc(doc) {
+        var rows = [];
+        var seen = new Set();
+        var buttons = doc.querySelectorAll('button');
+        for (var i = 0; i < buttons.length; i++) {
+            var btn = buttons[i];
+            if (String(btn.innerText || '').trim() !== '삭제') continue;
+            var row = btn.closest('tr');
+            if (!row) {
+                var curr = btn.parentElement;
+                while (curr && curr !== doc.body) {
+                    if (/V[KJ]-\d+/i.test(String(curr.innerText || '')) || curr.querySelectorAll('input').length >= 2) {
+                        row = curr;
+                        break;
+                    }
+                    curr = curr.parentElement;
+                }
+            }
+            if (row && !seen.has(row)) {
+                seen.add(row);
+                rows.push(row);
+            }
+        }
+        return rows;
+    }
+
+    function ensureCheckboxesAndMarking(doc, rows) {
+        ensureMarkStyleInjected(doc);
+
+        var table = doc.querySelector('table');
+        if (table && table.tHead) {
+            var headRow = table.tHead.querySelector('tr');
+            if (headRow && !headRow.querySelector('.bs-chk-head-v44')) {
+                var th = doc.createElement('th');
+                th.className = 'bs-chk-head-v44 bs-chk-cell-v44';
+                th.title = '전체 선택 / 해제';
+                th.innerHTML = '<input type="checkbox" class="bs-chk-input-v44 bs-chk-all-v44" title="현재 표시된 행 전체 선택/해제">';
+                headRow.insertBefore(th, headRow.firstChild);
+
+                var allChk = th.querySelector('.bs-chk-all-v44');
+                allChk.addEventListener('change', function() {
+                    var checked = allChk.checked;
+                    var curRows = findSalesRowsInDoc(doc);
+                    curRows.forEach(function(r) {
+                        if (r.style.display === 'none') return;
+                        var cb = r.querySelector('.bs-row-chk-v44');
+                        if (cb) {
+                            cb.checked = checked;
+                            r.classList.toggle('bs-row-marked-v44', checked);
+                        }
+                    });
+                    updateMarkedCountBadge(doc);
+                });
+            }
+        }
+
+        rows.forEach(function(row) {
+            if (!row.dataset.bsOrigCaptured) {
+                var initVals = readRowValues(row);
+                row.dataset.bsOrigMember = initVals.memberId;
+                row.dataset.bsOrigDate = initVals.date;
+                row.dataset.bsOrigCv = String(initVals.cv);
+                row.dataset.bsOrigPv = String(initVals.pv);
+                row.dataset.bsOrigCaptured = '1';
+            }
+
+            if (row.querySelector('.bs-row-chk-v44')) return;
+
+            var isTr = (row.tagName === 'TR');
+            var cell = doc.createElement(isTr ? 'td' : 'div');
+            cell.className = 'bs-chk-cell-v44';
+            cell.innerHTML = '<input type="checkbox" class="bs-chk-input-v44 bs-row-chk-v44" title="비교 대조용 행 마킹">';
+            row.insertBefore(cell, row.firstChild);
+
+            var cb = cell.querySelector('.bs-row-chk-v44');
+            cb.addEventListener('change', function(e) {
+                e.stopPropagation();
+                row.classList.toggle('bs-row-marked-v44', cb.checked);
+                updateMarkedCountBadge(doc);
+            });
+
+            cell.addEventListener('click', function(e) {
+                if (e.target === cb) return;
+                cb.checked = !cb.checked;
+                row.classList.toggle('bs-row-marked-v44', cb.checked);
+                updateMarkedCountBadge(doc);
+            });
+        });
+
+        updateMarkedCountBadge(doc);
+    }
+
+    function updateMarkedCountBadge(doc) {
+        var badge = doc.querySelector('.bs-marked-count-wrap-v44');
+        if (!badge) return;
+        var markedRows = doc.querySelectorAll('.bs-row-marked-v44');
+        var cnt = markedRows.length;
+        if (cnt > 0) {
+            badge.style.display = 'inline-flex';
+            var txtEl = badge.querySelector('.bs-marked-count-txt-v44');
+            if (txtEl) txtEl.innerText = '선택 ' + cnt + '건';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function fixIframeDoubleScrollbar(ifr, doc, rows) {
+        if (ifr && ifr.parentElement) {
+            ifr.parentElement.style.setProperty('overflow', 'hidden', 'important');
+        }
+        if (doc.documentElement) {
+            doc.documentElement.style.setProperty('overflow', 'hidden', 'important');
+            doc.documentElement.style.setProperty('height', '100%', 'important');
+        }
+        if (doc.body) {
+            doc.body.style.setProperty('overflow', 'hidden', 'important');
+            doc.body.style.setProperty('height', '100%', 'important');
+            doc.body.style.setProperty('display', 'flex', 'important');
+            doc.body.style.setProperty('flex-direction', 'column', 'important');
+            doc.body.style.setProperty('box-sizing', 'border-box', 'important');
+        }
+
+        var anchor = (rows && rows.length > 0) ? rows[0].parentElement : doc.querySelector('table');
+        if (!anchor) return;
+
+        var win = doc.defaultView || window;
+        var scrollAncestors = [];
+        var curr = anchor;
+        while (curr && curr !== doc.body && curr !== doc.documentElement) {
+            var st = win.getComputedStyle(curr);
+            if (st.overflowY === 'auto' || st.overflowY === 'scroll' || curr.scrollHeight > curr.clientHeight + 4) {
+                scrollAncestors.push(curr);
+            }
+            curr = curr.parentElement;
+        }
+
+        if (scrollAncestors.length >= 1) {
+            scrollAncestors[0].style.setProperty('overflow-y', 'auto', 'important');
+            scrollAncestors[0].style.setProperty('flex', '1 1 auto', 'important');
+            scrollAncestors[0].style.setProperty('min-height', '0', 'important');
+            for (var i = 1; i < scrollAncestors.length; i++) {
+                scrollAncestors[i].style.setProperty('overflow-y', 'hidden', 'important');
+                scrollAncestors[i].style.setProperty('display', 'flex', 'important');
+                scrollAncestors[i].style.setProperty('flex-direction', 'column', 'important');
+                scrollAncestors[i].style.setProperty('flex', '1 1 auto', 'important');
+                scrollAncestors[i].style.setProperty('min-height', '0', 'important');
+            }
+        }
+    }
+
+    function ensureIframeFilterBarMounted(doc, countEl) {
+        var bar = doc.querySelector('.bs-sales-line-filter-bar-v44');
+        if (bar) return bar;
+
+        bar = doc.createElement('div');
+        bar.className = 'bs-sales-line-filter-bar-v44';
+        bar.style.cssText = 'display:inline-flex; align-items:center; gap:5px; padding:2px 8px; background:#0f172a; border:1px solid #334155; border-radius:6px; margin:0 10px;';
+        bar.innerHTML = [
+            '<span style="font-size:11px; color:#94a3b8; font-weight:700; margin-right:2px;">라인:</span>',
+            '<button type="button" data-line-filter="ALL" style="padding:2px 9px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; border:1px solid #60a5fa; background:#2563eb; color:#fff;">전체</button>',
+            '<button type="button" data-line-filter="A" style="padding:2px 9px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; border:1px solid #334155; background:#1e293b; color:#94a3b8;">좌(A)</button>',
+            '<button type="button" data-line-filter="B" style="padding:2px 9px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; border:1px solid #334155; background:#1e293b; color:#94a3b8;">우(B)</button>',
+            '<span class="bs-marked-count-wrap-v44" style="display:none; align-items:center; gap:4px; margin-left:6px; padding-left:6px; border-left:1px solid #334155;">',
+            '  <span class="bs-marked-count-txt-v44" style="font-size:11px; font-weight:800; color:#fbbf24;">선택 0건</span>',
+            '  <button type="button" class="bs-clear-marks-btn-v44" style="padding:1px 6px; border-radius:4px; font-size:10.5px; font-weight:700; cursor:pointer; border:1px solid #b45309; background:#451a03; color:#fde68a;">해제</button>',
+            '</span>'
+        ].join('');
+
+        if (countEl && countEl.parentElement) {
+            countEl.parentElement.insertBefore(bar, countEl.nextSibling);
+        }
+
+        bar.addEventListener('click', function(e) {
+            var clearBtn = e.target && e.target.closest ? e.target.closest('.bs-clear-marks-btn-v44') : null;
+            if (clearBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                doc.querySelectorAll('.bs-row-chk-v44, .bs-chk-all-v44').forEach(function(cb) { cb.checked = false; });
+                doc.querySelectorAll('.bs-row-marked-v44').forEach(function(r) { r.classList.remove('bs-row-marked-v44'); });
+                updateMarkedCountBadge(doc);
+                return;
+            }
+
+            var btn = e.target && e.target.closest ? e.target.closest('button[data-line-filter]') : null;
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            activeLineFilter = btn.getAttribute('data-line-filter') || 'ALL';
+            updateFilterButtonStyles(doc);
+            applySalesIframeFilter();
+        });
+
+        updateFilterButtonStyles(doc);
+        return bar;
+    }
+
+    function updateFilterButtonStyles(doc) {
+        doc.querySelectorAll('.bs-sales-line-filter-bar-v44 button[data-line-filter]').forEach(function(btn) {
+            var val = btn.getAttribute('data-line-filter');
+            if (val === activeLineFilter) {
+                btn.style.background = val === 'A' ? '#0284c7' : (val === 'B' ? '#059669' : '#2563eb');
+                btn.style.borderColor = val === 'A' ? '#38bdf8' : (val === 'B' ? '#34d399' : '#60a5fa');
+                btn.style.color = '#ffffff';
+            } else {
+                btn.style.background = '#1e293b';
+                btn.style.borderColor = '#334155';
+                btn.style.color = '#94a3b8';
+            }
+        });
+    }
+
+    function extractRowMemberNorm(rowEl, nameToNorm) {
+        var txt = String(rowEl.innerText || '');
+        var m = txt.match(/V[KJ]-\d+/i);
+        if (m) return normId(m[0]);
+
+        var inputs = rowEl.querySelectorAll('input:not([type="checkbox"])');
+        for (var i = 0; i < inputs.length; i++) {
+            var im = String(inputs[i].value || '').match(/V[KJ]-\d+/i);
+            if (im) return normId(im[0]);
+        }
+
+        var foundNorm = '';
+        nameToNorm.forEach(function(nId, name) {
+            if (!foundNorm && name && name.length >= 2 && txt.indexOf(name) !== -1) {
+                foundNorm = nId;
+            }
+        });
+        return foundNorm;
+    }
+
+    function extractRowCvPv(rowEl) {
+        var vals = readRowValues(rowEl);
+        return { cv: vals.cv, pv: vals.pv };
+    }
+
+    function applySalesIframeFilter() {
+        if (isApplyingFilter) return;
+        isApplyingFilter = true;
+        try {
+            var ctx = findSalesIframeContext();
+            if (!ctx) return;
+
+            var doc = ctx.doc;
+            patchIframeFetchAndAuth(ctx.win);
+            bindDirectDbSaveHandler(doc);
+
+            var countEl = findInnermostTextEl(doc, function(t) {
+                return t.indexOf('조회 건수:') === 0 && t.length < 40;
+            });
+            var sumEl = findInnermostTextEl(doc, function(t) {
+                return t.indexOf('합계 CV:') !== -1 && t.indexOf('합계 PV:') !== -1 && t.length < 90;
+            });
+
+            var rows = findSalesRowsInDoc(doc);
+            fixIframeDoubleScrollbar(ctx.iframe, doc, rows);
+            ensureIframeFilterBarMounted(doc, countEl);
+            ensureCheckboxesAndMarking(doc, rows);
+
+            var subInfo = getSelectedPartnerSublineSets();
+            var visibleCount = 0;
+            var sumCV = 0;
+            var sumPV = 0;
+
+            rows.forEach(function(row) {
+                var show = true;
+                if (activeLineFilter !== 'ALL') {
+                    var rowNorm = extractRowMemberNorm(row, subInfo.nameToNorm);
+                    if (activeLineFilter === 'A') {
+                        show = Boolean(rowNorm && subInfo.setA.has(rowNorm));
+                    } else if (activeLineFilter === 'B') {
+                        show = Boolean(rowNorm && subInfo.setB.has(rowNorm));
+                    }
+                }
+
+                row.style.display = show ? '' : 'none';
+
+                if (show) {
+                    visibleCount++;
+                    var cvpv = extractRowCvPv(row);
+                    sumCV += cvpv.cv;
+                    sumPV += cvpv.pv;
+                }
+            });
+
+            var lineTag = activeLineFilter === 'A' ? ' [좌(A)라인]' : (activeLineFilter === 'B' ? ' [우(B)라인]' : '');
+            if (countEl) {
+                countEl.innerText = '조회 건수: ' + visibleCount + '건' + lineTag;
+            }
+            if (sumEl) {
+                sumEl.innerText = '합계 CV: ' + sumCV.toLocaleString('ko-KR') + ' CV / 합계 PV: ' + sumPV.toLocaleString('ko-KR') + ' PV';
+            }
+        } finally {
+            isApplyingFilter = false;
+        }
+    }
+
+    setInterval(applySalesIframeFilter, 300);
+    setTimeout(applySalesIframeFilter, 200);
+
+    console.log('[Cellvia Sim] Sales Direct DB Update (Token Query Fix), Delete Fix, Row Marking & Line Filter Loaded: Version-4.7');
+})();
+// ============================================================================
+// [47] 실적집계창 추천수당(Direct Bonus) 누락 보정 패치 [Version-1.0]
+// - 1) 추천인 ID 비교 시 앞자리 0(VJ-00017 vs VJ-017 등)을 정규화하여 추천 파트너 100% 매칭
+// - 2) computeAllMembersTeamBonusByPeriod 결과 Map에 0-패딩 키('001' 등)를 함께 등록해 당시 직급 누락 해결
+// - 3) DB 요율 미로드 시 MEMBER 이상 기본 추천수당 요율(12%) 안전 폴백 적용
+// ============================================================================
+(function initDirectBonusFixPatchV1_0() {
+    function normNoZero(val) {
+        if (!val) return '';
+        return String(val).trim().toLowerCase().replace(/^v[kj]-?0*/, '');
+    }
+
+    function normKeepZero(val) {
+        if (!val) return '';
+        return String(val).trim().toLowerCase().replace(/^v[kj]-?/, '');
+    }
+
+    // 1) 추천수당 요율 안전 폴백 (GUEST 0%, MEMBER 이상 DB 요율 우선 / 미로드 시 12%)
+    var origGetDirectRate = window.getDirectBonusRate;
+    window.getDirectBonusRate = function(rankName) {
+        var r = String(rankName || '').trim().toUpperCase();
+        if (!r || r === 'GUEST' || r === 'CUSTOMER') return 0;
+        if (typeof origGetDirectRate === 'function') {
+            var dbRate = origGetDirectRate(r);
+            if (typeof dbRate === 'number' && dbRate > 0) return dbRate;
+        }
+        return 0.12;
+    };
+
+    // 2) 직추천 파트너 매핑 시 앞자리 0 불일치(VJ-00017 vs VJ-017) 완전 해결
+    window.getDirectRecommendedPartnersMap = function(targetMember) {
+        var recMap = new Map();
+        if (!targetMember || !targetMember.id) return recMap;
+
+        var targetNoZero = normNoZero(targetMember.id);
+        var targetName = String(targetMember.name || '').trim();
+        var allMembers = (typeof window.getUniqueMembers === 'function') ? window.getUniqueMembers() : [];
+
+        var rollupChk = document.getElementById('chk-rollup') || document.querySelector('#perfWidget input[type="checkbox"]');
+        var isRollup = rollupChk ? rollupChk.checked : true;
+
+        function registerPartner(m) {
+            var k1 = normKeepZero(m.id);
+            var k2 = normNoZero(m.id);
+            if (k1) recMap.set(k1, m);
+            if (k2) recMap.set(k2, m);
+        }
+
+        allMembers.forEach(function(m) {
+            if (!m || !m.id) return;
+            var mNoZero = normNoZero(m.id);
+            if (!mNoZero || mNoZero === targetNoZero) return;
+
+            var rId = m.recId || m.recommender_id || m.recommenderId || m.rec_id || '';
+            var rNoZero = normNoZero(rId);
+            var rName = String(m.recName || m.recommender_name || m.recommenderName || m.rec_name || '').trim();
+
+            if ((rNoZero && rNoZero === targetNoZero) || (!rNoZero && targetName && rName === targetName)) {
+                registerPartner(m);
+                return;
+            }
+
+            if (isRollup && rNoZero) {
+                var currRecId = rId;
+                var visited = new Set([mNoZero]);
+                while (currRecId) {
+                    var currNoZero = normNoZero(currRecId);
+                    if (!currNoZero || visited.has(currNoZero)) break;
+                    visited.add(currNoZero);
+
+                    var recNode = (typeof window.findMemberNode === 'function') ? window.findMemberNode(currRecId) : null;
+                    if (!recNode) break;
+
+                    var recRank = String(recNode.rank || recNode.rank_name || '').toUpperCase();
+                    if (window.getDirectBonusRate(recRank) <= 0) {
+                        var nextRecId = recNode.recId || recNode.recommender_id || recNode.rec_id || '';
+                        if (normNoZero(nextRecId) === targetNoZero) {
+                            registerPartner(m);
+                            break;
+                        }
+                        currRecId = nextRecId;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        });
+
+        return recMap;
+    };
+
+    // 3) teamBonusMap에 앞자리 0 패딩 키('001', '017')도 동시 등록하여 당시 직급 조회 누락 방지
+    var origComputeTeamBonus = window.computeAllMembersTeamBonusByPeriod;
+    if (typeof origComputeTeamBonus === 'function' && !origComputeTeamBonus._directBonusKeyFixed) {
+        var wrappedCompute = function() {
+            var map = origComputeTeamBonus.apply(this, arguments);
+            if (map instanceof Map) {
+                var entries = Array.from(map.entries());
+                entries.forEach(function(pair) {
+                    var k = String(pair[0] || '');
+                    var val = pair[1];
+                    if (/^\d+$/.test(k) && k.length < 3) {
+                        var padded = k.padStart(3, '0');
+                        if (!map.has(padded)) map.set(padded, val);
+                    }
+                });
+            }
+            return map;
+        };
+        wrappedCompute._directBonusKeyFixed = true;
+        window.computeAllMembersTeamBonusByPeriod = wrappedCompute;
+    }
+
+    console.log('[Cellvia Sim] Direct Bonus (추천수당) Fix Patch Loaded: Version-1.0');
+})();
+// ============================================================================
+// [48] 보상플랜 요약표 한/일 언어 전환 + 프로모션 카드(품위유지수당 합산) + 최하단 주석 [Version-2.2]
+// ============================================================================
+(function initCompPlanPromoCardsPatchV2_2() {
+    var LANG_KEY = 'BS_COMP_PLAN_LANG_V2';
+
+    function buildCompPlanHtml(lang) {
+        var isJa = (lang === 'ja');
+
+        var t = isJa ? {
+            docTitle: 'Compensation Plan (マーケティングプラン要約)',
+            subtitle: 'マーケティングプラン要約',
+            thTitle: 'タイトル',
+            thPv: 'タイトル獲得PV<br>(無限累積)',
+            thSub: '購読基準CV',
+            thBonusGroup: '手当支給基準CV',
+            thDirect: '紹介手当',
+            thTeam: '支援手当',
+            thMatch: '紹介マッチング手当',
+            gens: ['1代', '2代', '3代', '4代', '5代'],
+            thMaintVol: '維持ボリュームCV',
+            thMaintPay: 'タイトル維持手当',
+            thFastPower: 'ファストパワー手当',
+            none: 'なし',
+            fpHtml: '<b>▷ プラン1</b>: 左側レッグに2名紹介 → 10万ウォン<br><br><b>▷ プラン2</b>: 左側直接紹介2名が各2名紹介 → 20万ウォン<br><br><b>▷ プラン3</b>: 右側直接紹介2名が各2名紹介 → 30万ウォン<br><br>(毎月最大60万ウォン)',
+            rows: {
+                guestPv: '会員登録時',
+                memberPv: '1PV以上〜70万PV未満',
+                maniaPv: '70万PV以上',
+                drPv: '小実績210万PV / 直接MA 70万:MA 70万',
+                emPv: '小実績1,400万PV / 直接MA 70万:MA 70万',
+                dmPv: '小実績1億PV / 紹介系列DR 1:1',
+                gdmPv: '小実績3億PV / EM 1:1 & DM 2期維持',
+                bdmPv: '小実績10億PV / DM 1:1 & GDM 2期維持',
+                rdmPv: '小実績30億PV / GDM 1:1 & BDM 2期維持',
+                crPv: '小実績100億PV / BDM 1:1',
+                sub1: '1万 CV', sub3: '3万 CV', sub7: '7万 CV',
+                mvDr: '210万 CV', mvEm: '350万 CV', mvDm: '1,000万 CV', mvGdm: '1,900万 CV', mvBdm: '3,400万 CV', mvRdm: '6,500万 CV', mvCr: '13,500万 CV',
+                mpDr: '15万ウォン', mpEm: '30万ウォン', mpDm: '75万ウォン', mpGdm: '140万ウォン', mpBdm: '230万ウォン', mpRdm: '400万ウォン', mpCr: '600万ウォン'
+            },
+            promoUpBadge: '昇格',
+            promoUpTitle: 'タイトル昇格プロモーション',
+            promoUpTag: '昇格プロモーション',
+            promoMaintBadge: 'タイトル維持',
+            promoMaintTitle: 'タイトル維持プロモーション (品目 + 維持手当)',
+            promoMaintTag: 'タイトル維持プロモーション',
+            totalLabel: '会員価格 合計',
+            maintTotalLabel: '総特典合計 (会員価格+手当)',
+            bonusItemName: 'タイトル維持手当',
+            bonusQtyTag: '手当',
+            won: 'ウォン',
+            items: {
+                ampoule: 'アンプル',
+                ampoule20: 'アンプル(20%)',
+                mist: 'ミスト',
+                serum: 'セラム',
+                scalpia: 'スカルピアアンプル',
+                chroma: 'クロマデバイス',
+                gungae: 'グンエ',
+                confidence: 'コンフィデンスオイル',
+                premium: 'プレミアムアンプル'
+            },
+            noteTitle: '※ ご案内および注意事項',
+            notes: [
+                '締め期数基準：毎月 1日〜15日（前期） / 16日〜末日（後期）の月2回締め切りとなります。',
+                'Director / Emerald 昇格は直近連続4期以内の小実績PV合算基準が適用され、Diamond以上は無制限累積が適用されます。',
+                'タイトル維持手当は該当期数の小実績控除CVと本人当期CVを合算して判定されます。',
+                '紹介マッチング手当は圧縮ロールアップ（Roll-up）基準が適用されます。',
+                'プロモーション構成品および会員価格は会社の方針により変更される場合があります。'
+            ]
+        } : {
+            docTitle: 'Compensation Plan (보상플랜 요약)',
+            subtitle: '보상플랜 요약표',
+            thTitle: '직급',
+            thPv: '직급 획득 PV<br>(무한 누적)',
+            thSub: '구독 기준 CV',
+            thBonusGroup: '수당 지급 기준 CV',
+            thDirect: '추천수당',
+            thTeam: '지원수당',
+            thMatch: '추천매칭수당',
+            gens: ['1대', '2대', '3대', '4대', '5대'],
+            thMaintVol: '유지 볼륨 CV',
+            thMaintPay: '품위유지수당',
+            thFastPower: '패스트파워수당',
+            none: '없음',
+            fpHtml: '<b>▷ 플랜 1</b>: 좌측 레그에 2명 추천 → 10만원<br><br><b>▷ 플랜 2</b>: 좌측 직추천 2명이 각 2명 추천 → 20만원<br><br><b>▷ 플랜 3</b>: 우측 직추천 2명이 각 2명 추천 → 30만원<br><br>(매월 최대 60만원)',
+            rows: {
+                guestPv: '회원가입 시',
+                memberPv: '1PV 이상 ~ 70만 PV 미만',
+                maniaPv: '70만 PV 이상',
+                drPv: '소실적 210만 PV / 직접 MA 70만 : MA 70만',
+                emPv: '소실적 1,400만 PV / 직접 MA 70만 : MA 70만',
+                dmPv: '소실적 1억 PV / 추천계열 DR 1:1',
+                gdmPv: '소실적 3억 PV / EM 1:1 & DM 2기 유지',
+                bdmPv: '소실적 10억 PV / DM 1:1 & GDM 2기 유지',
+                rdmPv: '소실적 30억 PV / GDM 1:1 & BDM 2기 유지',
+                crPv: '소실적 100억 PV / BDM 1:1',
+                sub1: '1만 CV', sub3: '3만 CV', sub7: '7만 CV',
+                mvDr: '210만 CV', mvEm: '350만 CV', mvDm: '1,000만 CV', mvGdm: '1,900만 CV', mvBdm: '3,400만 CV', mvRdm: '6,500만 CV', mvCr: '13,500만 CV',
+                mpDr: '15만원', mpEm: '30만원', mpDm: '75만원', mpGdm: '140만원', mpBdm: '230만원', mpRdm: '400만원', mpCr: '600만원'
+            },
+            promoUpBadge: '승급',
+            promoUpTitle: '직급 승급 프로모션',
+            promoUpTag: '승급 프로모션',
+            promoMaintBadge: '품위유지',
+            promoMaintTitle: '직급 품위유지 프로모션 (물품 + 품위유지수당)',
+            promoMaintTag: '품위유지 프로모션',
+            totalLabel: '회원가 합계',
+            maintTotalLabel: '총 혜택 합계 (회원가+수당)',
+            bonusItemName: '품위유지수당',
+            bonusQtyTag: '수당',
+            won: '원',
+            items: {
+                ampoule: '앰플',
+                ampoule20: '앰플(20%)',
+                mist: '미스트',
+                serum: '세럼',
+                scalpia: '스칼피아앰플',
+                chroma: '크로마디바이스',
+                gungae: '궁애',
+                confidence: '컨피던스오일',
+                premium: '프리미엄앰플'
+            },
+            noteTitle: '※ 안내 및 유의사항',
+            notes: [
+                '마감 기수 기준: 매월 1일~15일(전기수) / 16일~말일(후기수) 월 2회 마감됩니다.',
+                'Director / Emerald 승급은 최근 연속 4기수 이내 소실적 PV 합산 기준이 적용되며, Diamond 이상은 기간 제한 없이 무한 누적됩니다.',
+                '품위유지수당은 해당 기수 소실적 공제 CV와 본인 당기 CV를 합산하여 달성 여부를 판정합니다.',
+                '추천매칭수당은 압축 롤업(Roll-up) 기준이 적용됩니다.',
+                '프로모션 구성품목 및 회원가는 회사 정책에 따라 변경될 수 있습니다.'
+            ]
+        };
+
+        var notesHtml = t.notes.map(function(line) {
+            return '<li>' + line + '</li>';
+        }).join('');
+
+        return [
+            '<!DOCTYPE html><html lang="' + (isJa ? 'ja' : 'ko') + '"><head><meta charset="UTF-8"><title>' + t.docTitle + '</title>',
+            '<style>',
+            '*{box-sizing:border-box}',
+            'body{margin:0;padding:18px 22px 26px;background:#fff;color:#1e293b;font-family:"Pretendard",Meiryo,-apple-system,sans-serif}',
+            '.cp-header{position:relative;text-align:center;margin-bottom:14px;min-height:54px}',
+            '.cp-title{display:inline-block;font-family:Georgia,serif;font-size:26px;font-weight:700;color:#1e3a8a;border-bottom:2.5px solid #2563eb;padding-bottom:3px;margin:0 0 5px 0}',
+            '.cp-subtitle{font-size:14px;font-weight:700;color:#334155;margin:0}',
+            '.lang-switch{position:absolute;top:2px;right:0;display:inline-flex;align-items:center;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:999px;padding:3px;gap:2px}',
+            '.lang-btn{border:none;background:transparent;color:#475569;font-size:11.5px;font-weight:800;padding:4px 12px;border-radius:999px;cursor:pointer;transition:all .15s}',
+            '.lang-btn.active{background:#1d4ed8;color:#fff;box-shadow:0 1px 4px rgba(29,78,216,0.35)}',
+            '.table-scroll{width:100%;overflow-x:auto}',
+            'table{width:100%;min-width:980px;border-collapse:collapse;border:1.5px solid #94a3b8;font-size:11.5px}',
+            'th{background:#8e9aaf;color:#0f172a;font-weight:700;padding:7px 6px;border:1px solid #cbd5e1;white-space:nowrap}',
+            'td{border:1px solid #e2e8f0;padding:7px 6px;text-align:center}',
+            'th.col-gen,td.col-gen{min-width:40px;white-space:nowrap}',
+            'th.col-nowrap,td.col-nowrap{white-space:nowrap}',
+            'td.col-title{font-weight:800;white-space:nowrap;min-width:96px}',
+            'td.col-pv{text-align:left;min-width:210px;line-height:1.35}',
+            'td.col-fp{text-align:left;min-width:220px;line-height:1.5}',
+            '.promo-wrap{margin-top:22px;padding-top:16px;border-top:2px solid #e2e8f0}',
+            '.promo-section{margin-bottom:16px}',
+            '.promo-section:last-child{margin-bottom:0}',
+            '.promo-sec-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}',
+            '.promo-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;color:#fff}',
+            '.promo-badge.upgrade{background:#1d4ed8}',
+            '.promo-badge.maint{background:#047857}',
+            '.promo-sec-title{font-size:14px;font-weight:800;color:#0f172a}',
+            '.promo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}',
+            '.promo-card{background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 2px 6px rgba(15,23,42,0.06)}',
+            '.promo-card-top{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #e2e8f0}',
+            '.promo-card.upgrade .promo-card-top{background:#eff6ff}',
+            '.promo-card.maint .promo-card-top{background:#ecfdf5}',
+            '.promo-rank{font-size:13.5px;font-weight:800;letter-spacing:0.3px}',
+            '.promo-card.upgrade .promo-rank{color:#1e40af}',
+            '.promo-card.maint .promo-rank{color:#065f46}',
+            '.promo-tag{font-size:10.5px;font-weight:700;color:#64748b}',
+            '.promo-items{padding:10px 12px;flex:1;display:flex;flex-direction:column;gap:6px}',
+            '.promo-item{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding-bottom:5px;border-bottom:1px dashed #e2e8f0}',
+            '.promo-item:last-child{border-bottom:none;padding-bottom:0}',
+            '.promo-item.bonus-row{background:#ecfdf5;margin:2px -6px 0;padding:6px;border-radius:6px;border-bottom:none;border:1px solid #a7f3d0}',
+            '.promo-item.bonus-row .promo-item-name{color:#065f46}',
+            '.promo-item.bonus-row .promo-item-qty{background:#047857;color:#fff}',
+            '.promo-item.bonus-row .promo-item-price{color:#047857;font-weight:800}',
+            '.promo-item-left{display:flex;align-items:center;gap:6px}',
+            '.promo-item-name{font-weight:700;color:#1e293b}',
+            '.promo-item-qty{font-size:10.5px;font-weight:700;color:#475569;background:#e2e8f0;padding:1px 6px;border-radius:4px}',
+            '.promo-item-price{font-family:monospace;font-weight:600;color:#475569;white-space:nowrap}',
+            '.promo-card-foot{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#fff;border-top:1.5px solid #e2e8f0}',
+            '.promo-total-label{font-size:11px;font-weight:700;color:#64748b}',
+            '.promo-total-val{font-size:14px;font-weight:800;font-family:monospace}',
+            '.promo-card.upgrade .promo-total-val{color:#1d4ed8}',
+            '.promo-card.maint .promo-total-val{color:#047857}',
+            '.cp-notes{margin-top:20px;padding:12px 16px;background:#f8fafc;border:1px solid #cbd5e1;border-left:4px solid #64748b;border-radius:6px;font-size:11.5px;color:#475569;line-height:1.6}',
+            '.cp-notes-title{font-weight:800;color:#1e293b;margin-bottom:6px;font-size:12px}',
+            '.cp-notes ul{margin:0;padding-left:18px}',
+            '.cp-notes li{margin-bottom:3px}',
+            '.cp-notes li:last-child{margin-bottom:0}',
+            '</style></head><body>',
+            '<div class="cp-header">',
+            '  <h1 class="cp-title">Compensation Plan</h1>',
+            '  <p class="cp-subtitle">' + t.subtitle + '</p>',
+            '  <div class="lang-switch" role="group" aria-label="Language Switch">',
+            '    <button type="button" class="lang-btn' + (!isJa ? ' active' : '') + '" data-lang="ko">한국어</button>',
+            '    <button type="button" class="lang-btn' + (isJa ? ' active' : '') + '" data-lang="ja">日本語</button>',
+            '  </div>',
+            '</div>',
+            '<div class="table-scroll"><table><thead>',
+            '  <tr><th rowspan="3">' + t.thTitle + '</th><th rowspan="3">' + t.thPv + '</th><th rowspan="3">' + t.thSub + '</th><th colspan="10">' + t.thBonusGroup + '</th></tr>',
+            '  <tr><th rowspan="2">' + t.thDirect + '</th><th rowspan="2">' + t.thTeam + '</th><th colspan="5">' + t.thMatch + '</th><th rowspan="2">' + t.thMaintVol + '</th><th rowspan="2">' + t.thMaintPay + '</th><th rowspan="2">' + t.thFastPower + '</th></tr>',
+            '  <tr><th class="col-gen">' + t.gens[0] + '</th><th class="col-gen">' + t.gens[1] + '</th><th class="col-gen">' + t.gens[2] + '</th><th class="col-gen">' + t.gens[3] + '</th><th class="col-gen">' + t.gens[4] + '</th></tr>',
+            '</thead><tbody>',
+            '  <tr><td class="col-title">Customer</td><td>-</td><td rowspan="4" class="col-nowrap">' + t.none + '</td><td class="col-nowrap">0%</td><td class="col-nowrap">0%</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-nowrap">-</td><td class="col-nowrap">-</td><td rowspan="11" class="col-fp">' + t.fpHtml + '</td></tr>',
+            '  <tr><td class="col-title">Guest</td><td class="col-pv">' + t.rows.guestPv + '</td><td class="col-nowrap">0%</td><td class="col-nowrap">0%</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td rowspan="2" class="col-nowrap">' + t.none + '</td><td rowspan="2" class="col-nowrap">-</td></tr>',
+            '  <tr><td class="col-title">Member</td><td class="col-pv">' + t.rows.memberPv + '</td><td rowspan="9" class="col-nowrap">12%</td><td rowspan="7" class="col-nowrap">12%</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td></tr>',
+            '  <tr><td class="col-title">Mania</td><td class="col-pv">' + t.rows.maniaPv + '</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-nowrap">-</td><td class="col-nowrap">-</td></tr>',
+            '  <tr><td class="col-title">Director</td><td class="col-pv">' + t.rows.drPv + '</td><td rowspan="2" class="col-nowrap">' + t.rows.sub1 + '</td><td class="col-gen">10%</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-nowrap">' + t.rows.mvDr + '</td><td class="col-nowrap">' + t.rows.mpDr + '</td></tr>',
+            '  <tr><td class="col-title">Emerald</td><td class="col-pv">' + t.rows.emPv + '</td><td class="col-gen">10%</td><td class="col-gen">5%</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-nowrap">' + t.rows.mvEm + '</td><td class="col-nowrap">' + t.rows.mpEm + '</td></tr>',
+            '  <tr><td class="col-title">Diamond</td><td class="col-pv">' + t.rows.dmPv + '</td><td rowspan="3" class="col-nowrap">' + t.rows.sub3 + '</td><td class="col-gen">10%</td><td class="col-gen">5%</td><td class="col-gen">5%</td><td class="col-gen">-</td><td class="col-gen">-</td><td class="col-nowrap">' + t.rows.mvDm + '</td><td class="col-nowrap">' + t.rows.mpDm + '</td></tr>',
+            '  <tr><td class="col-title">Green Diamond</td><td class="col-pv">' + t.rows.gdmPv + '</td><td class="col-gen">10%</td><td class="col-gen">5%</td><td class="col-gen">5%</td><td class="col-gen">2%</td><td class="col-gen">-</td><td class="col-nowrap">' + t.rows.mvGdm + '</td><td class="col-nowrap">' + t.rows.mpGdm + '</td></tr>',
+            '  <tr><td class="col-title">Blue Diamond</td><td class="col-pv">' + t.rows.bdmPv + '</td><td class="col-gen">10%</td><td class="col-gen">5%</td><td class="col-gen">5%</td><td class="col-gen">3%</td><td class="col-gen">-</td><td class="col-nowrap">' + t.rows.mvBdm + '</td><td class="col-nowrap">' + t.rows.mpBdm + '</td></tr>',
+            '  <tr><td class="col-title">Red Diamond</td><td class="col-pv">' + t.rows.rdmPv + '</td><td rowspan="2" class="col-nowrap">' + t.rows.sub7 + '</td><td rowspan="2" class="col-nowrap">10%</td><td class="col-gen">10%</td><td class="col-gen">5%</td><td class="col-gen">5%</td><td class="col-gen">3%</td><td class="col-gen">2%</td><td class="col-nowrap">' + t.rows.mvRdm + '</td><td class="col-nowrap">' + t.rows.mpRdm + '</td></tr>',
+            '  <tr><td class="col-title">Crown</td><td class="col-pv">' + t.rows.crPv + '</td><td class="col-gen">10%</td><td class="col-gen">5%</td><td class="col-gen">5%</td><td class="col-gen">3%</td><td class="col-gen">3%</td><td class="col-nowrap">' + t.rows.mvCr + '</td><td class="col-nowrap">' + t.rows.mpCr + '</td></tr>',
+            '</tbody></table></div>',
+            '<div class="promo-wrap">',
+            '  <div class="promo-section">',
+            '    <div class="promo-sec-head"><span class="promo-badge upgrade">' + t.promoUpBadge + '</span><span class="promo-sec-title">' + t.promoUpTitle + '</span></div>',
+            '    <div class="promo-grid">',
+            '      <div class="promo-card upgrade">',
+            '        <div class="promo-card-top"><span class="promo-rank">DIRECTOR</span><span class="promo-tag">' + t.promoUpTag + '</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.ampoule + '</span><span class="promo-item-qty">1BOX</span></div><span class="promo-item-price">220,000' + t.won + '</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.mist + '</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">36,300' + t.won + '</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.serum + '</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">38,500' + t.won + '</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">' + t.totalLabel + '</span><span class="promo-total-val">294,800' + t.won + '</span></div>',
+            '      </div>',
+            '      <div class="promo-card upgrade">',
+            '        <div class="promo-card-top"><span class="promo-rank">EMERALD</span><span class="promo-tag">' + t.promoUpTag + '</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.scalpia + '</span><span class="promo-item-qty">2BOX</span></div><span class="promo-item-price">143,000' + t.won + '</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.chroma + '</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">275,000' + t.won + '</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">' + t.totalLabel + '</span><span class="promo-total-val">561,000' + t.won + '</span></div>',
+            '      </div>',
+            '      <div class="promo-card upgrade">',
+            '        <div class="promo-card-top"><span class="promo-rank">DIAMOND</span><span class="promo-tag">' + t.promoUpTag + '</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.gungae + '</span><span class="promo-item-qty">4BOX</span></div><span class="promo-item-price">242,000' + t.won + '</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.confidence + '</span><span class="promo-item-qty">2EA</span></div><span class="promo-item-price">121,000' + t.won + '</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">' + t.totalLabel + '</span><span class="promo-total-val">1,210,000' + t.won + '</span></div>',
+            '      </div>',
+            '    </div>',
+            '  </div>',
+            '  <div class="promo-section">',
+            '    <div class="promo-sec-head"><span class="promo-badge maint">' + t.promoMaintBadge + '</span><span class="promo-sec-title">' + t.promoMaintTitle + '</span></div>',
+            '    <div class="promo-grid">',
+            '      <div class="promo-card maint">',
+            '        <div class="promo-card-top"><span class="promo-rank">DIRECTOR</span><span class="promo-tag">' + t.promoMaintTag + '</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.ampoule20 + '</span><span class="promo-item-qty">1BOX</span></div><span class="promo-item-price">220,000' + t.won + '</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.mist + '</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">36,300' + t.won + '</span></div>',
+            '          <div class="promo-item bonus-row"><div class="promo-item-left"><span class="promo-item-name">' + t.bonusItemName + '</span><span class="promo-item-qty">' + t.bonusQtyTag + '</span></div><span class="promo-item-price">+150,000' + t.won + '</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">' + t.maintTotalLabel + '</span><span class="promo-total-val">406,300' + t.won + '</span></div>',
+            '      </div>',
+            '      <div class="promo-card maint">',
+            '        <div class="promo-card-top"><span class="promo-rank">EMERALD</span><span class="promo-tag">' + t.promoMaintTag + '</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.premium + '</span><span class="promo-item-qty">1BOX</span></div><span class="promo-item-price">396,000' + t.won + '</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.scalpia + '</span><span class="promo-item-qty">1BOX</span></div><span class="promo-item-price">143,000' + t.won + '</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.mist + '</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">36,300' + t.won + '</span></div>',
+            '          <div class="promo-item bonus-row"><div class="promo-item-left"><span class="promo-item-name">' + t.bonusItemName + '</span><span class="promo-item-qty">' + t.bonusQtyTag + '</span></div><span class="promo-item-price">+300,000' + t.won + '</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">' + t.maintTotalLabel + '</span><span class="promo-total-val">875,300' + t.won + '</span></div>',
+            '      </div>',
+            '      <div class="promo-card maint">',
+            '        <div class="promo-card-top"><span class="promo-rank">DIAMOND</span><span class="promo-tag">' + t.promoMaintTag + '</span></div>',
+            '        <div class="promo-items">',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.premium + '</span><span class="promo-item-qty">2BOX</span></div><span class="promo-item-price">396,000' + t.won + '</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.scalpia + '</span><span class="promo-item-qty">1BOX</span></div><span class="promo-item-price">143,000' + t.won + '</span></div>',
+            '          <div class="promo-item"><div class="promo-item-left"><span class="promo-item-name">' + t.items.mist + '</span><span class="promo-item-qty">1EA</span></div><span class="promo-item-price">36,300' + t.won + '</span></div>',
+            '          <div class="promo-item bonus-row"><div class="promo-item-left"><span class="promo-item-name">' + t.bonusItemName + '</span><span class="promo-item-qty">' + t.bonusQtyTag + '</span></div><span class="promo-item-price">+750,000' + t.won + '</span></div>',
+            '        </div>',
+            '        <div class="promo-card-foot"><span class="promo-total-label">' + t.maintTotalLabel + '</span><span class="promo-total-val">1,721,300' + t.won + '</span></div>',
+            '      </div>',
+            '    </div>',
+            '  </div>',
+            '</div>',
+            '<div class="cp-notes">',
+            '  <div class="cp-notes-title">' + t.noteTitle + '</div>',
+            '  <ul>' + notesHtml + '</ul>',
+            '</div>',
+            '</body></html>'
+        ].join('');
+    }
+
+    function renderCompPlanWindow(win, lang) {
+        if (!win || !win.document) return;
+        try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+
+        win.document.open();
+        win.document.write(buildCompPlanHtml(lang));
+        win.document.close();
+
+        var btns = win.document.querySelectorAll('.lang-btn');
+        btns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var nextLang = btn.getAttribute('data-lang') || 'ko';
+                renderCompPlanWindow(win, nextLang);
+            });
+        });
+    }
+
+    window.openCompensationPlanPopup = function() {
+        var win = window.open('', 'COMP_PLAN_HELP', 'width=1140,height=860,resizable=yes,scrollbars=yes');
+        if (!win) return;
+        var savedLang = 'ko';
+        try {
+            var stored = localStorage.getItem(LANG_KEY);
+            if (stored === 'ja' || stored === 'ko') savedLang = stored;
+        } catch (e) {}
+        renderCompPlanWindow(win, savedLang);
+    };
+
+    console.log('[Cellvia Sim] Compensation Plan Promo Cards (Maint Bonus Sum) Patch Loaded: Version-2.2');
+})();
+// ============================================================================
+// [49] 매출/구독 패널 열기·닫기 및 매출 추가/편집 시 선택 파트너·화면 위치 유지 & ESC 키 페이지 초기화 [Version-2.0]
+// ============================================================================
+(function initKeepSelectedPartnerAndEscResetPatchV2_0() {
+    var keepViewportUntil = 0;
+    var savedViewState = null;
+
+    function captureCurrentViewport() {
+        savedViewState = {
+            memberId: window.currentSelectedId || null,
+            panX: window.panX,
+            panY: window.panY,
+            scale: window.scale
+        };
+    }
+
+    function restoreSavedViewport() {
+        if (!savedViewState) return;
+        var wrapper = document.getElementById('tree-wrapper') || document.querySelector('.tree-wrapper');
+        if (wrapper && typeof savedViewState.panX === 'number' && typeof savedViewState.panY === 'number') {
+            window.panX = savedViewState.panX;
+            window.panY = savedViewState.panY;
+            window.scale = savedViewState.scale || 0.85;
+            wrapper.style.setProperty('transform-origin', '0 0', 'important');
+            wrapper.style.setProperty(
+                'transform',
+                'translate(' + window.panX + 'px, ' + window.panY + 'px) scale(' + window.scale + ')',
+                'important'
+            );
+        }
+        if (savedViewState.memberId) {
+            window.currentSelectedId = savedViewState.memberId;
+            if (typeof window.applyCardHighlights === 'function') {
+                window.applyCardHighlights();
+            }
+        }
+    }
+
+    // 1) 패널 열기/닫기 및 매출 저장/삭제 중에는 centerRootNode()가 최상위 파트너로 화면을 튕기지 못하도록 차단
+    var origCenterRootNode = window.centerRootNode;
+    if (typeof origCenterRootNode === 'function' && !origCenterRootNode._keepViewportWrappedV49) {
+        var wrappedCenterRoot = function() {
+            if (Date.now() < keepViewportUntil && savedViewState) {
+                restoreSavedViewport();
+                return;
+            }
+            return origCenterRootNode.apply(this, arguments);
+        };
+        wrappedCenterRoot._keepViewportWrappedV49 = true;
+        window.centerRootNode = wrappedCenterRoot;
+    }
+
+    // 2) 좌측 매출/구독 패널 토글 시 화면 초기화 차단
+    function wrapSyncViewportKeepFn(fnName) {
+        var origFn = window[fnName];
+        if (typeof origFn !== 'function' || origFn._keepViewportWrappedV49) return;
+
+        var wrapped = function() {
+            captureCurrentViewport();
+            keepViewportUntil = Date.now() + 800;
+            return origFn.apply(this, arguments);
+        };
+        wrapped._keepViewportWrappedV49 = true;
+        window[fnName] = wrapped;
+    }
+
+    wrapSyncViewportKeepFn('toggleSalesSidebar');
+    wrapSyncViewportKeepFn('toggleWidgetGlobal');
+
+    // 3) 매출 추가/수정/삭제 시 선택 파트너 및 화면 위치 유지
+    function wrapSalesMutationFn(fnName) {
+        var origFn = window[fnName];
+        if (typeof origFn !== 'function' || origFn._keepViewportWrappedV49) return;
+
+        var wrapped = async function() {
+            captureCurrentViewport();
+            keepViewportUntil = Date.now() + 2000;
+
+            try {
+                return await origFn.apply(this, arguments);
+            } finally {
+                if (savedViewState) {
+                    keepViewportUntil = Date.now() + 600;
+                    restoreSavedViewport();
+                    setTimeout(restoreSavedViewport, 180);
+                    setTimeout(restoreSavedViewport, 350);
+                }
+            }
+        };
+        wrapped._keepViewportWrappedV49 = true;
+        window[fnName] = wrapped;
+    }
+
+    wrapSalesMutationFn('saveAllMemberSalesToTiDB');
+    wrapSalesMutationFn('deleteSaleRecord');
+    wrapSalesMutationFn('refreshAfterSalesMutation');
+
+    // 4) ESC 키 입력 시 모든 팝업·선택·검색 해제 및 계보도 초기 상태로 완전 초기화
+    window.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape' && e.keyCode !== 27) return;
+        if (document.getElementById('bs-auth-login-overlay')) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') {
+            e.stopImmediatePropagation();
+        }
+
+        keepViewportUntil = 0;
+        savedViewState = null;
+
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
+
+        if (typeof window.closeInstantNavigatorV37 === 'function') {
+            window.closeInstantNavigatorV37();
+        }
+        var lineMoveModal = document.getElementById('bs-line-move-custom-modal-v43');
+        if (lineMoveModal) lineMoveModal.remove();
+
+        if (typeof window.resetSimulatorPageToInitialState === 'function') {
+            window.resetSimulatorPageToInitialState();
+        } else if (typeof window.centerRootNode === 'function') {
+            window.currentSelectedId = null;
+            window.centerRootNode();
+        }
+    }, true);
+
+    console.log('[Cellvia Sim] Keep Selected Partner on Sales Toggle/Edit & ESC Full Reset Loaded: Version-2.0');
+})();
+// ============================================================================
+// [50] 실적집계창 품위유지수당 & 당시 직급(Historical Rank) 보정 패치 [Version-2.0]
+// - 1) 과거 기수(08-전 등)에 현재 최고 직급(EMERALD)이 덮어씌워지는 문제 해결 -> 실제 당시 직급(DIRECTOR 등) 복원
+// - 2) 본인 당기 CV 합산 + 하향 달성 반영하여 품위유지수당 및 수당상세 검증 창 기준 동기화
+// ============================================================================
+(function initMaintenanceBonusPerfTableFixV2_0() {
+    var FALLBACK_MAINT_TIERS = [
+        { rank: 'CROWN', level: 10, reqCv: 135000000, amount: 6000000 },
+        { rank: 'RED DIAMOND', level: 9, reqCv: 65000000, amount: 4000000 },
+        { rank: 'BLUE DIAMOND', level: 8, reqCv: 34000000, amount: 2300000 },
+        { rank: 'GREEN DIAMOND', level: 7, reqCv: 19000000, amount: 1400000 },
+        { rank: 'DIAMOND', level: 6, reqCv: 10000000, amount: 750000 },
+        { rank: 'EMERALD', level: 5, reqCv: 3500000, amount: 300000 },
+        { rank: 'DIRECTOR', level: 4, reqCv: 2100000, amount: 150000 }
+    ];
+
+    var RANK_LV = {
+        'GUEST': 1, 'MEMBER': 2, 'MANIA': 3, 'DIRECTOR': 4, 'EMERALD': 5,
+        'DIAMOND': 6, 'GREEN DIAMOND': 7, 'BLUE DIAMOND': 8, 'RED DIAMOND': 9, 'CROWN': 10
+    };
+
+    function normNoZero(val) {
+        if (!val) return '';
+        return String(val).trim().toLowerCase().replace(/^v[kj]-?0*/, '');
+    }
+
+    function getMaintTiers() {
+        return FALLBACK_MAINT_TIERS.map(function(t) {
+            var dbPol = (window.dbRankMaintenancePolicies && window.dbRankMaintenancePolicies[t.rank]) || null;
+            return {
+                rank: t.rank,
+                level: t.level,
+                reqCv: (dbPol && dbPol.reqSmallCv > 0) ? Number(dbPol.reqSmallCv) : t.reqCv,
+                amount: (dbPol && dbPol.amount > 0) ? Number(dbPol.amount) : t.amount
+            };
+        });
+    }
+
+    function getMemberPeriodRankMap(actualId) {
+        if (!(window.lastAllMembersTeamBonusMap instanceof Map)) return null;
+        var map = window.lastAllMembersTeamBonusMap;
+        var noZero = normNoZero(actualId);
+        var padded = (/^\d+$/.test(noZero) && noZero.length < 3) ? noZero.padStart(3, '0') : noZero;
+        return map.get(noZero) || map.get(padded) || map.get(String(actualId).toLowerCase()) || null;
+    }
+
+    function applyMaintenanceBonusFix(targetId) {
+        if (!Array.isArray(window.perfData) || window.perfData.length === 0) return;
+
+        var effectiveId = targetId || window.currentSelectedId;
+        var member = (typeof window.findMemberNode === 'function' && effectiveId) ? window.findMemberNode(effectiveId) : null;
+        if (!member) return;
+
+        var actualId = member.id;
+        var selfNorm = normNoZero(actualId);
+        var allSales = window.allSalesData || window.integrated_sales_history || [];
+        var periodRankMap = getMemberPeriodRankMap(actualId);
+
+        // 1) 기수별 본인 당기 CV 집계
+        var selfCvByPeriod = {};
+        allSales.forEach(function(s) {
+            if (!s) return;
+            var sNorm = normNoZero(s.member_id || s.memberId || '');
+            if (sNorm !== selfNorm) return;
+            var rawDate = s.transaction_date || s.sales_date || s.buy_date || s.date || '';
+            var pInfo = (typeof window.getPeriodInfoFromDate === 'function') ? window.getPeriodInfoFromDate(rawDate) : null;
+            if (!pInfo || !pInfo.sortOrderKey) return;
+            var cvVal = (typeof window.parseCommaNumber === 'function')
+                ? window.parseCommaNumber(s.cv || s.sales_cv)
+                : Number(s.cv || s.sales_cv || 0);
+            if (cvVal > 0) {
+                selfCvByPeriod[pInfo.sortOrderKey] = (selfCvByPeriod[pInfo.sortOrderKey] || 0) + cvVal;
+            }
+        });
+
+        var tiers = getMaintTiers();
+        var tbody = document.getElementById('perf-table-tbody');
+        var trs = tbody ? tbody.querySelectorAll('tr') : [];
+
+        // 2) 각 기수의 실제 당시 직급 복원 및 품위유지수당 재계산
+        window.perfData.forEach(function(row, idx) {
+            // 실제 기수별 달성 직급 복원 (현재 최고 직급 덮어쓰기 제거)
+            if (periodRankMap && periodRankMap[row.sortOrderKey] && periodRankMap[row.sortOrderKey].historicalRank) {
+                row.historicalRank = String(periodRankMap[row.sortOrderKey].historicalRank).trim().toUpperCase();
+                row.appliedMatchRank = row.historicalRank;
+            }
+
+            var histRank = String(row.historicalRank || member.rank || 'GUEST').trim().toUpperCase();
+            var maxLv = RANK_LV[histRank] || 1;
+            var selfTermCV = selfCvByPeriod[row.sortOrderKey] || 0;
+            var recognizedCV = (row.matchedCV || 0) + selfTermCV;
+            row.selfTermCV = selfTermCV;
+
+            var matchedTier = null;
+            if (maxLv >= 4) {
+                for (var i = 0; i < tiers.length; i++) {
+                    if (tiers[i].level <= maxLv && recognizedCV >= tiers[i].reqCv) {
+                        matchedTier = tiers[i];
+                        break;
+                    }
+                }
+            }
+
+            var ownTier = tiers.find(function(t) { return t.rank === histRank; }) || null;
+            row.maintAchievedRank = matchedTier ? matchedTier.rank : '';
+            row.maintPolicyInfo = {
+                reqSmallCv: matchedTier ? matchedTier.reqCv : (ownTier ? ownTier.reqCv : 0),
+                amount: matchedTier ? matchedTier.amount : 0
+            };
+
+            var newLevelBonus = matchedTier ? matchedTier.amount : 0;
+            if (newLevelBonus !== (row.levelBonus || 0)) {
+                row.levelBonus = newLevelBonus;
+
+                var tr = trs[idx];
+                if (tr && tr.children && tr.children.length >= 18) {
+                    tr.children[14].innerHTML = newLevelBonus > 0
+                        ? '<span onclick="window.openBonusDetailModal(\'' + actualId + '\', \'' + row.periodLabel + '\', \'' + row.startDate + '\', \'' + row.endDate + '\', \'dignityBonus\')" style="cursor:pointer; text-decoration:underline; color:#60a5fa;">' + newLevelBonus.toLocaleString('ko-KR') + '</span>'
+                        : '<span style="color:#6b7280;">0</span>';
+
+                    var totalBonus = (row.directBonus || 0) + (row.teamBonus || 0) + (row.matchingBonus || 0) + (row.levelBonus || 0) + (row.carBonus || 0) + (row.fastPowerBonus || 0);
+                    tr.children[17].innerText = totalBonus > 0 ? totalBonus.toLocaleString('ko-KR') : '0';
+                }
+            }
+        });
+    }
+
+    var origCalcPerf = window.calculateLocalPerformance;
+    if (typeof origCalcPerf === 'function' && !origCalcPerf._maintFixWrappedV50_2) {
+        var wrapped = async function(targetId) {
+            var res = await origCalcPerf.apply(this, arguments);
+            applyMaintenanceBonusFix(targetId);
+            return res;
+        };
+        wrapped._maintFixWrappedV50_2 = true;
+        window.calculateLocalPerformance = wrapped;
+    }
+
+    console.log('[Cellvia Sim] Maintenance Bonus & Historical Rank Fix Loaded: Version-2.0');
+})();
+// ============================================================================
+// [51] 추천매칭보너스 수동 편집('제외' 포함) DB 저장·조회 및 실적집계표 반영 패치 [Version-2.0]
+// ============================================================================
+(function initMatchingOverrideApplyPatchV2_0() {
+    // 1) DB에서 불러올 때 applied_gen === 0(제외)이 1세대로 바뀌지 않도록 보정
+    window.loadMatchingOverridesForTarget = async function(targetId) {
+        if (!targetId) return {};
+        var normTarget = String(targetId).trim().toUpperCase();
+        var localKey = 'bs_matching_overrides_' + normTarget;
+        var baseRank = (typeof window.getBaseBusinessRankName === 'function') ? window.getBaseBusinessRankName() : 'GUEST';
+        var overrideMap = {};
+
+        try {
+            var savedStr = localStorage.getItem(localKey);
+            if (savedStr) overrideMap = JSON.parse(savedStr) || {};
+        } catch (e) {}
+
+        if (window.API_BASE) {
+            try {
+                var res = await fetch(window.API_BASE + '/api/matching-overrides?targetId=' + encodeURIComponent(normTarget));
+                if (res.ok) {
+                    var data = await res.json();
+                    if (data && data.ok && Array.isArray(data.rows)) {
+                        var dbGrouped = {};
+                        data.rows.forEach(function(r) {
+                            var pk = r.period_key;
+                            if (!dbGrouped[pk]) dbGrouped[pk] = [];
+                            var rawGenVal = (r.applied_gen !== undefined && r.applied_gen !== null) ? Number(r.applied_gen) : 1;
+                            var rawRateVal = Number(r.applied_rate || 0);
+                            var rawAmtVal = Number(r.matching_amount || 0);
+                            var rawTeamVal = Number(r.partner_team_bonus || 0);
+                            var g = (rawGenVal === 0 || (rawRateVal === 0 && rawAmtVal === 0 && rawTeamVal > 0)) ? 0 : rawGenVal;
+                            dbGrouped[pk].push({
+                                gen: g,
+                                rawGen: (r.raw_gen !== undefined && r.raw_gen !== null) ? Number(r.raw_gen) : (g || 1),
+                                genLabel: g > 0 ? (g + '세대') : '제외',
+                                member_id: r.partner_member_id,
+                                name: r.partner_name || '-',
+                                rank: r.partner_hist_rank || baseRank,
+                                teamBonus: Number(r.partner_team_bonus || 0),
+                                rate: g > 0 ? Number(r.applied_rate || 0) : 0,
+                                matchingAmount: g > 0 ? Number(r.matching_amount || 0) : 0,
+                                isManualOverride: true
+                            });
+                        });
+                        if (Object.keys(dbGrouped).length > 0) {
+                            overrideMap = Object.assign({}, overrideMap, dbGrouped);
+                            localStorage.setItem(localKey, JSON.stringify(overrideMap));
+                        }
+                    }
+                }
+            } catch (err) {}
+        }
+
+        window.cachedMatchingOverrides = window.cachedMatchingOverrides || {};
+        window.cachedMatchingOverrides[normTarget] = overrideMap;
+        return overrideMap;
+    };
+
+    // 2) '제외(0%)' 행(gen === 0)도 함께 저장되도록 saveMatchingOverridesToDB 보정
+    window.saveMatchingOverridesToDB = async function() {
+        var st = window.matchingEditState;
+        if (!st || !st.targetId || !st.periodKey) return;
+
+        var validRows = (st.rows || []).filter(function(r) {
+            return String(r.member_id || '').replace(/[^0-9]/g, '').length > 0;
+        }).map(function(r) {
+            var g = (r.gen !== undefined && r.gen !== null) ? Number(r.gen) : 0;
+            return {
+                gen: g,
+                rawGen: (r.rawGen !== undefined && r.rawGen !== null) ? Number(r.rawGen) : (g || 1),
+                genLabel: g > 0 ? (g + '세대') : '제외',
+                member_id: r.member_id,
+                name: r.name || '-',
+                rank: r.rank || 'GUEST',
+                teamBonus: Number(r.teamBonus || 0),
+                rate: g > 0 ? Number(r.rate || 0) : 0,
+                matchingAmount: g > 0 ? Number(r.matchingAmount || 0) : 0,
+                isManualOverride: true
+            };
+        });
+
+        var normTarget = String(st.targetId).trim().toUpperCase();
+        var localKey = 'bs_matching_overrides_' + normTarget;
+
+        var savedMap = {};
+        try { savedMap = JSON.parse(localStorage.getItem(localKey) || '{}') || {}; } catch (e) {}
+        savedMap[st.periodKey] = validRows;
+        localStorage.setItem(localKey, JSON.stringify(savedMap));
+
+        window.cachedMatchingOverrides = window.cachedMatchingOverrides || {};
+        window.cachedMatchingOverrides[normTarget] = savedMap;
+
+        if (window.API_BASE) {
+            try {
+                await fetch(window.API_BASE + '/api/matching-overrides', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        target_member_id: normTarget,
+                        period_key: st.periodKey,
+                        period_label: st.termLabel,
+                        rows: validRows
+                    })
+                });
+            } catch (err) {
+                console.error('[Version-2.0] 매칭 오버라이드 DB 저장 오류:', err);
+            }
+        }
+
+        if (typeof window.calculateLocalPerformance === 'function') {
+            await window.calculateLocalPerformance(st.targetId);
+        }
+        alert('✅ [' + st.termLabel + '] 추천매칭보너스 편집 내역이 저장되어 시뮬레이터에 반영되었습니다.');
+    };
+
+    // 3) 실적집계표 렌더링 직후 저장된 수동 편집(제외 포함) 내역을 적용하여 테이블 갱신
+    async function applySavedMatchingOverridesToPerf(targetId) {
+        if (!Array.isArray(window.perfData) || window.perfData.length === 0) return;
+
+        var effectiveId = targetId || window.currentSelectedId;
+        var member = (typeof window.findMemberNode === 'function' && effectiveId) ? window.findMemberNode(effectiveId) : null;
+        if (!member || !member.id) return;
+
+        var actualId = member.id;
+        var normTarget = String(actualId).trim().toUpperCase();
+        var overrideMap = await window.loadMatchingOverridesForTarget(normTarget);
+
+        if (!overrideMap || Object.keys(overrideMap).length === 0) return;
+
+        var tbody = document.getElementById('perf-table-tbody');
+        var trs = tbody ? tbody.querySelectorAll('tr') : [];
+
+        window.perfData.forEach(function(row, idx) {
+            var pk = row.sortOrderKey;
+            if (!pk || !Object.prototype.hasOwnProperty.call(overrideMap, pk)) return;
+
+            var autoSum = Number(row.matchingBonus || 0);
+            var autoDetails = Array.isArray(row.matchingDetails) ? row.matchingDetails : [];
+
+            var ovRows = Array.isArray(overrideMap[pk]) ? overrideMap[pk] : [];
+            var newMatchingSum = 0;
+            ovRows.forEach(function(r) {
+                if (Number(r.gen || 0) > 0) {
+                    newMatchingSum += Number(r.matchingAmount || 0);
+                }
+            });
+
+            // 자동계산 결과와 실제 차이가 있는지 비교 (금액, 인원, 세대 변경/제외 여부)
+            var isModified = (newMatchingSum !== autoSum) || (ovRows.length !== autoDetails.length);
+            if (!isModified) {
+                var autoKeySet = autoDetails.map(function(d) {
+                    return String(d.member_id || '').toUpperCase() + ':' + Number(d.gen || 0);
+                }).sort().join('|');
+                var ovKeySet = ovRows.map(function(d) {
+                    return String(d.member_id || '').toUpperCase() + ':' + Number(d.gen || 0);
+                }).sort().join('|');
+                isModified = (autoKeySet !== ovKeySet);
+            }
+
+            row.matchingDetails = ovRows.map(function(r) { return Object.assign({}, r); });
+            row.matchingBonus = newMatchingSum;
+
+            var tr = trs[idx];
+            if (tr && tr.children && tr.children.length >= 18) {
+                var matchCell = tr.children[13];
+                if (isModified) {
+                    matchCell.style.background = 'rgba(249, 115, 22, 0.18)';
+                    matchCell.style.boxShadow = 'inset 3px 0 0 #f97316';
+                    matchCell.title = '추천매칭수당 수동 편집 적용됨';
+                    matchCell.innerHTML = '<span onclick="window.openBonusDetailModal(\'' + actualId + '\', \'' + row.periodLabel + '\', \'' + row.startDate + '\', \'' + row.endDate + '\', \'matchBonus\')" style="cursor:pointer; text-decoration:underline; color:#fb923c; font-weight:800;">' + (newMatchingSum > 0 ? newMatchingSum.toLocaleString('ko-KR') : '0') + '</span>';
+                } else {
+                    matchCell.style.background = '';
+                    matchCell.style.boxShadow = '';
+                    matchCell.title = '';
+                    matchCell.innerHTML = newMatchingSum > 0
+                        ? '<span onclick="window.openBonusDetailModal(\'' + actualId + '\', \'' + row.periodLabel + '\', \'' + row.startDate + '\', \'' + row.endDate + '\', \'matchBonus\')" style="cursor:pointer; text-decoration:underline; color:#60a5fa;">' + newMatchingSum.toLocaleString('ko-KR') + '</span>'
+                        : '<span onclick="window.openBonusDetailModal(\'' + actualId + '\', \'' + row.periodLabel + '\', \'' + row.startDate + '\', \'' + row.endDate + '\', \'matchBonus\')" style="cursor:pointer; color:#6b7280; text-decoration:underline;">0</span>';
+                }
+
+                var totalBonus = (row.directBonus || 0) + (row.teamBonus || 0) + (row.matchingBonus || 0) + (row.levelBonus || 0) + (row.carBonus || 0) + (row.fastPowerBonus || 0);
+                tr.children[17].innerText = totalBonus > 0 ? totalBonus.toLocaleString('ko-KR') : '0';
+            }
+        });
+    }
+
+    var origCalcPerf = window.calculateLocalPerformance;
+    if (typeof origCalcPerf === 'function' && !origCalcPerf._matchingOverrideWrappedV51_2) {
+        var wrapped = async function(targetId) {
+            var res = await origCalcPerf.apply(this, arguments);
+            await applySavedMatchingOverridesToPerf(targetId);
+            return res;
+        };
+        wrapped._matchingOverrideWrappedV51_2 = true;
+        window.calculateLocalPerformance = wrapped;
+    }
+
+    console.log('[Cellvia Sim] Matching Bonus Override (제외 저장·조회·반영) Patch Loaded: Version-2.0');
+})();
+// ============================================================================
+// [52] 전체 모달·팝업 + 좌측/하단 슬라이드 메뉴 통합 레이어(z-index) 최상단 관리 패치 [Version-3.0]
+// - 보너스 상세, 보상플랜 요약표, 매출기간검색, 내비게이터, 좌측(#salesWidget), 하단(#perfWidget) 모두 통합 관리
+// - 기존 하드코딩된 z-index(2147483600 등) 충돌을 제거하고, 클릭하거나 새로 연 창을 무조건 최상단으로 배치
+// ============================================================================
+(function initUnifiedModalZIndexManagerV3_0() {
+    window._bsGlobalModalZIndex = 1000300;
+
+    var LAYER_SELECTOR = [
+        '#salesWidget',
+        '#perfWidget',
+        '#filterWidget',
+        '#bonusDetailModal',
+        '#memberEditModal',
+        '#addPartnerModal',
+        '#partnerModal',
+        '#bizNavModal',
+        '.bs-modal-wrap-v36',
+        '.bs-inpage-modal-wrap-v29',
+        '#bs-root-switch-modal-overlay',
+        '#bs-duplicate-partner-modal',
+        '#bs-line-move-custom-modal-v43'
+    ].join(', ');
+
+    // 기존 고정 z-index(!important) 충돌 스타일 제거
+    var oldFrontStyle = document.getElementById('widget-front-layer-style');
+    if (oldFrontStyle) oldFrontStyle.remove();
+
+    window.bringModalToFrontV52 = function(el) {
+        if (!el || el.id === 'bs-auth-login-overlay') return;
+        el.classList.remove('is-front-widget', 'is-back-widget');
+        window._bsGlobalModalZIndex += 1;
+        el.style.setProperty('z-index', String(window._bsGlobalModalZIndex), 'important');
+    };
+
+    // 기존 bringWidgetToFront가 2147483600을 덮어쓰지 않도록 통합 함수로 위임
+    window.bringWidgetToFront = function(activeEl) {
+        if (activeEl) window.bringModalToFrontV52(activeEl);
+    };
+
+    // 모든 관리 대상 요소의 비정상 고순위 z-index 정규화 + iframe 클릭 감지 상시 유지
+    function syncAllLayersAndIframes() {
+        var els = document.querySelectorAll(LAYER_SELECTOR);
+        for (var i = 0; i < els.length; i++) {
+            var el = els[i];
+            el.classList.remove('is-front-widget', 'is-back-widget');
+
+            if (window.getComputedStyle(el).display === 'none') continue;
+
+            var curZ = parseInt(window.getComputedStyle(el).zIndex || '0', 10);
+            if (curZ > window._bsGlobalModalZIndex) {
+                window.bringModalToFrontV52(el);
+            }
+
+            var ifr = el.querySelector('iframe');
+            if (!ifr) continue;
+            try {
+                var iDoc = ifr.contentDocument || (ifr.contentWindow && ifr.contentWindow.document);
+                if (iDoc && !iDoc._bsZIndexBoundV52_3) {
+                    iDoc._bsZIndexBoundV52_3 = true;
+                    (function(targetEl) {
+                        var bringUp = function() {
+                            window.bringModalToFrontV52(targetEl);
+                        };
+                        iDoc.addEventListener('pointerdown', bringUp, true);
+                        iDoc.addEventListener('mousedown', bringUp, true);
+                    })(el);
+                }
+            } catch (e) {}
+        }
+    }
+
+    // 1) 모달창 또는 좌측/하단 슬라이드 메뉴의 헤더·본문 클릭 시 즉시 최상단 이동
+    function handleMainDocPointer(e) {
+        if (!e.target || typeof e.target.closest !== 'function') return;
+        var targetLayer = e.target.closest(LAYER_SELECTOR);
+        if (targetLayer) {
+            window.bringModalToFrontV52(targetLayer);
+        }
+    }
+    window.addEventListener('pointerdown', handleMainDocPointer, true);
+    window.addEventListener('mousedown', handleMainDocPointer, true);
+
+    // 2) iframe 내부 클릭으로 메인 window가 blur될 때 해당 모달창 최상단 이동
+    window.addEventListener('blur', function() {
+        setTimeout(function() {
+            var active = document.activeElement;
+            if (active && active.tagName === 'IFRAME' && typeof active.closest === 'function') {
+                var targetLayer = active.closest(LAYER_SELECTOR);
+                if (targetLayer) window.bringModalToFrontV52(targetLayer);
+            }
+        }, 0);
+    });
+
+    // 3) 새로 열리거나 생성되는 모달·패널 자동 최상단 이동
+    var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+            if (m.type === 'childList' && m.addedNodes) {
+                m.addedNodes.forEach(function(node) {
+                    if (!node || node.nodeType !== 1) return;
+                    if (node.id === 'widget-front-layer-style') {
+                        node.remove();
+                        return;
+                    }
+                    if (node.matches && node.matches(LAYER_SELECTOR)) {
+                        window.bringModalToFrontV52(node);
+                        setTimeout(syncAllLayersAndIframes, 50);
+                    }
+                });
+            } else if (m.type === 'attributes' && m.target && m.target.nodeType === 1) {
+                var el = m.target;
+                if (el.matches && el.matches(LAYER_SELECTOR)) {
+                    var isVisible = window.getComputedStyle(el).display !== 'none' && !el.classList.contains('closed');
+                    if (isVisible && el.dataset.bsLastVisibleV52 !== '1') {
+                        el.dataset.bsLastVisibleV52 = '1';
+                        window.bringModalToFrontV52(el);
+                        setTimeout(syncAllLayersAndIframes, 50);
+                    } else if (!isVisible) {
+                        el.dataset.bsLastVisibleV52 = '0';
+                    }
+                }
+            }
+        });
+    });
+
+    if (document.body) {
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style', 'class']
+        });
+    }
+
+    // 4) 보너스 상세 모달 오픈 시 하단 실적표(#perfWidget)보다 확실히 위로 배치
+    var origOpenBonus = window.openBonusDetailModal;
+    if (typeof origOpenBonus === 'function' && !origOpenBonus._zIndexWrappedV52) {
+        var wrappedOpenBonus = function() {
+            var res = origOpenBonus.apply(this, arguments);
+            var modal = document.getElementById('bonusDetailModal');
+            if (modal) window.bringModalToFrontV52(modal);
+            return res;
+        };
+        wrappedOpenBonus._zIndexWrappedV52 = true;
+        window.openBonusDetailModal = wrappedOpenBonus;
+    }
+
+    setInterval(syncAllLayersAndIframes, 400);
+    setTimeout(syncAllLayersAndIframes, 100);
+
+    console.log('[Cellvia Sim] Unified Modal & Slide-Menu Z-Index Manager Loaded: Version-3.0');
+})();
+// ============================================================================
+// [53] 보너스 상세 산출 검증 모달창 수정·편집 행 오렌지색 마킹 패치 [Version-1.0]
+// - 자동계산 스냅샷과 비교하여 세대 변경('편집'), 제외('제외'), 신규 추가('추가')된 행에
+//   오렌지색 배경·좌측 표시선·배지를 표시하여 편집 내역을 한눈에 식별
+// ============================================================================
+(function initBonusModalEditedRowMarkingV1_0() {
+    window._bsAutoMatchingSnapshot = window._bsAutoMatchingSnapshot || {};
+
+    function normId(val) {
+        return String(val || '').trim().toUpperCase();
+    }
+
+    // 1) 자동계산 직후 기수별 원본 세대 스냅샷 저장
+    var origCalcMatching = window.calculateMatchingBonusForTarget;
+    if (typeof origCalcMatching === 'function' && !origCalcMatching._snapshotWrappedV53) {
+        var wrappedCalcMatching = function(targetMember, periodMap) {
+            var res = origCalcMatching.apply(this, arguments);
+            if (targetMember && targetMember.id && periodMap) {
+                var tKey = normId(targetMember.id);
+                window._bsAutoMatchingSnapshot[tKey] = window._bsAutoMatchingSnapshot[tKey] || {};
+                Object.keys(periodMap).forEach(function(pk) {
+                    var list = (periodMap[pk] && Array.isArray(periodMap[pk].matchingDetails)) ? periodMap[pk].matchingDetails : [];
+                    var snap = {};
+                    list.forEach(function(item) {
+                        snap[normId(item.member_id)] = Number(item.gen || 0);
+                    });
+                    window._bsAutoMatchingSnapshot[tKey][pk] = snap;
+                });
+            }
+            return res;
+        };
+        wrappedCalcMatching._snapshotWrappedV53 = true;
+        window.calculateMatchingBonusForTarget = wrappedCalcMatching;
+    }
+
+    // 2) 모달 테이블 렌더링 직후 수정·제외·추가된 행에 오렌지색 마킹 적용
+    var origRenderTable = window.renderMatchingEditorTable;
+    if (typeof origRenderTable === 'function' && !origRenderTable._markWrappedV53) {
+        var wrappedRenderTable = function() {
+            var res = origRenderTable.apply(this, arguments);
+
+            var st = window.matchingEditState;
+            var tbody = document.getElementById('b-detail-tbody');
+            if (!st || !tbody || !Array.isArray(st.rows) || st.rows.length === 0) return res;
+
+            var tKey = normId(st.targetId);
+            var periodSnap = (window._bsAutoMatchingSnapshot[tKey] && window._bsAutoMatchingSnapshot[tKey][st.periodKey]) || null;
+            var trs = tbody.querySelectorAll('tr');
+
+            st.rows.forEach(function(item, idx) {
+                var tr = trs[idx];
+                if (!tr || !tr.children || tr.children.length < 8) return;
+
+                var mKey = normId(item.member_id);
+                var curGen = Number(item.gen || 0);
+                var hasAuto = periodSnap && Object.prototype.hasOwnProperty.call(periodSnap, mKey);
+                var autoGen = hasAuto ? periodSnap[mKey] : null;
+
+                var markType = '';
+                if (item.isNewRow || (periodSnap && mKey.replace(/[^0-9]/g, '').length > 0 && !hasAuto)) {
+                    markType = '추가';
+                } else if (curGen === 0) {
+                    markType = '제외';
+                } else if (hasAuto && curGen !== autoGen) {
+                    markType = '편집';
+                }
+
+                if (markType) {
+                    tr.style.background = 'rgba(249, 115, 22, 0.16)';
+                    tr.style.boxShadow = 'inset 3px 0 0 #f97316';
+                    if (curGen === 0) tr.style.opacity = '0.78';
+
+                    var badgeColor = markType === '제외' ? '#ef4444' : '#f97316';
+                    var badgeBg = markType === '제외' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(249, 115, 22, 0.22)';
+                    var firstTd = tr.children[0];
+                    if (firstTd && !firstTd.querySelector('.bs-row-edit-badge-v53')) {
+                        var badge = document.createElement('div');
+                        badge.className = 'bs-row-edit-badge-v53';
+                        badge.style.cssText = 'display:inline-block; margin-top:3px; padding:1px 6px; border-radius:3px; font-size:9.5px; font-weight:800; color:' + badgeColor + '; background:' + badgeBg + '; border:1px solid ' + badgeColor + ';';
+                        badge.innerText = markType;
+                        firstTd.appendChild(badge);
+                    }
+                }
+            });
+
+            return res;
+        };
+        wrappedRenderTable._markWrappedV53 = true;
+        window.renderMatchingEditorTable = wrappedRenderTable;
+    }
+
+    console.log('[Cellvia Sim] Bonus Detail Modal Edited Row Marking Loaded: Version-1.0');
+})();
+// ============================================================================
+// [54] 내비게이터 디렉터 이상 품위유지 하향달성 순차 기준 적용 패치 [Version-1.0]
+// - DIRECTOR -> EMERALD -> DIAMOND ... 본인 직급 순으로 미달성된 하위 단계를 먼저 목표로 표시
+// - 하위 단계 달성 시 다음 단계(본인 직급 방향)를 목표 기준 및 달성률로 자동 전환
+// ============================================================================
+(function initNavigatorStepwiseMaintPatchV1_0() {
+    var MAINT_TIERS_ASC = [
+        { rank: 'DIRECTOR', level: 4, cv: 2100000 },
+        { rank: 'EMERALD', level: 5, cv: 3500000 },
+        { rank: 'DIAMOND', level: 6, cv: 10000000 },
+        { rank: 'GREEN DIAMOND', level: 7, cv: 19000000 },
+        { rank: 'BLUE DIAMOND', level: 8, cv: 34000000 },
+        { rank: 'RED DIAMOND', level: 9, cv: 65000000 },
+        { rank: 'CROWN', level: 10, cv: 135000000 }
+    ];
+
+    var RANK_LEVEL = {
+        'DIRECTOR': 4, 'EMERALD': 5, 'DIAMOND': 6,
+        'GREEN DIAMOND': 7, 'BLUE DIAMOND': 8, 'RED DIAMOND': 9, 'CROWN': 10
+    };
+
+    function parseNum(str) {
+        var n = Number(String(str || '').replace(/[^0-9.-]/g, ''));
+        return isNaN(n) ? 0 : n;
+    }
+
+    function applyStepwiseMaintToNavigatorDOM() {
+        var navBody = document.getElementById('bizNavBody');
+        if (!navBody) return;
+
+        var maintBox = navBody.lastElementChild;
+        if (!maintBox || String(maintBox.innerText || '').indexOf('품위유지 등급 달성 현황') === -1) return;
+
+        var headerRow = maintBox.children[0];
+        var gridRow = maintBox.children[2];
+        if (!headerRow || !gridRow || gridRow.children.length < 3) return;
+
+        // 1) 현재 직급 추출
+        var titleEl = headerRow.children[0];
+        var titleMatch = String(titleEl ? titleEl.innerText : '').match(/^\[([^\]]+)\]/);
+        if (!titleMatch || !titleMatch[1]) return;
+
+        var currRank = titleMatch[1].trim().toUpperCase();
+        var currLevel = RANK_LEVEL[currRank] || 0;
+        if (currLevel < 4) return; // DIRECTOR 미만은 적용 제외
+
+        // 2) 해당기수 인정 소실적 CV 추출
+        var recognizedBox = gridRow.children[1];
+        var recognizedCV = recognizedBox && recognizedBox.children[1] ? parseNum(recognizedBox.children[1].innerText) : 0;
+
+        // 3) 본인 직급 이하의 품위유지 단계를 낮은 순(DIRECTOR -> ... -> currRank)으로 순차 평가
+        var eligibleTiers = MAINT_TIERS_ASC.filter(function(t) { return t.level <= currLevel; });
+        var targetTier = eligibleTiers[eligibleTiers.length - 1];
+        var achievedTier = null;
+
+        for (var i = 0; i < eligibleTiers.length; i++) {
+            if (recognizedCV >= eligibleTiers[i].cv) {
+                achievedTier = eligibleTiers[i];
+            } else {
+                targetTier = eligibleTiers[i];
+                break;
+            }
+        }
+
+        var isOwnRankAchieved = Boolean(achievedTier && achievedTier.rank === currRank);
+        var targetCV = targetTier.cv;
+        var stepPct = targetCV > 0 ? Math.floor((recognizedCV / targetCV) * 100) : 0;
+        var stepShortage = Math.max(0, targetCV - recognizedCV);
+
+        // 4) 상단 상태 라벨 및 달성률 배지 갱신
+        var statusWrap = headerRow.children[1];
+        if (statusWrap && statusWrap.children.length >= 2) {
+            var statusSpan = statusWrap.children[0];
+            var pctSpan = statusWrap.children[1];
+
+            if (isOwnRankAchieved) {
+                statusSpan.style.color = '#10b981';
+                statusSpan.innerText = '✓ ' + currRank + ' 유지 달성';
+            } else if (achievedTier) {
+                statusSpan.style.color = '#fbbf24';
+                statusSpan.innerText = achievedTier.rank + ' 달성 ✓ ➔ ' + targetTier.rank + ' 도전';
+            } else if (targetTier.rank !== currRank) {
+                statusSpan.style.color = '#f87171';
+                statusSpan.innerText = '하향 기준: ' + targetTier.rank + ' 미달성';
+            } else {
+                statusSpan.style.color = '#f87171';
+                statusSpan.innerText = '미달성';
+            }
+
+            pctSpan.innerText = targetTier.rank + ' 달성률: ' + stepPct + '%';
+        }
+
+        // 5) 좌측 박스(유지 기준 CV) 갱신
+        var reqBox = gridRow.children[0];
+        if (reqBox && reqBox.children.length >= 2) {
+            var isDownwardTarget = (targetTier.rank !== currRank);
+            reqBox.children[0].innerText = '[' + targetTier.rank + '] 유지 기준 CV' + (isDownwardTarget ? ' (하향)' : '');
+            reqBox.children[1].innerText = targetCV.toLocaleString('ko-KR') + ' CV';
+        }
+
+        // 6) 우측 박스(품위유지 부족분 CV) 갱신
+        var shortBox = gridRow.children[2];
+        if (shortBox && shortBox.children.length >= 2) {
+            shortBox.children[0].innerText = '[' + targetTier.rank + '] 부족분 CV';
+            if (stepShortage > 0) {
+                shortBox.children[1].style.color = '#f87171';
+                shortBox.children[1].innerText = '-' + stepShortage.toLocaleString('ko-KR') + ' CV';
+            } else {
+                shortBox.children[1].style.color = '#10b981';
+                shortBox.children[1].innerText = '✓ 달성 완료';
+            }
+        }
+    }
+
+    var origOpenNav = window.openInstantNavigatorV37;
+    if (typeof origOpenNav === 'function' && !origOpenNav._stepwiseMaintWrappedV54) {
+        var wrappedOpenNav = function() {
+            var res = origOpenNav.apply(this, arguments);
+            applyStepwiseMaintToNavigatorDOM();
+            return res;
+        };
+        wrappedOpenNav._stepwiseMaintWrappedV54 = true;
+        window.openInstantNavigatorV37 = wrappedOpenNav;
+        window.openBusinessNavigatorModal = wrappedOpenNav;
+        window.renderBusinessNavigator = wrappedOpenNav;
+    }
+
+    console.log('[Cellvia Sim] Navigator Stepwise Downward Maintenance Patch Loaded: Version-1.0');
+})();
+// ============================================================================
+// [55] 👤 시뮬레이터 이용자 관리(신규 이용자 추가·조회·삭제) 모달 UI 패치 [Version-1.0]
+// ============================================================================
+(function initSimUserManagementModalV1_0() {
+    window.openUserManageModal = async function() {
+        var existing = document.getElementById('bs-user-manage-modal');
+        if (existing) existing.remove();
+
+        var overlay = document.createElement('div');
+        overlay.id = 'bs-user-manage-modal';
+        overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.68); backdrop-filter:blur(2px); z-index:2147483640; display:flex; align-items:center; justify-content:center; padding:16px;';
+
+        overlay.innerHTML = [
+            '<div onclick="event.stopPropagation()" style="width:520px; max-width:95vw; max-height:86vh; background:#111827; border:1.5px solid #3b82f6; border-radius:12px; box-shadow:0 25px 60px rgba(0,0,0,0.9); display:flex; flex-direction:column; overflow:hidden; color:#f8fafc;">',
+            '  <div style="height:44px; background:#1e293b; border-bottom:1px solid #334155; display:flex; align-items:center; justify-content:space-between; padding:0 16px;">',
+            '    <strong style="font-size:14px; color:#60a5fa;">👤 시뮬레이터 이용자 관리</strong>',
+            '    <button type="button" id="bs-um-close" style="background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:5px; padding:3px 9px; font-size:11.5px; font-weight:700; cursor:pointer;">닫기 ✕</button>',
+            '  </div>',
+            '  <div style="padding:14px 16px; border-bottom:1px solid #1f2937; background:#0f172a;">',
+            '    <div style="font-size:12px; font-weight:700; color:#94a3b8; margin-bottom:8px;">+ 새 이용자 등록</div>',
+            '    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">',
+            '      <input type="text" id="bs-um-username" placeholder="로그인 아이디 (ID)" autocomplete="off" style="padding:8px 10px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:12px; outline:none;">',
+            '      <input type="password" id="bs-um-password" placeholder="비밀번호 (4자리 이상)" autocomplete="new-password" style="padding:8px 10px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:12px; outline:none;">',
+            '    </div>',
+            '    <div style="display:flex; gap:8px;">',
+            '      <input type="text" id="bs-um-name" placeholder="이용자 이름 (선택)" style="flex:1; padding:8px 10px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:12px; outline:none;">',
+            '      <select id="bs-um-role" style="width:96px; padding:8px; background:#111827; border:1px solid #4b5563; border-radius:6px; color:#fff; font-size:12px;">',
+            '        <option value="user">일반</option>',
+            '        <option value="admin">관리자</option>',
+            '      </select>',
+            '      <button type="button" id="bs-um-add-btn" style="padding:8px 14px; background:#2563eb; border:1px solid #60a5fa; color:#fff; border-radius:6px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap;">이용자 추가</button>',
+            '    </div>',
+            '    <div id="bs-um-msg" style="margin-top:6px; font-size:11.5px; font-weight:700; display:none;"></div>',
+            '  </div>',
+            '  <div style="padding:12px 16px; overflow-y:auto; flex:1;">',
+            '    <table style="width:100%; border-collapse:collapse; font-size:12px;">',
+            '      <thead><tr style="background:#1e293b; color:#94a3b8; border-bottom:1px solid #334155;">',
+            '        <th style="padding:7px 6px; text-align:left;">아이디</th>',
+            '        <th style="padding:7px 6px; text-align:left;">이름</th>',
+            '        <th style="padding:7px 6px; text-align:center;">권한</th>',
+            '        <th style="padding:7px 6px; text-align:center;">등록일</th>',
+            '        <th style="padding:7px 6px; text-align:center;">관리</th>',
+            '      </tr></thead>',
+            '      <tbody id="bs-um-tbody"><tr><td colspan="5" style="padding:20px; text-align:center; color:#64748b;">목록을 불러오는 중...</td></tr></tbody>',
+            '    </table>',
+            '  </div>',
+            '</div>'
+        ].join('');
+
+        overlay.addEventListener('click', function() { overlay.remove(); });
+        document.body.appendChild(overlay);
+
+        var msgEl = document.getElementById('bs-um-msg');
+        function showMsg(text, isErr) {
+            msgEl.style.display = 'block';
+            msgEl.style.color = isErr ? '#f87171' : '#34d399';
+            msgEl.innerText = text;
+        }
+
+        async function loadUsersList() {
+            var tbody = document.getElementById('bs-um-tbody');
+            if (!tbody) return;
+            try {
+                var res = await fetch(window.API_BASE + '/api/users');
+                var data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || '조회 실패');
+                var list = data.users || [];
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:#64748b;">등록된 이용자가 없습니다.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = list.map(function(u) {
+                    var dateStr = u.created_at ? String(u.created_at).slice(0, 10) : '-';
+                    var roleBadge = u.role === 'admin'
+                        ? '<span style="background:rgba(37,99,235,0.25); color:#60a5fa; border:1px solid #3b82f6; padding:1px 6px; border-radius:4px; font-size:10.5px; font-weight:700;">관리자</span>'
+                        : '<span style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:1px 6px; border-radius:4px; font-size:10.5px;">일반</span>';
+                    return [
+                        '<tr style="border-bottom:1px solid #1f2937;">',
+                        '  <td style="padding:8px 6px; font-weight:700; color:#fff;">' + u.username + '</td>',
+                        '  <td style="padding:8px 6px; color:#cbd5e1;">' + (u.display_name || '-') + '</td>',
+                        '  <td style="padding:8px 6px; text-align:center;">' + roleBadge + '</td>',
+                        '  <td style="padding:8px 6px; text-align:center; color:#94a3b8; font-family:monospace;">' + dateStr + '</td>',
+                        '  <td style="padding:8px 6px; text-align:center; white-space:nowrap;">' +
+                        '    <button type="button" class="bs-um-pw" data-uid="' + u.id + '" data-uname="' + u.username + '" style="background:rgba(37,99,235,0.2); border:1px solid #3b82f6; color:#93c5fd; border-radius:4px; padding:2px 7px; font-size:11px; cursor:pointer; margin-right:4px;">비번변경</button>' +
+                        '    <button type="button" class="bs-um-del" data-uid="' + u.id + '" data-uname="' + u.username + '" style="background:rgba(239,68,68,0.18); border:1px solid #ef4444; color:#fca5a5; border-radius:4px; padding:2px 7px; font-size:11px; cursor:pointer;">삭제</button>' +
+                        '  </td>',
+                        '</tr>'
+                    ].join('');
+                }).join('');
+
+                tbody.querySelectorAll('.bs-um-del').forEach(function(btn) {
+                    btn.onclick = async function() {
+                        var uid = btn.getAttribute('data-uid');
+                        var uname = btn.getAttribute('data-uname');
+                        if (!confirm('이용자 "' + uname + '" 계정을 삭제하시겠습니까?')) return;
+                        var dRes = await fetch(window.API_BASE + '/api/users/' + encodeURIComponent(uid), { method: 'DELETE' });
+                        var dData = await dRes.json();
+                        if (!dRes.ok || !dData.success) {
+                            showMsg(dData.message || '삭제 실패', true);
+                            return;
+                        }
+                        showMsg('✓ 이용자 "' + uname + '" 삭제 완료', false);
+                        loadUsersList();
+                    };
+                });
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:#f87171;">목록 조회 오류: ' + err.message + '</td></tr>';
+            }
+        }
+
+        document.getElementById('bs-um-close').onclick = function() { overlay.remove(); };
+        document.getElementById('bs-um-add-btn').onclick = async function() {
+            var username = document.getElementById('bs-um-username').value.trim();
+            var password = document.getElementById('bs-um-password').value.trim();
+            var display_name = document.getElementById('bs-um-name').value.trim();
+            var role = document.getElementById('bs-um-role').value;
+
+            if (!username || !password) {
+                showMsg('아이디와 비밀번호를 모두 입력해 주세요.', true);
+                return;
+            }
+            try {
+                var res = await fetch(window.API_BASE + '/api/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, password: password, display_name: display_name, role: role })
+                });
+                var data = await res.json();
+                if (!res.ok || !data.success) {
+                    showMsg(data.message || '등록 실패', true);
+                    return;
+                }
+                document.getElementById('bs-um-username').value = '';
+                document.getElementById('bs-um-password').value = '';
+                document.getElementById('bs-um-name').value = '';
+                showMsg('✓ 새 이용자 "' + username + '" 등록 완료!', false);
+                loadUsersList();
+            } catch (err) {
+                showMsg('서버 통신 오류: ' + err.message, true);
+            }
+        };
+
+        loadUsersList();
+    };
+
+    // 우측 세로 슬라이드 독에 [이용자 관리] 아이콘 자동 장착
+    function mountUserManageDockButton() {
+        var tray = document.getElementById('bsBodyVerticalSlideTray');
+        if (!tray || document.getElementById('bsVDockUserManageBtn')) return;
+
+        var btn = document.createElement('button');
+        btn.id = 'bsVDockUserManageBtn';
+        btn.type = 'button';
+        btn.className = 'bs-vdock-icon-btn';
+        btn.title = '시뮬레이터 이용자 관리 (새 이용자 추가)';
+        btn.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>';
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            window.openUserManageModal();
+        });
+        tray.appendChild(btn);
+    }
+
+    setInterval(mountUserManageDockButton, 600);
+    setTimeout(mountUserManageDockButton, 200);
+    console.log('[Cellvia Sim] User Management Modal Patch Loaded: Version-1.0');
+})();
+// ============================================================================
+// [56] 우측 세로 슬라이드 독에 로그아웃 버튼 장착 패치 [Version-1.0]
+// ============================================================================
+(function initDockLogoutButtonPatchV1_0() {
+    function mountLogoutDockBtn() {
+        var tray = document.getElementById('bsBodyVerticalSlideTray');
+        if (!tray || document.getElementById('bsVDockLogoutBtn')) return;
+
+        var btn = document.createElement('button');
+        btn.id = 'bsVDockLogoutBtn';
+        btn.type = 'button';
+        btn.className = 'bs-vdock-icon-btn';
+        btn.title = '로그아웃';
+        btn.style.setProperty('color', '#f87171', 'important');
+        btn.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>';
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (typeof window.logoutSimulator === 'function') {
+                window.logoutSimulator();
+            }
+        });
+        tray.appendChild(btn);
+    }
+
+    setInterval(mountLogoutDockBtn, 600);
+    setTimeout(mountLogoutDockBtn, 200);
 })();
